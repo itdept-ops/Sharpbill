@@ -101,8 +101,7 @@ def run() -> None:
         db.commit()
         total = len(list(db.scalars(select(User))))
         print(
-            f"Seeded {new_users} new users. Total users: {total} "
-            "(custom roles: Manager, Auditor)."
+            f"Seeded {new_users} new users. Total users: {total} (custom roles: Manager, Auditor)."
         )
 
 
