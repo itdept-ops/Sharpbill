@@ -1,4 +1,5 @@
 import google.auth.transport.requests
+from google.auth.exceptions import GoogleAuthError
 from google.oauth2 import id_token as google_id_token
 
 from app.auth import ProviderTokenError, VerifiedIdentity
@@ -19,7 +20,9 @@ def verify_google_id_token(raw_token: str) -> VerifiedIdentity:
             audience=settings.google_client_id,
             clock_skew_in_seconds=30,
         )
-    except ValueError as exc:  # bad signature, expired, wrong audience
+    except (ValueError, GoogleAuthError) as exc:
+        # ValueError = bad signature/expired/wrong audience; GoogleAuthError = cert-fetch /
+        # transport failures. Either way it's a 401, never an unhandled 500.
         raise ProviderTokenError(str(exc)) from exc
 
     if claims.get("iss") not in _VALID_ISSUERS:

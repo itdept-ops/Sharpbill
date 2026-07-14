@@ -132,6 +132,16 @@ def test_logout_clears_cookie(client):
     assert resp.status_code == 204
 
 
+def test_logout_revokes_token_durably(client):
+    client.post("/api/auth/dev", json={"email": "lo@example.com"})
+    token = client.cookies.get("session")
+    assert client.get("/api/auth/me").status_code == 200
+    client.post("/api/auth/logout")
+    # Replay the pre-logout token: it must be rejected server-side, not just cleared client-side.
+    client.cookies.set("session", token)
+    assert client.get("/api/auth/me").status_code == 401
+
+
 def test_auth_config_reports_dev_enabled(client):
     resp = client.get("/api/auth/config")
     assert resp.status_code == 200

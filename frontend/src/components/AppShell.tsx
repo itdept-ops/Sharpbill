@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
+import { Link, NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 
 import { useAuth } from "../auth/AuthContext";
 import { PresenceProvider, usePresence } from "../presence/PresenceContext";
@@ -39,7 +39,12 @@ function ShellInner() {
         <NavLink to="/dashboard" className="rail-item">
           ▸ Dashboard
         </NavLink>
-        {(can("users.read") || can("roles.manage")) && <div className="rail-section">Admin</div>}
+        <NavLink to="/profile" className="rail-item">
+          ▸ My Profile
+        </NavLink>
+        {(can("users.read") || can("roles.manage") || can("settings.manage")) && (
+          <div className="rail-section">Admin</div>
+        )}
         {can("users.read") && (
           <NavLink to="/admin/users" className="rail-item">
             ▸ Users
@@ -50,7 +55,16 @@ function ShellInner() {
             ▸ Roles &amp; Access
           </NavLink>
         )}
+        {can("settings.manage") && (
+          <NavLink to="/admin/settings" className="rail-item">
+            ▸ Site Settings
+          </NavLink>
+        )}
         <div className="rail-spacer" />
+        <div className="rail-section">Info</div>
+        <NavLink to="/technology" className="rail-item">
+          ▸ Technology
+        </NavLink>
         <NavLink to="/about" className="rail-item">
           ▸ About
         </NavLink>
@@ -76,7 +90,9 @@ function ShellInner() {
         </button>
         {user && (
           <span className="user-chip">
-            <span className="email">{user.email}</span>
+            <Link to="/profile" className="email">
+              {user.email}
+            </Link>
             <RoleBadge role={user.role} />
           </span>
         )}

@@ -68,6 +68,14 @@ def _clean_tables():
     # Reset between tests: wipe users + any custom roles/permissions, then restore the
     # canonical system role<->permission seed so RBAC starts identical for every test.
     with engine.begin() as conn:
+        # Reset the site-settings singleton first (its FK to roles would otherwise block the
+        # custom-role cleanup below).
+        conn.execute(
+            text(
+                "UPDATE site_settings SET signup_mode='open', allow_google=1, allow_microsoft=1, "
+                "default_role_id=(SELECT id FROM roles WHERE name='user') WHERE id=1"
+            )
+        )
         conn.execute(text("DELETE FROM user_identities"))
         conn.execute(text("DELETE FROM users"))
         conn.execute(text("DELETE FROM roles WHERE is_system = 0"))

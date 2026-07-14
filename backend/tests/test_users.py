@@ -173,3 +173,43 @@ def test_deactivation_revokes_sessions_durably(client):
     client.patch(f"/api/users/{vu['id']}/status", json={"is_active": True})
     # Reactivation must NOT resurrect the pre-deactivation session.
     assert victim.get("/api/auth/me").status_code == 401
+
+
+def test_user_can_edit_own_profile(client):
+    me = _login(client, "self@example.com", role="user")
+    resp = client.patch(
+        f"/api/users/{me['id']}/profile",
+        json={"title": "Field Nurse", "department": "Ops", "location": "Remote"},
+    )
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["title"] == "Field Nurse"
+    assert body["department"] == "Ops"
+
+
+def test_user_cannot_edit_others_profile(client):
+    other = TestClient(app)
+    ou = other.post("/api/auth/dev", json={"email": "other@example.com", "role": "user"}).json()
+    _login(client, "nosy@example.com", role="user")
+    resp = client.patch(f"/api/users/{ou['id']}/profile", json={"title": "Hacked"})
+    assert resp.status_code == 403
+
+
+def test_admin_can_view_user_detail(client):
+    target = TestClient(app)
+    tu = target.post("/api/auth/dev", json={"email": "detail@example.com", "role": "user"}).json()
+    _login(client, "admin@example.com", role="admin")
+    resp = client.get(f"/api/users/{tu['id']}")
+    assert resp.status_code == 200
+    assert resp.json()["email"] == "detail@example.com"
+
+
+def test_filter_users_by_search_and_role(client):
+    for e in ("alice@example.com", "bob@example.com"):
+        TestClient(app).post("/api/auth/dev", json={"email": e, "role": "user"})
+    _login(client, "admin@example.com", role="admin")
+    admin_role = _role_id(client, "admin")
+
+    assert client.get("/api/users", params={"search": "alice"}).json()["total"] == 1
+    admins = client.get("/api/users", params={"role_id": admin_role}).json()
+    assert all(u["role"] == "admin" for u in admins["items"])

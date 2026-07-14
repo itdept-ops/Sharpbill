@@ -6,6 +6,7 @@ from fastapi.responses import JSONResponse
 from app.config import settings
 from app.errors import install_error_handlers
 from app.routers import auth, dashboard, health, presence, roles, users
+from app.routers import settings as settings_router
 
 logging.basicConfig(level=settings.log_level)
 
@@ -20,6 +21,8 @@ install_error_handlers(app)
 # Login-CSRF guard: the cookie-setting login routes reject non-JSON Content-Type. This runs
 # before body parsing so a cross-site <form> POST is refused with 415 (SameSite=Lax already
 # blocks the cookie on authenticated requests; this closes the cookie-*setting* gap).
+# Only the cookie-SETTING routes need this; logout relies on the cookie and is already
+# CSRF-safe because SameSite=Lax never sends the session cookie on a cross-site POST.
 _JSON_REQUIRED_PATHS = {"/api/auth/google", "/api/auth/microsoft"}
 
 
@@ -45,6 +48,7 @@ app.include_router(auth.router, prefix="/api/auth", tags=["auth"])
 app.include_router(users.router, prefix="/api/users", tags=["users"])
 app.include_router(roles.router, prefix="/api", tags=["rbac"])
 app.include_router(presence.router, prefix="/api/presence", tags=["presence"])
+app.include_router(settings_router.router, prefix="/api/admin", tags=["settings"])
 app.include_router(dashboard.router, prefix="/api", tags=["dashboard"])
 
 # Dev-only login endpoint — mounted solely in a local environment with the flag on.

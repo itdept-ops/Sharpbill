@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session
 from app.auth import VerifiedIdentity
 from app.config import settings
 from app.errors import ApiError
-from app.models import Role, User, UserIdentity
+from app.models import Role, SiteSettings, User, UserIdentity
 from app.permissions import ADMIN_ROLE, DEFAULT_ROLE
 
 
@@ -18,6 +18,13 @@ def _utcnow() -> datetime:
 def _now_naive() -> datetime:
     # last_seen_at is stored/compared as naive UTC (see app.auth.deps / app.presence).
     return datetime.now(UTC).replace(tzinfo=None)
+
+
+def get_site_settings(db: Session) -> SiteSettings:
+    site = db.get(SiteSettings, 1)
+    if site is None:  # pragma: no cover - seeded by migration 0003
+        raise ApiError(500, "INTERNAL_ERROR", "Site settings row is missing")
+    return site
 
 
 def _role_by_name(db: Session, name: str) -> Role:
@@ -49,7 +56,7 @@ def _admin_bootstrap(ident: VerifiedIdentity) -> bool:
 
 
 def _assert_login_allowed(ident: VerifiedIdentity) -> None:
-    """Optional allowlist gate (empty config = allow any verified account)."""
+    """Optional env allowlist gate (empty config = allow any verified account)."""
     if ident.provider == "google":
         domains = settings.allowed_email_domain_set
         if domains and ident.email.rsplit("@", 1)[-1] not in domains:
@@ -60,14 +67,33 @@ def _assert_login_allowed(ident: VerifiedIdentity) -> None:
             raise ApiError(403, "LOGIN_NOT_ALLOWED", "This account is not permitted to sign in")
 
 
+def _assert_provider_enabled(site: SiteSettings, ident: VerifiedIdentity) -> None:
+    if ident.provider == "google" and not site.allow_google:
+        raise ApiError(403, "PROVIDER_DISABLED", "Google sign-in is currently disabled")
+    if ident.provider == "microsoft" and not site.allow_microsoft:
+        raise ApiError(403, "PROVIDER_DISABLED", "Microsoft sign-in is currently disabled")
+
+
+def _gate_lifecycle(user: User) -> None:
+    """The single approval/active gate applied to every login path."""
+    if not user.is_approved:
+        raise ApiError(403, "PENDING_APPROVAL", "Your account is awaiting administrator approval")
+    if not user.is_active:
+        raise ApiError(403, "ACCOUNT_DISABLED", "This account has been deactivated")
+
+
 def find_or_create_user(db: Session, ident: VerifiedIdentity) -> User:
     """Look up by (provider, provider_subject); provision on first login.
 
     Identity is keyed on the provider's immutable subject id (Google `sub` / Microsoft `oid`),
     NEVER the email — a user changing their provider email cannot become another account, and
-    two providers sharing an email are two separate accounts.
+    two providers sharing an email are two separate accounts. Provisioning obeys the site's
+    signup mode (open / approval / closed) and per-provider toggles.
     """
     _assert_login_allowed(ident)
+    site = get_site_settings(db)
+    _assert_provider_enabled(site, ident)
+
     identity = db.scalar(
         select(UserIdentity).where(
             UserIdentity.provider == ident.provider,
@@ -76,20 +102,30 @@ def find_or_create_user(db: Session, ident: VerifiedIdentity) -> User:
     )
     if identity is not None:
         user = identity.user
-        if not user.is_active:
-            raise ApiError(403, "ACCOUNT_DISABLED", "This account has been deactivated")
+        _gate_lifecycle(user)
         user.last_login_at = _utcnow()
-        user.last_seen_at = _now_naive()  # appear online immediately on login
+        user.last_seen_at = _now_naive()
         identity.provider_email = ident.email  # audit trail only; not used for lookups
         db.commit()
         return user
 
-    role = _role_by_name(db, ADMIN_ROLE if _admin_bootstrap(ident) else DEFAULT_ROLE)
+    # --- first login: provision ---
+    if site.signup_mode == "closed":
+        raise ApiError(403, "SIGNUP_CLOSED", "Sign-ups are currently closed")
+
+    is_admin_boot = _admin_bootstrap(ident)
+    if is_admin_boot:
+        role = _role_by_name(db, ADMIN_ROLE)
+    else:
+        role = db.get(Role, site.default_role_id) or _role_by_name(db, DEFAULT_ROLE)
+    approved = is_admin_boot or site.signup_mode == "open"
+
     user = User(
         email=ident.email,
         display_name=ident.display_name,
         role=role,
         is_active=True,
+        is_approved=approved,
         last_login_at=_utcnow(),
         last_seen_at=_now_naive(),
     )
@@ -114,7 +150,11 @@ def find_or_create_user(db: Session, ident: VerifiedIdentity) -> User:
         )
         if identity is None:
             raise
+        _gate_lifecycle(identity.user)  # the race loser must still pass the approval gate
         return identity.user
+
+    if not approved:
+        raise ApiError(403, "PENDING_APPROVAL", "Your account was created and is awaiting approval")
     return user
 
 
@@ -123,7 +163,8 @@ def dev_upsert_user(
 ) -> User:
     """Local dev only: find-or-create a user by email and mint/refresh a 'dev' identity.
 
-    Bypasses provider verification entirely; used exclusively by the gated /api/auth/dev route.
+    Bypasses provider verification and the approval flow entirely; used exclusively by the
+    gated /api/auth/dev route.
     """
     email = email.lower()
     user = db.scalar(select(User).where(User.email == email).order_by(User.id))
@@ -134,6 +175,7 @@ def dev_upsert_user(
             display_name=display_name or email.split("@")[0],
             role=_role_by_name(db, resolved),
             is_active=True,
+            is_approved=True,
             last_login_at=_utcnow(),
             last_seen_at=_now_naive(),
         )
@@ -146,6 +188,7 @@ def dev_upsert_user(
             user.role = _role_by_name(db, role_name)
         if display_name is not None:
             user.display_name = display_name
+        user.is_approved = True
         user.last_login_at = _utcnow()
         user.last_seen_at = _now_naive()
         if not any(i.provider == "dev" for i in user.identities):

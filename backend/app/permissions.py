@@ -11,14 +11,16 @@ USERS_MANAGE = "users.manage"
 ROLES_MANAGE = "roles.manage"
 PRESENCE_VIEW = "presence.view"
 PRESENCE_KICK = "presence.kick"
+SETTINGS_MANAGE = "settings.manage"
 
 # (key, description) — order is the seed order.
 BUILTIN_PERMISSIONS: list[tuple[str, str]] = [
     (USERS_READ, "View the user directory"),
-    (USERS_MANAGE, "Change user roles and activation status"),
+    (USERS_MANAGE, "Change user roles, activation, and approval"),
     (ROLES_MANAGE, "Create and edit roles and permissions"),
     (PRESENCE_VIEW, "See who is currently online"),
     (PRESENCE_KICK, "Force sign-out (kick) a user's active sessions"),
+    (SETTINGS_MANAGE, "Manage site settings and approve sign-ups"),
 ]
 
 ADMIN_ROLE = "admin"
@@ -27,7 +29,14 @@ DEFAULT_ROLE = "user"
 SYSTEM_ROLES: dict[str, dict] = {
     ADMIN_ROLE: {
         "description": "Full access to every feature.",
-        "permissions": [USERS_READ, USERS_MANAGE, ROLES_MANAGE, PRESENCE_VIEW, PRESENCE_KICK],
+        "permissions": [
+            USERS_READ,
+            USERS_MANAGE,
+            ROLES_MANAGE,
+            PRESENCE_VIEW,
+            PRESENCE_KICK,
+            SETTINGS_MANAGE,
+        ],
     },
     DEFAULT_ROLE: {
         "description": "Standard access for new members.",

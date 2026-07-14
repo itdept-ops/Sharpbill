@@ -1,10 +1,18 @@
-from fastapi import APIRouter, Depends, Response
+from datetime import UTC, datetime
+
+from fastapi import APIRouter, Depends, Request, Response
 from sqlalchemy.orm import Session
 
 from app.auth import ProviderTokenError
 from app.auth.deps import get_current_user
 from app.auth.google import verify_google_id_token
-from app.auth.jwt import clear_session_cookie, create_session_token, set_session_cookie
+from app.auth.jwt import (
+    COOKIE_NAME,
+    clear_session_cookie,
+    create_session_token,
+    decode_session_token,
+    set_session_cookie,
+)
 from app.auth.microsoft import verify_microsoft_id_token
 from app.auth.service import find_or_create_user
 from app.config import settings
@@ -55,7 +63,18 @@ def login_microsoft(
 
 
 @router.post("/logout", status_code=204)
-def logout(response: Response) -> Response:
+def logout(request: Request, response: Response, db: Session = Depends(get_db)) -> Response:
+    # Best-effort durable revocation: stamp the token epoch so the just-cleared cookie is also
+    # rejected server-side if replayed. Logout always succeeds (204) regardless.
+    token = request.cookies.get(COOKIE_NAME)
+    if token:
+        try:
+            user = db.get(User, int(decode_session_token(token)["sub"]))
+            if user is not None:
+                user.session_valid_after = datetime.now(UTC).replace(tzinfo=None)
+                db.commit()
+        except Exception:
+            pass
     clear_session_cookie(response)
     response.status_code = 204
     return response

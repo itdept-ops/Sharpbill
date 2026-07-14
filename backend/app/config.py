@@ -1,6 +1,6 @@
 from typing import Literal
 
-from pydantic import field_validator
+from pydantic import field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -36,6 +36,12 @@ class Settings(BaseSettings):
         if len(v) < 32 or "replace-me" in v:
             raise ValueError("SESSION_JWT_SECRET must be >= 32 chars and not the placeholder value")
         return v
+
+    @model_validator(mode="after")
+    def _secure_cookie_in_production(self) -> "Settings":
+        if self.app_env == "production" and not self.cookie_secure:
+            raise ValueError("COOKIE_SECURE must be true when APP_ENV=production")
+        return self
 
     @property
     def admin_email_set(self) -> set[str]:

@@ -18,7 +18,8 @@ def test_active_user_appears_online(client):
     assert resp.status_code == 200
     body = resp.json()
     assert body["count"] >= 1
-    assert any(u["email"] == "here@example.com" for u in body["online"])
+    assert any(u["display_name"] == "here" for u in body["online"])
+    assert all("email" not in u for u in body["online"])  # presence must not leak email
     assert body["window_seconds"] > 0
 
 
@@ -45,5 +46,5 @@ def test_two_users_both_online(client):
     other = TestClient(app)
     other.post("/api/auth/dev", json={"email": "b@example.com", "role": "user"})
 
-    emails = {u["email"] for u in client.get("/api/presence/online").json()["online"]}
-    assert {"a@example.com", "b@example.com"} <= emails
+    names = {u["display_name"] for u in client.get("/api/presence/online").json()["online"]}
+    assert {"a", "b"} <= names

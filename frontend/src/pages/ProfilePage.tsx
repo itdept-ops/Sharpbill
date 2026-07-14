@@ -1,0 +1,23 @@
+import { useEffect, useState } from "react";
+
+import { api } from "../api/client";
+import { useAuth } from "../auth/AuthContext";
+import { UserProfile } from "../components/UserProfile";
+import type { User } from "../types";
+
+export function ProfilePage() {
+  const { user: me } = useAuth();
+  const [user, setUser] = useState<User | null>(null);
+
+  useEffect(() => {
+    if (me) api.get<User>(`/api/users/${me.id}`).then(setUser).catch(() => setUser(me));
+  }, [me]);
+
+  return (
+    <div>
+      <h1 className="page-title">SYS://profile</h1>
+      <p className="page-sub">Your account, identity, and profile — edit anything below.</p>
+      {user ? <UserProfile user={user} /> : <div className="muted">Loading…</div>}
+    </div>
+  );
+}

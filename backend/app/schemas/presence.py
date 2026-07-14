@@ -4,8 +4,8 @@ from pydantic import BaseModel
 
 
 class PresenceUser(BaseModel):
+    # Deliberately omits email — presence.view exposes who is online, not the directory.
     id: int
-    email: str
     display_name: str | None
     role: str
     last_seen_at: datetime | None

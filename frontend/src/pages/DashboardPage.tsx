@@ -3,20 +3,25 @@ import { useEffect, useState } from "react";
 import { api } from "../api/client";
 import { useAuth } from "../auth/AuthContext";
 import { OnlineDot, RoleBadge } from "../components/badges";
+import { AreaChart, BarChart, Donut, SegmentBar, SERIES } from "../components/Charts";
 import { Panel } from "../components/Panel";
 import { usePresence } from "../presence/PresenceContext";
-import type { DashboardData } from "../types";
+import type { Analytics, DashboardData } from "../types";
 
-const SPARK = ["▂▃▅▂▇▅▆▃", "▁▄▂▅▃▆▇▅", "▃▅▆▇▆▅▃▂"];
+const md = (iso: string) => iso.slice(5).replace("-", "/");
 
 export function DashboardPage() {
   const { user } = useAuth();
   const presence = usePresence();
   const [data, setData] = useState<DashboardData | null>(null);
+  const [an, setAn] = useState<Analytics | null>(null);
+
+  const canAnalytics = !!user?.permissions.includes("users.read");
 
   useEffect(() => {
     api.get<DashboardData>("/api/dashboard").then(setData).catch(() => setData(null));
-  }, []);
+    if (canAnalytics) api.get<Analytics>("/api/dashboard/analytics").then(setAn).catch(() => setAn(null));
+  }, [canAnalytics]);
 
   const onlineNow = presence.canView ? presence.count : (data?.stats.online_users ?? "—");
 
@@ -34,37 +39,60 @@ export function DashboardPage() {
         <div className="panel panel--brackets kpi">
           <div className="kpi-label">Total users</div>
           <div className="kpi-value">{data?.stats.total_users ?? "—"}</div>
-          <div className="sparkline">{SPARK[0]}</div>
+          <div className="sparkline">▂▃▅▂▇▅▆▃</div>
         </div>
         <div className="panel panel--brackets kpi">
-          <div className="kpi-label">Active users</div>
+          <div className="kpi-label">Active</div>
           <div className="kpi-value">{data?.stats.active_users ?? "—"}</div>
-          <div className="sparkline">{SPARK[1]}</div>
+          <div className="sparkline">▁▄▂▅▃▆▇▅</div>
         </div>
         <div className="panel panel--brackets kpi">
           <div className="kpi-label">Online now</div>
-          <div className="kpi-value">
-            {onlineNow}
-            <span className="unit">live</span>
-          </div>
-          <div className="sparkline">{SPARK[2]}</div>
+          <div className="kpi-value">{onlineNow}<span className="unit">live</span></div>
+          <div className="sparkline">▃▅▆▇▆▅▃▂</div>
         </div>
         <div className="panel panel--brackets kpi">
-          <div className="kpi-label">Your access</div>
-          <div className="kpi-value" style={{ fontSize: 18 }}>
-            {user?.permissions.length ?? 0} perms
-          </div>
-          <div className="sparkline muted" style={{ letterSpacing: 0 }}>
-            {user?.role}
-          </div>
+          <div className="kpi-label">Awaiting approval</div>
+          <div className="kpi-value">{an ? an.status.pending : "—"}</div>
+          <div className="sparkline muted" style={{ letterSpacing: 0 }}>signup queue</div>
         </div>
       </div>
 
+      {canAnalytics && an && (
+        <div className="grid-2" style={{ marginBottom: 16 }}>
+          <Panel title="// SIGN-UPS · LAST 14 DAYS">
+            <AreaChart points={an.signups.map((s) => ({ label: md(s.date), value: s.count }))} />
+          </Panel>
+          <Panel title="// ACCOUNT STATUS">
+            <SegmentBar
+              segments={[
+                { label: "active", value: an.status.active, color: SERIES[0], glyph: "●" },
+                { label: "pending", value: an.status.pending, color: SERIES[2], glyph: "◆" },
+                { label: "disabled", value: an.status.disabled, color: SERIES[4], glyph: "✕" },
+              ]}
+            />
+            <div style={{ marginTop: 14 }} className="kpi-label">Online right now</div>
+            <div className="kpi-value" style={{ fontSize: 22 }}>{an.status.online}</div>
+          </Panel>
+        </div>
+      )}
+
+      {canAnalytics && an && (
+        <div className="grid-2" style={{ marginBottom: 16 }}>
+          <Panel title="// USERS BY ROLE">
+            <BarChart data={an.roles.map((r) => ({ label: r.role, value: r.count }))} />
+          </Panel>
+          <Panel title="// SIGN-IN PROVIDERS">
+            <Donut
+              caption="ACCOUNTS"
+              segments={an.providers.map((p, i) => ({ label: p.provider, value: p.count, color: SERIES[i % SERIES.length] }))}
+            />
+          </Panel>
+        </div>
+      )}
+
       <div className="grid-2">
-        <Panel
-          title="// ONLINE NOW"
-          right={<span className="status-dot" />}
-        >
+        <Panel title="// ONLINE NOW" right={<span className="status-dot" />}>
           {!presence.canView ? (
             <div className="online-empty">Requires the presence.view permission.</div>
           ) : presence.online.length === 0 ? (
@@ -74,22 +102,19 @@ export function DashboardPage() {
               {presence.online.map((u) => (
                 <div className="online-row" key={u.id}>
                   <OnlineDot online />
-                  <span className="who">{u.display_name ?? u.email}</span>
+                  <span className="who">{u.display_name ?? "member"}</span>
                   <RoleBadge role={u.role} />
                 </div>
               ))}
             </div>
           )}
         </Panel>
-
         <Panel title="// SYSTEM">
           <p className="sans dim" style={{ marginTop: 0 }}>
-            This dashboard is the v1 placeholder. Identity, roles &amp; permissions, presence,
-            and the session kill-switch are live — real CRM features slot in from here.
+            Identity, roles &amp; permissions, presence, kick, profiles, and admin settings are
+            live. This deck fills in as real CRM data lands.
           </p>
-          <div className="placeholder" style={{ marginTop: 12 }}>
-            More instruments coming online soon.
-          </div>
+          <div className="placeholder" style={{ marginTop: 12 }}>More instruments coming online.</div>
         </Panel>
       </div>
     </div>

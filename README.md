@@ -13,14 +13,20 @@ UI. FastAPI + React + MySQL, run locally with Docker Compose.
   so a changed provider email can't impersonate another account. The verified id is stored and
   shown in the admin UI.
 - **Roles & permissions (RBAC).** Every user has one role; roles hold permissions; admins can
-  **create new permissions** and roles and assign them. Access is read from the DB on every
-  request. Built-in permissions: `users.read`, `users.manage`, `roles.manage`, `presence.view`,
-  `presence.kick`. System roles `admin` / `user` are protected.
-- **Live presence.** See who's online in real time (rolls off after ~90s of inactivity).
-- **Kick.** Force sign-out any user; their session is revoked on the next request via a
-  per-user token epoch. Deactivation is a durable revocation too.
-- **Pages.** Matrix-rain landing, an About page, a themed dashboard (KPIs + online panel), an
-  admin user table, and a roles/permissions manager. A "Calm" toggle reduces motion.
+  **create new permissions** and roles and assign them, via a grouped permission-matrix builder.
+  Access is read from the DB on every request. Built-in permissions: `users.read`, `users.manage`,
+  `roles.manage`, `presence.view`, `presence.kick`, `settings.manage`. System roles are protected.
+- **User management.** Rich profiles (title, department, phone, location, timezone, bio) with
+  self-service and admin edit; a filterable directory (search, role, status, online); a detailed
+  per-user page; role/activation/kick/approve controls.
+- **Live presence + kick.** See who's online; force sign-out any user (session revoked next
+  request via a per-user token epoch). Deactivation and logout are durable revocations too.
+- **Site settings.** Admins choose the sign-up mode (**open / approval / closed**), toggle each
+  provider, set the default role, and **approve pending sign-ups** from a queue.
+- **Dashboard analytics.** Hand-built SVG charts — sign-ups over 14 days, account-status split,
+  users-by-role, and sign-in providers.
+- **Pages.** Matrix-rain landing, a Technology showcase, an About page, the themed console
+  (dashboard, users, user detail, roles, settings, profile). A "Calm" toggle reduces motion.
 
 ## Stack
 
@@ -64,9 +70,14 @@ Reset the DB: `docker compose down -v && docker compose up -d && docker compose 
 | POST | `/api/auth/logout` | — | clear cookie |
 | GET | `/api/auth/me` | session | current user |
 | GET | `/api/dashboard` | session | stats (incl. online count) |
-| GET | `/api/users` | `users.read` | user directory (+ online, provider ids) |
+| GET | `/api/dashboard/analytics` | `users.read` | chart data (roles, providers, signups, status) |
+| GET | `/api/users` | `users.read` | directory + filters (`search`, `role_id`, `status`, `online`) |
+| GET | `/api/users/{id}` | self or `users.read` | user detail |
+| PATCH | `/api/users/{id}/profile` | self or `users.manage` | edit profile fields |
 | PATCH | `/api/users/{id}/role` | `users.manage` | reassign role |
 | PATCH | `/api/users/{id}/status` | `users.manage` | activate / deactivate |
+| POST | `/api/users/{id}/approve` | `users.manage` | approve a pending sign-up |
+| GET · PUT | `/api/admin/settings` | `settings.manage` | site settings (signup mode, providers, default role) |
 | POST | `/api/users/{id}/kick` | `presence.kick` | force sign-out |
 | GET | `/api/roles` · `/api/permissions` | `roles.manage` | list |
 | POST | `/api/roles` · `/api/permissions` | `roles.manage` | create |

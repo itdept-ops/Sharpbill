@@ -38,7 +38,7 @@ def get_current_user(request: Request, db: Session = Depends(get_db)) -> User:
         raise ApiError(401, "INVALID_SESSION", "Session invalid or expired") from None
 
     user = db.get(User, int(payload["sub"]))  # DB read every request, by design
-    if user is None or not user.is_active:
+    if user is None or not user.is_active or not user.is_approved:
         raise ApiError(401, "INVALID_SESSION", "Session invalid or expired")
 
     # Session kill-switch (kick): reject tokens minted at or before the cutoff second.

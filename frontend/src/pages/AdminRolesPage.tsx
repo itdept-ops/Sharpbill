@@ -262,11 +262,28 @@ function RoleModal({
   const toggle = (key: string, on: boolean) =>
     onChange({ ...draft, keys: on ? [...draft.keys, key] : draft.keys.filter((k) => k !== key) });
 
+  const groups: Record<string, Permission[]> = {};
+  for (const p of perms) {
+    const area = p.key.split(".")[0];
+    (groups[area] ??= []).push(p);
+  }
+  const setGroup = (list: Permission[], on: boolean) => {
+    const keys = new Set(draft.keys);
+    for (const p of list) {
+      if (on) keys.add(p.key);
+      else keys.delete(p.key);
+    }
+    onChange({ ...draft, keys: [...keys] });
+  };
+
   return (
     <div className="modal" onClick={onClose}>
       <section className="panel panel--brackets modal-panel" onClick={(e) => e.stopPropagation()}>
         <div className="panel-header">
-          // {draft.mode === "create" ? "NEW ROLE" : `EDIT ${draft.name.toUpperCase()}`}
+          <span>// {draft.mode === "create" ? "NEW ROLE" : `EDIT ${draft.name.toUpperCase()}`}</span>
+          <span className="muted" style={{ fontSize: 10 }}>
+            {draft.keys.length} / {perms.length} perms
+          </span>
         </div>
         <div className="panel-body">
           <div className="form-row">
@@ -288,25 +305,38 @@ function RoleModal({
               onChange={(e) => onChange({ ...draft, description: e.target.value })}
             />
           </div>
-          <div className="field-label">&gt; permissions</div>
-          <div className="perm-list">
-            {perms.map((p) => (
-              <label className="perm-check" key={p.id}>
-                <input
-                  type="checkbox"
-                  checked={has.has(p.key)}
-                  onChange={(e) => toggle(p.key, e.target.checked)}
-                />
-                <span>
-                  <span className="pk">{p.key}</span>
-                  {p.description && <div className="pd">{p.description}</div>}
-                </span>
-              </label>
-            ))}
+          <div className="field-label">&gt; permissions · {draft.keys.length} selected</div>
+          <div className="perm-groups">
+            {Object.entries(groups).map(([area, list]) => {
+              const allOn = list.every((p) => has.has(p.key));
+              return (
+                <div className="perm-group" key={area}>
+                  <div className="perm-group-head">
+                    <span className="pg-area">{area}</span>
+                    <button className="link-btn" onClick={() => setGroup(list, !allOn)}>
+                      {allOn ? "clear all" : "select all"}
+                    </button>
+                  </div>
+                  {list.map((p) => (
+                    <label className="perm-check" key={p.id}>
+                      <input
+                        type="checkbox"
+                        checked={has.has(p.key)}
+                        onChange={(e) => toggle(p.key, e.target.checked)}
+                      />
+                      <span>
+                        <span className="pk">{p.key}</span>
+                        {p.description && <div className="pd">{p.description}</div>}
+                      </span>
+                    </label>
+                  ))}
+                </div>
+              );
+            })}
           </div>
           <div className="role-card-actions">
             <button className="btn btn-primary btn-sm" onClick={onSave}>
-              Save
+              Save role
             </button>
             <button className="btn btn-ghost btn-sm" onClick={onClose}>
               Cancel

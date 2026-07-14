@@ -32,7 +32,6 @@ def online_users(
         online=[
             PresenceUser(
                 id=u.id,
-                email=u.email,
                 display_name=u.display_name,
                 role=u.role_name,
                 last_seen_at=u.last_seen_at,

@@ -21,12 +21,19 @@ class User(Base):
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     email: Mapped[str] = mapped_column(String(255), index=True)  # lowercase; not unique
     display_name: Mapped[str | None] = mapped_column(String(255))
+    # --- profile ---
+    title: Mapped[str | None] = mapped_column(String(120))
+    department: Mapped[str | None] = mapped_column(String(120))
+    phone: Mapped[str | None] = mapped_column(String(40))
+    location: Mapped[str | None] = mapped_column(String(120))
+    timezone: Mapped[str | None] = mapped_column(String(60))
+    bio: Mapped[str | None] = mapped_column(String(500))
+    # --- access / lifecycle ---
     role_id: Mapped[int] = mapped_column(ForeignKey("roles.id", ondelete="RESTRICT"), index=True)
     is_active: Mapped[bool] = mapped_column(TINYINT(1), server_default=text("1"))
+    is_approved: Mapped[bool] = mapped_column(TINYINT(1), server_default=text("1"))
     last_login_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=False))
-    # Presence: bumped on authenticated activity; drives the "online" indicator.
     last_seen_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=False))
-    # Session kill-switch: any session token issued before this instant is rejected.
     session_valid_after: Mapped[datetime | None] = mapped_column(DateTime(timezone=False))
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=False), server_default=text("CURRENT_TIMESTAMP(6)")
@@ -55,3 +62,9 @@ class User(Base):
         for ident in self.identities:
             seen.setdefault(ident.provider, None)
         return list(seen.keys())
+
+    @property
+    def status(self) -> str:
+        if not self.is_approved:
+            return "pending"
+        return "active" if self.is_active else "disabled"
