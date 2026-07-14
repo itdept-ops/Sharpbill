@@ -2,6 +2,7 @@ import logging
 
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
+from starlette.concurrency import run_in_threadpool
 
 from app.config import settings
 from app.errors import install_error_handlers
@@ -50,7 +51,9 @@ async def _enforce_json_on_login(request: Request, call_next):
 async def _request_log(request: Request, call_next):
     response = await call_next(request)
     try:
-        record_request(request, response.status_code)
+        # Persistence opens a sync DB session + commits — run it off the event loop so it never
+        # blocks request handling or the WebSocket presence loop.
+        await run_in_threadpool(record_request, request, response.status_code)
     except Exception:
         logging.getLogger("app.requests").exception("request logging error")
     return response

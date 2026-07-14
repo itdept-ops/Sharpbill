@@ -23,6 +23,18 @@ def test_requests_are_logged_with_user_and_endpoint(client):
     assert entry["ip"]  # captured
 
 
+def test_logs_method_filter(client):
+    client.post("/api/auth/dev", json={"email": "admin@example.com", "role": "admin"})
+    resp = client.post("/api/roles", json={"name": "Zeta", "permission_keys": []})
+    assert resp.status_code == 201
+    client.get("/api/users")  # a logged GET
+
+    body = client.get("/api/admin/logs", params={"method": "POST"}).json()
+    assert body["total"] >= 1
+    assert all(e["method"] == "POST" for e in body["items"])
+    assert any(e["path"] == "/api/roles" for e in body["items"])
+
+
 def test_noisy_paths_are_not_logged(client):
     client.post("/api/auth/dev", json={"email": "admin@example.com", "role": "admin"})
     client.get("/api/auth/me")  # skipped path

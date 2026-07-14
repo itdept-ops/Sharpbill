@@ -129,18 +129,15 @@ export function AdminUsersPage() {
 
   const exportCsv = async () => {
     try {
-      const res = await fetch(`/api/users/export.csv?${query().toString()}`, {
-        credentials: "same-origin",
-      });
-      if (!res.ok) throw new Error();
-      const url = URL.createObjectURL(await res.blob());
+      const blob = await api.getBlob(`/api/users/export.csv?${query().toString()}`);
+      const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
       a.download = "users.csv";
       a.click();
       URL.revokeObjectURL(url);
-    } catch {
-      setBanner({ msg: "Export failed" });
+    } catch (e) {
+      setBanner({ msg: e instanceof ApiError ? e.message : "Export failed" });
     }
   };
 

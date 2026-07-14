@@ -7,6 +7,7 @@ from app.db import get_db
 from app.models import RequestLog, User
 from app.permissions import LOGS_VIEW
 from app.schemas.log import RequestLogListOut, RequestLogOut
+from app.sqlutil import escape_like
 
 router = APIRouter(dependencies=[Depends(require_permission(LOGS_VIEW))])
 
@@ -16,12 +17,15 @@ def list_logs(
     db: Session = Depends(get_db),
     limit: int = Query(100, ge=1, le=500),
     offset: int = Query(0, ge=0),
-    search: str | None = Query(None),
+    search: str | None = Query(None, max_length=100),
+    method: str | None = Query(None, max_length=10),
     user_id: int | None = Query(None),
 ) -> RequestLogListOut:
     base = select(RequestLog)
     if search:
-        base = base.where(RequestLog.path.like(f"%{search}%"))
+        base = base.where(RequestLog.path.like(f"%{escape_like(search)}%", escape="\\"))
+    if method:
+        base = base.where(RequestLog.method == method.upper())
     if user_id is not None:
         base = base.where(RequestLog.user_id == user_id)
     total = db.scalar(select(func.count()).select_from(base.subquery())) or 0

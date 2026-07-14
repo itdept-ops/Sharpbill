@@ -121,6 +121,23 @@ def test_kick_invalidates_existing_session(client):
     # (Re-logging in the next second issues a fresh, valid session.)
 
 
+def test_cannot_kick_self(client):
+    admin = _login(client, "admin@example.com", role="admin")
+    resp = client.post(f"/api/users/{admin['id']}/kick")
+    assert resp.status_code == 400
+    assert resp.json()["detail"]["code"] == "CANNOT_MODIFY_SELF"
+
+
+def test_search_escapes_like_wildcards(client):
+    for e in ("a_b@example.com", "axb@example.com"):
+        TestClient(app).post("/api/auth/dev", json={"email": e, "role": "user"})
+    _login(client, "admin@example.com", role="admin")
+    items = client.get("/api/users", params={"search": "a_b"}).json()["items"]
+    emails = {u["email"] for u in items}
+    assert "a_b@example.com" in emails
+    assert "axb@example.com" not in emails  # '_' must match literally, not as a wildcard
+
+
 def test_kick_requires_permission(client):
     target = TestClient(app)
     tu = target.post("/api/auth/dev", json={"email": "kt@example.com", "role": "user"}).json()

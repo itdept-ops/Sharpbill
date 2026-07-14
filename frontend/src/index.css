@@ -100,11 +100,8 @@ code {
   color: var(--ink-dim);
 }
 
-.caps {
-  text-transform: uppercase;
-  letter-spacing: var(--track-label);
+.small {
   font-size: 11px;
-  color: var(--muted);
 }
 .cursor::after {
   content: "▍";
@@ -767,13 +764,6 @@ textarea.field-input {
   color: var(--muted);
   margin-left: 4px;
 }
-.sparkline {
-  color: var(--green);
-  font-size: 13px;
-  letter-spacing: 1px;
-  margin-top: 6px;
-  opacity: 0.8;
-}
 
 /* ---- online panel ---- */
 .online-list {
@@ -875,10 +865,6 @@ tbody tr:hover td {
 }
 tbody tr.row-inactive {
   opacity: 0.5;
-}
-td.num {
-  text-align: right;
-  font-variant-numeric: tabular-nums;
 }
 .row-actions {
   display: flex;
@@ -1261,15 +1247,6 @@ td select.field-input {
   content: "> ";
   color: var(--amber);
 }
-.skills {
-  font-size: 12.5px;
-  color: var(--ink-dim);
-  line-height: 1.9;
-  word-spacing: 4px;
-}
-.skills .k {
-  color: var(--green);
-}
 .chips {
   display: flex;
   flex-wrap: wrap;
@@ -1436,9 +1413,6 @@ td select.field-input {
 }
 .link-btn:hover {
   text-decoration: underline;
-}
-tr.clickable {
-  cursor: pointer;
 }
 
 /* ---- charts ---- */

@@ -20,6 +20,7 @@ from app.schemas.user import (
     UserListOut,
     UserOut,
 )
+from app.sqlutil import escape_like
 
 router = APIRouter()
 
@@ -57,11 +58,11 @@ def _filtered(
 ) -> Select:
     stmt = select(User)
     if search:
-        like = f"%{search.lower()}%"
+        like = f"%{escape_like(search.lower())}%"
         stmt = stmt.where(
             or_(
-                func.lower(User.email).like(like),
-                func.lower(func.coalesce(User.display_name, "")).like(like),
+                func.lower(User.email).like(like, escape="\\"),
+                func.lower(func.coalesce(User.display_name, "")).like(like, escape="\\"),
             )
         )
     if role_id is not None:
@@ -299,6 +300,8 @@ def kick_user(
     db: Session = Depends(get_db),
     actor: User = Depends(require_permission(PRESENCE_KICK)),
 ) -> UserOut:
+    if user_id == actor.id:
+        raise ApiError(400, "CANNOT_MODIFY_SELF", "You cannot kick your own session")
     user = _get_target(db, user_id)
     user.session_valid_after = datetime.now(UTC).replace(tzinfo=None)
     db.commit()

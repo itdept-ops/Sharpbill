@@ -27,9 +27,10 @@ def _should_log(method: str, path: str) -> bool:
 
 
 def _client_ip(request: Request) -> str | None:
-    xff = request.headers.get("x-forwarded-for")
-    if xff:
-        return xff.split(",")[0].strip()
+    # Use the socket peer, not a caller-supplied X-Forwarded-For (which any direct client can
+    # spoof to forge the logged source IP). When a trusted reverse proxy / ALB is added, mount
+    # Uvicorn/Starlette proxy-headers middleware with an explicit trusted-hosts list — that
+    # rewrites request.client.host from XFF safely, and this stays correct.
     return request.client.host if request.client else None
 
 

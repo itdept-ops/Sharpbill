@@ -3,6 +3,8 @@ import { useCallback, useEffect, useState } from "react";
 import { api, ApiError } from "../api/client";
 import type { RequestLog, RequestLogList } from "../types";
 
+const METHODS = ["GET", "POST", "PATCH", "PUT", "DELETE"];
+
 function statusClass(code: number): string {
   if (code >= 500) return "off";
   if (code >= 400) return "warn";
@@ -22,6 +24,7 @@ export function LogsPage() {
     setLoading(true);
     const q = new URLSearchParams({ limit: "200" });
     if (search.trim()) q.set("search", search.trim());
+    if (method) q.set("method", method);
     api
       .get<RequestLogList>(`/api/admin/logs?${q.toString()}`)
       .then((r) => {
@@ -30,15 +33,14 @@ export function LogsPage() {
       })
       .catch((e) => setBanner({ msg: e instanceof ApiError ? e.message : "Failed to load" }))
       .finally(() => setLoading(false));
-  }, [search]);
+  }, [search, method]);
 
   useEffect(() => {
     const t = setTimeout(load, 200);
     return () => clearTimeout(t);
   }, [load]);
 
-  const shown = method ? rows.filter((r) => r.method === method) : rows;
-  const methods = Array.from(new Set(rows.map((r) => r.method))).sort();
+  const filtered = search.trim() !== "" || method !== "";
 
   return (
     <div>
@@ -65,7 +67,7 @@ export function LogsPage() {
         />
         <select className="field-input" value={method} onChange={(e) => setMethod(e.target.value)}>
           <option value="">all methods</option>
-          {methods.map((m) => (
+          {METHODS.map((m) => (
             <option key={m} value={m}>
               {m}
             </option>
@@ -97,14 +99,14 @@ export function LogsPage() {
                 </td>
               </tr>
             )}
-            {!loading && shown.length === 0 && (
+            {!loading && rows.length === 0 && (
               <tr>
                 <td colSpan={6} className="muted">
-                  No requests logged yet.
+                  {filtered ? "No requests match this filter." : "No requests logged yet."}
                 </td>
               </tr>
             )}
-            {shown.map((l) => (
+            {rows.map((l) => (
               <tr key={l.id}>
                 <td className="mono-id" title={new Date(l.created_at).toLocaleString()}>
                   {new Date(l.created_at).toLocaleTimeString()}

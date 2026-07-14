@@ -49,8 +49,31 @@ async function request<T>(path: string, init: RequestInit = {}, opts: RequestOpt
   return res.status === 204 ? (undefined as T) : ((await res.json()) as T);
 }
 
+// Fetch a binary response (e.g. a CSV download) while reusing the shared 401 redirect and
+// {detail:{code,message}} error handling that JSON requests get.
+async function requestBlob(path: string): Promise<Blob> {
+  const res = await fetch(path, { credentials: "same-origin" });
+  if (res.status === 401) onUnauthorized?.();
+  if (!res.ok) {
+    let code = "ERROR";
+    let message = res.statusText;
+    try {
+      const detail = (await res.json())?.detail;
+      if (detail && typeof detail === "object") {
+        message = detail.message ?? message;
+        code = detail.code ?? code;
+      }
+    } catch {
+      /* non-JSON body */
+    }
+    throw new ApiError(res.status, code, message);
+  }
+  return res.blob();
+}
+
 export const api = {
   get: <T>(path: string, opts?: RequestOpts) => request<T>(path, {}, opts),
+  getBlob: (path: string) => requestBlob(path),
   post: <T>(path: string, body?: unknown, opts?: RequestOpts) =>
     request<T>(path, { method: "POST", body: body ? JSON.stringify(body) : undefined }, opts),
   patch: <T>(path: string, body: unknown, opts?: RequestOpts) =>
