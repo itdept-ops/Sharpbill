@@ -26,13 +26,7 @@ function StatusChip({ status }: { status: string }) {
   return <span className={`status-pill ${cls}`}>{glyph} {status}</span>;
 }
 
-export function UserProfile({
-  user: initial,
-  onChange,
-}: {
-  user: User;
-  onChange?: (u: User) => void;
-}) {
+export function UserProfile({ user: initial }: { user: User }) {
   const { user: me, setUser } = useAuth();
   const [user, setLocal] = useState<User>(initial);
   const [banner, setBanner] = useState<{ msg: string; ok?: boolean } | null>(null);
@@ -56,7 +50,6 @@ export function UserProfile({
   const apply = (u: User) => {
     setLocal(u);
     if (isSelf) setUser(u); // keep the global session in sync when editing yourself
-    onChange?.(u); // let a host (e.g. the directory table) reflect the change
   };
 
   const startEdit = () => {

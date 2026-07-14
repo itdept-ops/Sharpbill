@@ -4,7 +4,7 @@ import { Link } from "react-router-dom";
 import { api, ApiError } from "../api/client";
 import { useAuth } from "../auth/AuthContext";
 import { ProviderBadge, RoleBadge } from "../components/badges";
-import { UserProfile } from "../components/UserProfile";
+import { UserEditModal } from "../components/UserEditModal";
 import type { Role, User, UserList } from "../types";
 
 const PAGE_SIZE = 25;
@@ -329,21 +329,12 @@ export function AdminUsersPage() {
       )}
 
       {editing && (
-        <div className="modal" onClick={() => setEditing(null)}>
-          <section
-            className="panel panel--brackets modal-panel wide"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="panel-header">
-              // EDIT USER · {editing.email}
-              <span className="spacer" />
-              <button className="icon-btn" onClick={() => setEditing(null)}>✕ close</button>
-            </div>
-            <div className="panel-body">
-              <UserProfile user={editing} onChange={replace} />
-            </div>
-          </section>
-        </div>
+        <UserEditModal
+          user={editing}
+          roles={roles}
+          onClose={() => setEditing(null)}
+          onChange={replace}
+        />
       )}
     </div>
   );

@@ -1352,8 +1352,38 @@ td select.field-input {
   max-height: 88vh;
   overflow: auto;
 }
-.modal-panel.wide {
-  width: 920px;
+/* ---- focused user editor ---- */
+.modal-panel.edit-modal {
+  width: 640px;
+}
+.edit-id-head {
+  display: flex;
+  gap: 14px;
+  align-items: center;
+  padding-bottom: 14px;
+  border-bottom: 1px solid var(--border);
+}
+.edit-id-badges {
+  margin-top: 6px;
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+.edit-section {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.edit-section-title {
+  text-transform: uppercase;
+  letter-spacing: var(--track-label);
+  font-size: 11px;
+  color: var(--teal);
+}
+.field-input:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
 }
 .modal-panel .panel-body {
   display: flex;
