@@ -41,7 +41,11 @@ class UserOut(BaseModel):
     last_location_at: datetime | None
 
     @classmethod
-    def from_user(cls, user: User, *, online: bool = False) -> "UserOut":
+    def from_user(
+        cls, user: User, *, online: bool = False, include_location: bool = True
+    ) -> "UserOut":
+        # Location is opt-in GPS and privacy-sensitive: callers pass include_location=False to
+        # strip it for viewers who may only see their own coordinates.
         return cls(
             id=user.id,
             email=user.email,
@@ -67,10 +71,10 @@ class UserOut(BaseModel):
             last_login_at=user.last_login_at,
             last_seen_at=user.last_seen_at,
             online=online,
-            last_latitude=user.last_latitude,
-            last_longitude=user.last_longitude,
-            last_location_accuracy=user.last_location_accuracy,
-            last_location_at=user.last_location_at,
+            last_latitude=user.last_latitude if include_location else None,
+            last_longitude=user.last_longitude if include_location else None,
+            last_location_accuracy=user.last_location_accuracy if include_location else None,
+            last_location_at=user.last_location_at if include_location else None,
         )
 
 

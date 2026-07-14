@@ -954,38 +954,35 @@ td select.field-input {
   border-color: rgba(255, 90, 71, 0.35);
 }
 
-/* ---- contacts pipeline ---- */
-.pipeline {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
-  gap: 12px;
-  margin-bottom: 16px;
-}
-.pipe-stage {
+/* ---- permission chips (dashboard "your access") ---- */
+.perm-chips {
   display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 8px;
-  background: var(--panel);
-  border: 1px solid var(--border);
-  border-left: 2px solid var(--border);
-  border-radius: 2px;
-  padding: 12px 14px;
-  cursor: pointer;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.perm-chip {
   font-family: var(--font-mono);
-}
-.pipe-stage:hover {
-  border-color: var(--teal);
-}
-.pipe-stage.active {
-  border-left-color: var(--green);
+  font-size: 11px;
+  color: var(--ink-dim);
   background: var(--panel-2);
+  border: 1px solid var(--border);
+  border-radius: 2px;
+  padding: 2px 8px;
 }
-.pipe-count {
-  font-size: 26px;
-  font-weight: 600;
-  color: var(--ink);
-  font-variant-numeric: tabular-nums;
+
+/* ---- directory table extras ---- */
+.row-sub {
+  margin-top: 3px;
+  display: flex;
+  gap: 4px;
+}
+.pager {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  margin-top: 14px;
+  font-size: 12px;
 }
 
 /* ---- bulk action bar ---- */
@@ -1354,6 +1351,9 @@ td select.field-input {
   max-width: 100%;
   max-height: 88vh;
   overflow: auto;
+}
+.modal-panel.wide {
+  width: 920px;
 }
 .modal-panel .panel-body {
   display: flex;

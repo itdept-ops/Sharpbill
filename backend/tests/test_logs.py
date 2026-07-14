@@ -9,12 +9,13 @@ def test_logs_require_permission(client):
 def test_requests_are_logged_with_user_and_endpoint(client):
     client.post("/api/auth/dev", json={"email": "admin@example.com", "role": "admin"})
     # A meaningful request that should be recorded.
-    assert client.post("/api/contacts", json={"first_name": "Log Me"}).status_code == 201
+    resp = client.post("/api/roles", json={"name": "Logged", "permission_keys": []})
+    assert resp.status_code == 201
 
     body = client.get("/api/admin/logs").json()
     assert body["total"] >= 1
     entry = next(
-        (e for e in body["items"] if e["path"] == "/api/contacts" and e["method"] == "POST"), None
+        (e for e in body["items"] if e["path"] == "/api/roles" and e["method"] == "POST"), None
     )
     assert entry is not None
     assert entry["status_code"] == 201

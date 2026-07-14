@@ -261,3 +261,79 @@ def test_filter_users_by_search_and_role(client):
     assert client.get("/api/users", params={"search": "alice"}).json()["total"] == 1
     admins = client.get("/api/users", params={"role_id": admin_role}).json()
     assert all(u["role"] == "admin" for u in admins["items"])
+
+
+def test_location_visible_to_self_and_managers_only(client):
+    """Opt-in GPS is only exposed to a user viewing themselves or to users.manage holders."""
+    owner = TestClient(app)
+    ou = owner.post("/api/auth/dev", json={"email": "loc@example.com", "role": "user"}).json()
+    assert (
+        owner.post(
+            "/api/auth/location", json={"latitude": 40.7, "longitude": -74.0, "accuracy": 10}
+        ).status_code
+        == 204
+    )
+
+    # Self sees their own coordinates.
+    assert owner.get(f"/api/users/{ou['id']}").json()["last_latitude"] == 40.7
+
+    # A manager (users.manage) sees everyone's coordinates.
+    _login(client, "admin@example.com", role="admin")
+    admin_row = next(
+        u for u in client.get("/api/users").json()["items"] if u["email"] == "loc@example.com"
+    )
+    assert admin_row["last_latitude"] == 40.7
+
+    # A users.read-only viewer must NOT see other users' coordinates (list or detail).
+    client.post("/api/roles", json={"name": "ReadOnly", "permission_keys": ["users.read"]})
+    viewer = TestClient(app)
+    viewer.post("/api/auth/dev", json={"email": "ro@example.com", "role": "ReadOnly"})
+    v_row = next(
+        u for u in viewer.get("/api/users").json()["items"] if u["email"] == "loc@example.com"
+    )
+    assert v_row["last_latitude"] is None
+    assert viewer.get(f"/api/users/{ou['id']}").json()["last_latitude"] is None
+
+
+def test_kick_response_hides_location_from_non_manager(client):
+    """presence.kick alone must not leak the target's GPS in the kick response."""
+    owner = TestClient(app)
+    ou = owner.post("/api/auth/dev", json={"email": "gps@example.com", "role": "user"}).json()
+    owner.post("/api/auth/location", json={"latitude": 51.5, "longitude": -0.12, "accuracy": 8})
+
+    # A role with presence.kick but NOT users.manage (mirrors the seeded "Manager").
+    _login(client, "admin@example.com", role="admin")
+    client.post(
+        "/api/roles",
+        json={"name": "Moderator", "permission_keys": ["presence.view", "presence.kick"]},
+    )
+    mod = TestClient(app)
+    mod.post("/api/auth/dev", json={"email": "mod@example.com", "role": "Moderator"})
+
+    resp = mod.post(f"/api/users/{ou['id']}/kick")
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["last_latitude"] is None
+    assert body["last_longitude"] is None
+    assert body["last_location_accuracy"] is None
+
+    # ...but an admin (users.manage) kicking still sees coordinates.
+    admin_resp = client.post(f"/api/users/{ou['id']}/kick")
+    assert admin_resp.json()["last_latitude"] == 51.5
+
+
+def test_user_list_pagination(client):
+    _login(client, "admin@example.com", role="admin")
+    for i in range(4):
+        TestClient(app).post("/api/auth/dev", json={"email": f"pg{i}@example.com", "role": "user"})
+
+    full = client.get("/api/users").json()
+    assert full["total"] >= 5  # admin + 4
+
+    page = client.get("/api/users", params={"limit": 2, "offset": 0}).json()
+    assert page["total"] == full["total"]  # total counts all matches, not just the page
+    assert len(page["items"]) == 2
+
+    page2 = client.get("/api/users", params={"limit": 2, "offset": 2}).json()
+    assert len(page2["items"]) == 2
+    assert {u["id"] for u in page["items"]}.isdisjoint({u["id"] for u in page2["items"]})

@@ -80,16 +80,29 @@ def _filtered(
 @router.get("", response_model=UserListOut)
 def list_users(
     db: Session = Depends(get_db),
-    _: User = Depends(require_permission(USERS_READ)),
+    current: User = Depends(require_permission(USERS_READ)),
     search: str | None = Query(None, max_length=100),
     role_id: int | None = Query(None),
     status: str | None = Query(None, pattern="^(active|pending|disabled)$"),
     online: bool | None = Query(None),
+    limit: int = Query(100, ge=1, le=500),
+    offset: int = Query(0, ge=0),
 ) -> UserListOut:
-    users = list(db.scalars(_filtered(search, role_id, status, online)))
+    stmt = _filtered(search, role_id, status, online)
+    total = db.scalar(select(func.count()).select_from(stmt.subquery())) or 0
+    users = list(db.scalars(stmt.limit(limit).offset(offset)))
+    # Precise GPS is only shown to managers (users.manage) and to a user viewing themselves.
+    can_loc = USERS_MANAGE in current.permission_keys
     return UserListOut(
-        items=[UserOut.from_user(u, online=is_online(u.last_seen_at)) for u in users],
-        total=len(users),
+        items=[
+            UserOut.from_user(
+                u,
+                online=is_online(u.last_seen_at),
+                include_location=can_loc or u.id == current.id,
+            )
+            for u in users
+        ],
+        total=total,
     )
 
 
@@ -203,7 +216,10 @@ def get_user(
     if user_id != current.id and USERS_READ not in current.permission_keys:
         raise ApiError(403, "FORBIDDEN", "Missing permission: users.read")
     user = _get_target(db, user_id)
-    return UserOut.from_user(user, online=is_online(user.last_seen_at))
+    include_location = user.id == current.id or USERS_MANAGE in current.permission_keys
+    return UserOut.from_user(
+        user, online=is_online(user.last_seen_at), include_location=include_location
+    )
 
 
 @router.patch("/{user_id}/profile", response_model=UserOut)
@@ -281,9 +297,14 @@ def approve_user(
 def kick_user(
     user_id: int,
     db: Session = Depends(get_db),
-    _: User = Depends(require_permission(PRESENCE_KICK)),
+    actor: User = Depends(require_permission(PRESENCE_KICK)),
 ) -> UserOut:
     user = _get_target(db, user_id)
     user.session_valid_after = datetime.now(UTC).replace(tzinfo=None)
     db.commit()
-    return UserOut.from_user(user, online=is_online(user.last_seen_at))
+    # presence.kick is distinct from users.manage, so gate the target's GPS the same way the
+    # directory does — a kicker without users.manage must not learn the target's coordinates.
+    include_location = user.id == actor.id or USERS_MANAGE in actor.permission_keys
+    return UserOut.from_user(
+        user, online=is_online(user.last_seen_at), include_location=include_location
+    )

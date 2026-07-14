@@ -39,11 +39,6 @@ function ShellInner() {
         <NavLink to="/dashboard" className="rail-item">
           ▸ Dashboard
         </NavLink>
-        {can("contacts.read") && (
-          <NavLink to="/contacts" className="rail-item">
-            ▸ Contacts
-          </NavLink>
-        )}
         <NavLink to="/profile" className="rail-item">
           ▸ My Profile
         </NavLink>

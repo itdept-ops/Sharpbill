@@ -15,14 +15,24 @@ export function LoginPage() {
   const from = (location.state as { from?: string } | null)?.from ?? "/dashboard";
 
   const [config, setConfig] = useState<AuthConfig | null>(null);
+  const [configFailed, setConfigFailed] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [devEmail, setDevEmail] = useState("");
   const [devRole, setDevRole] = useState("user");
   const googleBtnRef = useRef<HTMLDivElement>(null);
 
-  useEffect(() => {
-    api.get<AuthConfig>("/api/auth/config").then(setConfig).catch(() => setConfig(null));
-  }, []);
+  const loadConfig = () => {
+    setConfigFailed(false);
+    api
+      .get<AuthConfig>("/api/auth/config")
+      .then(setConfig)
+      .catch(() => {
+        setConfig(null);
+        setConfigFailed(true);
+      });
+  };
+
+  useEffect(loadConfig, []);
 
   const onSuccess = (u: User) => {
     setUser(u);
@@ -154,6 +164,16 @@ export function LoginPage() {
                 Authenticate ▍
               </button>
             </form>
+          )}
+
+          {configFailed && (
+            <div className="auth-error" style={{ display: "flex", alignItems: "center", gap: 10 }}>
+              <span>ERR: could not reach the sign-in service.</span>
+              <span className="spacer" />
+              <button className="btn btn-ghost btn-sm" onClick={loadConfig}>
+                Retry
+              </button>
+            </div>
           )}
 
           {noProviders && (

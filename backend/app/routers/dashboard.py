@@ -23,7 +23,6 @@ def _count(db: Session, *conditions) -> int:
 @router.get("/dashboard")
 def dashboard(db: Session = Depends(get_db), user: User = Depends(get_current_user)) -> dict:
     return {
-        "message": "Welcome to Kingfisher CRM. Real features are coming next.",
         "stats": {
             "total_users": _count(db),
             "active_users": _count(db, User.is_active.is_(True), User.is_approved.is_(True)),

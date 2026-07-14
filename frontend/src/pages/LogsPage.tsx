@@ -13,11 +13,13 @@ function statusClass(code: number): string {
 export function LogsPage() {
   const [rows, setRows] = useState<RequestLog[]>([]);
   const [total, setTotal] = useState(0);
+  const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [method, setMethod] = useState("");
   const [banner, setBanner] = useState<{ msg: string; ok?: boolean } | null>(null);
 
   const load = useCallback(() => {
+    setLoading(true);
     const q = new URLSearchParams({ limit: "200" });
     if (search.trim()) q.set("search", search.trim());
     api
@@ -26,7 +28,8 @@ export function LogsPage() {
         setRows(r.items);
         setTotal(r.total);
       })
-      .catch((e) => setBanner({ msg: e instanceof ApiError ? e.message : "Failed to load" }));
+      .catch((e) => setBanner({ msg: e instanceof ApiError ? e.message : "Failed to load" }))
+      .finally(() => setLoading(false));
   }, [search]);
 
   useEffect(() => {
@@ -87,7 +90,14 @@ export function LogsPage() {
             </tr>
           </thead>
           <tbody>
-            {shown.length === 0 && (
+            {loading && (
+              <tr>
+                <td colSpan={6} className="muted">
+                  Loading…
+                </td>
+              </tr>
+            )}
+            {!loading && shown.length === 0 && (
               <tr>
                 <td colSpan={6} className="muted">
                   No requests logged yet.

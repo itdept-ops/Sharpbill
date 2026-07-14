@@ -77,7 +77,6 @@ def _clean_tables():
             )
         )
         conn.execute(text("DELETE FROM request_logs"))
-        conn.execute(text("DELETE FROM contacts"))
         conn.execute(text("DELETE FROM user_identities"))
         conn.execute(text("DELETE FROM users"))
         conn.execute(text("DELETE FROM roles WHERE is_system = 0"))
@@ -94,8 +93,7 @@ def _clean_tables():
             text(
                 "INSERT INTO role_permissions (role_id, permission_id) "
                 "SELECT r.id, p.id FROM roles r JOIN permissions p "
-                "WHERE r.name = 'user' AND p.key IN "
-                "('presence.view', 'contacts.read', 'contacts.write')"
+                "WHERE r.name = 'user' AND p.key IN ('presence.view')"
             )
         )
     yield

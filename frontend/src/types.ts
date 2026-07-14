@@ -57,7 +57,6 @@ export interface AuthConfig {
 }
 
 export interface DashboardData {
-  message: string;
   stats: { total_users: number; active_users: number; online_users: number };
 }
 
@@ -104,37 +103,6 @@ export interface SiteSettings {
   default_role_id: number;
   default_role_name: string;
   updated_at: string;
-}
-
-export type ContactStatus = "lead" | "active" | "customer" | "archived";
-
-export interface Contact {
-  id: number;
-  first_name: string;
-  last_name: string | null;
-  full_name: string;
-  email: string | null;
-  phone: string | null;
-  company: string | null;
-  title: string | null;
-  status: ContactStatus;
-  owner_id: number | null;
-  owner_name: string | null;
-  notes: string | null;
-  created_at: string;
-  updated_at: string;
-}
-
-export interface ContactList {
-  items: Contact[];
-  total: number;
-}
-
-export interface ContactStats {
-  total: number;
-  by_status: { status: string; count: number }[];
-  by_owner: { owner: string; count: number }[];
-  created: { date: string; count: number }[];
 }
 
 export interface RequestLog {

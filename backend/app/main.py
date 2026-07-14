@@ -6,7 +6,7 @@ from fastapi.responses import JSONResponse
 from app.config import settings
 from app.errors import install_error_handlers
 from app.request_logging import record_request
-from app.routers import auth, contacts, dashboard, health, logs, presence, roles, users, ws
+from app.routers import auth, dashboard, health, logs, presence, roles, users, ws
 from app.routers import settings as settings_router
 
 logging.basicConfig(level=settings.log_level)
@@ -61,7 +61,6 @@ app.include_router(auth.router, prefix="/api/auth", tags=["auth"])
 app.include_router(users.router, prefix="/api/users", tags=["users"])
 app.include_router(roles.router, prefix="/api", tags=["rbac"])
 app.include_router(presence.router, prefix="/api/presence", tags=["presence"])
-app.include_router(contacts.router, prefix="/api/contacts", tags=["contacts"])
 app.include_router(settings_router.router, prefix="/api/admin", tags=["settings"])
 app.include_router(logs.router, prefix="/api/admin", tags=["logs"])
 app.include_router(dashboard.router, prefix="/api", tags=["dashboard"])

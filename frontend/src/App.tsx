@@ -6,7 +6,6 @@ import { AppShell } from "./components/AppShell";
 import { AboutPage } from "./pages/AboutPage";
 import { AdminRolesPage } from "./pages/AdminRolesPage";
 import { AdminUsersPage } from "./pages/AdminUsersPage";
-import { ContactsPage } from "./pages/ContactsPage";
 import { DashboardPage } from "./pages/DashboardPage";
 import { LandingPage } from "./pages/LandingPage";
 import { LogsPage } from "./pages/LogsPage";
@@ -29,14 +28,6 @@ export default function App() {
       <Route element={<ProtectedRoute />}>
         <Route element={<AppShell />}>
           <Route path="/dashboard" element={<DashboardPage />} />
-          <Route
-            path="/contacts"
-            element={
-              <RequirePermission perm="contacts.read">
-                <ContactsPage />
-              </RequirePermission>
-            }
-          />
           <Route path="/profile" element={<ProfilePage />} />
           <Route
             path="/admin/users"

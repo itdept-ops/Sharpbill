@@ -4,7 +4,10 @@ import { Link } from "react-router-dom";
 import { api, ApiError } from "../api/client";
 import { useAuth } from "../auth/AuthContext";
 import { ProviderBadge, RoleBadge } from "../components/badges";
+import { UserProfile } from "../components/UserProfile";
 import type { Role, User, UserList } from "../types";
+
+const PAGE_SIZE = 25;
 
 function statusChip(u: User) {
   if (u.status === "pending") return <span className="status-pill info">◆ PENDING</span>;
@@ -16,6 +19,12 @@ function statusChip(u: User) {
   );
 }
 
+function lastActive(u: User): string {
+  if (u.online) return "online now";
+  const iso = u.last_seen_at ?? u.last_login_at;
+  return iso ? new Date(iso).toLocaleString() : "—";
+}
+
 interface BulkResult {
   applied: number;
   results: { id: number; ok: boolean; error?: string }[];
@@ -24,10 +33,13 @@ interface BulkResult {
 export function AdminUsersPage() {
   const { user: me } = useAuth();
   const [users, setUsers] = useState<User[]>([]);
+  const [total, setTotal] = useState(0);
   const [roles, setRoles] = useState<Role[]>([]);
   const [banner, setBanner] = useState<{ msg: string; ok?: boolean } | null>(null);
   const [loading, setLoading] = useState(true);
   const [selected, setSelected] = useState<Set<number>>(new Set());
+  const [editing, setEditing] = useState<User | null>(null);
+  const [page, setPage] = useState(0);
 
   const [search, setSearch] = useState("");
   const [roleId, setRoleId] = useState("");
@@ -47,14 +59,25 @@ export function AdminUsersPage() {
     return q;
   }, [search, roleId, status, onlineOnly]);
 
+  // Filters change → back to the first page.
+  useEffect(() => {
+    setPage(0);
+  }, [search, roleId, status, onlineOnly]);
+
   const load = useCallback(() => {
     setLoading(true);
+    const q = query();
+    q.set("limit", String(PAGE_SIZE));
+    q.set("offset", String(page * PAGE_SIZE));
     api
-      .get<UserList>(`/api/users?${query().toString()}`)
-      .then((r) => setUsers(r.items))
+      .get<UserList>(`/api/users?${q.toString()}`)
+      .then((r) => {
+        setUsers(r.items);
+        setTotal(r.total);
+      })
       .catch((e) => setBanner({ msg: e instanceof ApiError ? e.message : "Failed to load" }))
       .finally(() => setLoading(false));
-  }, [query]);
+  }, [query, page]);
 
   useEffect(() => {
     const t = setTimeout(load, 200);
@@ -65,7 +88,8 @@ export function AdminUsersPage() {
     if (canManageRoles) api.get<Role[]>("/api/roles").then(setRoles).catch(() => setRoles([]));
   }, [canManageRoles]);
 
-  const replace = (u: User) => setUsers((rows) => rows.map((r) => (r.id === u.id ? u : r)));
+  const replace = (u: User) =>
+    setUsers((rows) => rows.map((r) => (r.id === u.id ? u : r)));
 
   const act = async (fn: () => Promise<User>, prev: User, okMsg?: string) => {
     setBanner(null);
@@ -86,8 +110,7 @@ export function AdminUsersPage() {
       return n;
     });
   const allSelected = users.length > 0 && users.every((u) => selected.has(u.id));
-  const toggleAll = () =>
-    setSelected(allSelected ? new Set() : new Set(users.map((u) => u.id)));
+  const toggleAll = () => setSelected(allSelected ? new Set() : new Set(users.map((u) => u.id)));
 
   const bulk = async (action: string, role_id?: number) => {
     const ids = [...selected];
@@ -106,7 +129,9 @@ export function AdminUsersPage() {
 
   const exportCsv = async () => {
     try {
-      const res = await fetch(`/api/users/export.csv?${query().toString()}`, { credentials: "same-origin" });
+      const res = await fetch(`/api/users/export.csv?${query().toString()}`, {
+        credentials: "same-origin",
+      });
       if (!res.ok) throw new Error();
       const url = URL.createObjectURL(await res.blob());
       const a = document.createElement("a");
@@ -119,10 +144,15 @@ export function AdminUsersPage() {
     }
   };
 
+  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+  const cols = canManage ? 9 : 8;
+
   return (
     <div>
       <h1 className="page-title">SYS://admin / users</h1>
-      <p className="page-sub">{users.length} record{users.length === 1 ? "" : "s"} shown</p>
+      <p className="page-sub">
+        {total} record{total === 1 ? "" : "s"} · directory &amp; access control
+      </p>
 
       {banner && (
         <div className={`banner ${banner.ok ? "ok" : ""}`} role="alert">
@@ -203,81 +233,118 @@ export function AdminUsersPage() {
               <th>Status</th>
               <th>Email</th>
               <th>Name</th>
-              <th>Providers</th>
-              <th>Verified ID</th>
               <th>Role</th>
+              <th>Department</th>
+              <th>Title</th>
+              <th>Last active</th>
               <th style={{ textAlign: "right" }}>Actions</th>
             </tr>
           </thead>
           <tbody>
             {loading && (
-              <tr><td colSpan={canManage ? 8 : 7} className="muted">Loading…</td></tr>
+              <tr><td colSpan={cols} className="muted">Loading…</td></tr>
             )}
             {!loading && users.length === 0 && (
-              <tr><td colSpan={canManage ? 8 : 7} className="muted">No users match.</td></tr>
+              <tr><td colSpan={cols} className="muted">No users match.</td></tr>
             )}
-            {users.map((u) => {
-              const isSelf = u.id === me?.id;
-              return (
-                <tr key={u.id} className={u.is_active && u.is_approved ? "" : "row-inactive"}>
-                  {canManage && (
-                    <td>
-                      <input
-                        type="checkbox"
-                        checked={selected.has(u.id)}
-                        onChange={() => toggleSel(u.id)}
-                        disabled={isSelf}
-                      />
-                    </td>
-                  )}
-                  <td>{statusChip(u)}</td>
-                  <td>
-                    <Link to={`/admin/users/${u.id}`}>{u.email}</Link>
-                    {isSelf && <span className="muted"> (you)</span>}
-                  </td>
-                  <td className="sans">{u.display_name ?? "—"}</td>
-                  <td>{u.auth_providers.map((p) => <ProviderBadge key={p} provider={p} />)}</td>
-                  <td>
-                    {u.identities.map((i) => (
-                      <div key={i.provider + i.subject} className="mono-id" title={i.subject}>
-                        {i.provider}:{i.subject.length > 12 ? `${i.subject.slice(0, 10)}…` : i.subject}
-                      </div>
-                    ))}
-                  </td>
-                  <td>
-                    {canEditRole && !isSelf ? (
-                      <select
-                        className="field-input"
-                        value={u.role_id}
-                        onChange={(e) =>
-                          act(() => api.patch<User>(`/api/users/${u.id}/role`, { role_id: Number(e.target.value) }), u)
-                        }
-                      >
-                        {roles.map((r) => <option key={r.id} value={r.id}>{r.name}</option>)}
-                      </select>
-                    ) : (
-                      <RoleBadge role={u.role} />
+            {!loading &&
+              users.map((u) => {
+                const isSelf = u.id === me?.id;
+                return (
+                  <tr key={u.id} className={u.is_active && u.is_approved ? "" : "row-inactive"}>
+                    {canManage && (
+                      <td>
+                        <input
+                          type="checkbox"
+                          checked={selected.has(u.id)}
+                          onChange={() => toggleSel(u.id)}
+                          disabled={isSelf}
+                        />
+                      </td>
                     )}
-                  </td>
-                  <td>
-                    <div className="row-actions">
-                      {canManage && u.status === "pending" && (
-                        <button
-                          className="icon-btn"
-                          onClick={() => act(() => api.post<User>(`/api/users/${u.id}/approve`), u, `Approved ${u.email}.`)}
+                    <td>{statusChip(u)}</td>
+                    <td>
+                      <Link to={`/admin/users/${u.id}`}>{u.email}</Link>
+                      {isSelf && <span className="muted"> (you)</span>}
+                      <div className="row-sub">{u.auth_providers.map((p) => <ProviderBadge key={p} provider={p} />)}</div>
+                    </td>
+                    <td className="sans">{u.display_name ?? "—"}</td>
+                    <td>
+                      {canEditRole && !isSelf ? (
+                        <select
+                          className="field-input"
+                          value={u.role_id}
+                          onChange={(e) =>
+                            act(() => api.patch<User>(`/api/users/${u.id}/role`, { role_id: Number(e.target.value) }), u)
+                          }
                         >
-                          Approve
-                        </button>
+                          {roles.map((r) => <option key={r.id} value={r.id}>{r.name}</option>)}
+                        </select>
+                      ) : (
+                        <RoleBadge role={u.role} />
                       )}
-                      <Link className="icon-btn" to={`/admin/users/${u.id}`}>View</Link>
-                    </div>
-                  </td>
-                </tr>
-              );
-            })}
+                    </td>
+                    <td className="sans">{u.department ?? "—"}</td>
+                    <td className="sans">{u.title ?? "—"}</td>
+                    <td className="sans muted">{lastActive(u)}</td>
+                    <td>
+                      <div className="row-actions">
+                        {canManage && u.status === "pending" && (
+                          <button
+                            className="icon-btn"
+                            onClick={() => act(() => api.post<User>(`/api/users/${u.id}/approve`), u, `Approved ${u.email}.`)}
+                          >
+                            Approve
+                          </button>
+                        )}
+                        {canManage && (
+                          <button className="icon-btn" onClick={() => setEditing(u)}>
+                            Edit
+                          </button>
+                        )}
+                        <Link className="icon-btn" to={`/admin/users/${u.id}`}>View</Link>
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
           </tbody>
         </table>
       </div>
+
+      {totalPages > 1 && (
+        <div className="pager">
+          <button className="btn btn-ghost btn-sm" disabled={page === 0} onClick={() => setPage((p) => p - 1)}>
+            ← Prev
+          </button>
+          <span className="muted">Page {page + 1} of {totalPages}</span>
+          <button
+            className="btn btn-ghost btn-sm"
+            disabled={page >= totalPages - 1}
+            onClick={() => setPage((p) => p + 1)}
+          >
+            Next →
+          </button>
+        </div>
+      )}
+
+      {editing && (
+        <div className="modal" onClick={() => setEditing(null)}>
+          <section
+            className="panel panel--brackets modal-panel wide"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="panel-header">
+              // EDIT USER · {editing.email}
+              <span className="spacer" />
+              <button className="icon-btn" onClick={() => setEditing(null)}>✕ close</button>
+            </div>
+            <div className="panel-body">
+              <UserProfile user={editing} onChange={replace} />
+            </div>
+          </section>
+        </div>
+      )}
     </div>
   );
 }

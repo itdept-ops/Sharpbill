@@ -1,5 +1,4 @@
 from app.models.base import Base
-from app.models.contact import Contact
 from app.models.permission import Permission
 from app.models.request_log import RequestLog
 from app.models.role import Role
@@ -10,7 +9,6 @@ from app.models.user_identity import UserIdentity
 
 __all__ = [
     "Base",
-    "Contact",
     "Permission",
     "RequestLog",
     "Role",

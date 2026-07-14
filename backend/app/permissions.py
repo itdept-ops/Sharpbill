@@ -12,8 +12,6 @@ ROLES_MANAGE = "roles.manage"
 PRESENCE_VIEW = "presence.view"
 PRESENCE_KICK = "presence.kick"
 SETTINGS_MANAGE = "settings.manage"
-CONTACTS_READ = "contacts.read"
-CONTACTS_WRITE = "contacts.write"
 LOGS_VIEW = "logs.view"
 
 # (key, description) — order is the seed order.
@@ -24,8 +22,6 @@ BUILTIN_PERMISSIONS: list[tuple[str, str]] = [
     (PRESENCE_VIEW, "See who is currently online"),
     (PRESENCE_KICK, "Force sign-out (kick) a user's active sessions"),
     (SETTINGS_MANAGE, "Manage site settings and approve sign-ups"),
-    (CONTACTS_READ, "View contacts"),
-    (CONTACTS_WRITE, "Create, edit, and delete contacts"),
     (LOGS_VIEW, "View the request activity log"),
 ]
 
@@ -42,13 +38,11 @@ SYSTEM_ROLES: dict[str, dict] = {
             PRESENCE_VIEW,
             PRESENCE_KICK,
             SETTINGS_MANAGE,
-            CONTACTS_READ,
-            CONTACTS_WRITE,
             LOGS_VIEW,
         ],
     },
     DEFAULT_ROLE: {
         "description": "Standard access for new members.",
-        "permissions": [PRESENCE_VIEW, CONTACTS_READ, CONTACTS_WRITE],
+        "permissions": [PRESENCE_VIEW],
     },
 }
