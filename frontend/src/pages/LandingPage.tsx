@@ -25,6 +25,7 @@ export function LandingPage() {
         <span className="brand">◈ KINGFISHER CRM</span>
         <span className="spacer" />
         <Link to="/technology">Technology</Link>
+        <Link to="/security">Security</Link>
         <Link to="/about">About</Link>
         <Link to={enter}>{user ? "Console" : "Sign in"}</Link>
       </nav>

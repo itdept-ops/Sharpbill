@@ -46,6 +46,7 @@ export function TechnologyPage() {
           ◈ KINGFISHER CRM
         </Link>
         <span className="spacer" />
+        <Link to="/security">Security</Link>
         <Link to="/about">About</Link>
         <Link to={user ? "/dashboard" : "/login"}>{user ? "Console" : "Sign in"}</Link>
       </nav>

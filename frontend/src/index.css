@@ -1788,6 +1788,84 @@ td select.field-input {
   color: var(--muted);
 }
 
+/* ---- security walkthrough (numbered steps) ---- */
+.walk {
+  list-style: none;
+  margin: 0 0 8px;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.walk-step {
+  display: grid;
+  grid-template-columns: 44px 1fr;
+  gap: 14px;
+  align-items: start;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-left: 2px solid var(--green);
+  border-radius: 2px;
+  padding: 14px 16px;
+}
+.walk-num {
+  font-family: var(--font-mono);
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--green);
+  font-variant-numeric: tabular-nums;
+}
+.walk-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.walk-title {
+  font-weight: 600;
+  color: var(--ink);
+  letter-spacing: 0.02em;
+}
+.walk-tag {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: var(--track-label);
+  color: var(--teal);
+  border: 1px solid rgba(25, 229, 208, 0.3);
+  border-radius: 2px;
+  padding: 2px 7px;
+  white-space: nowrap;
+}
+.walk-detail {
+  margin: 7px 0 0;
+  font-family: var(--font-sans);
+  font-size: 13px;
+  color: var(--ink-dim);
+  line-height: 1.6;
+}
+.walk-note {
+  margin-top: 18px;
+  padding: 12px 14px;
+  font-family: var(--font-sans);
+  font-size: 12.5px;
+  color: var(--ink-dim);
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  border-left: 2px solid var(--amber);
+  border-radius: 2px;
+}
+
+/* ---- auth panel footer links ---- */
+.auth-links {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-top: 4px;
+  font-size: 12px;
+}
+
 /* ---- role builder permission groups ---- */
 .perm-groups {
   display: flex;

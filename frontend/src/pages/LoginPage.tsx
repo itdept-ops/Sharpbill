@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Navigate, useLocation, useNavigate } from "react-router-dom";
+import { Link, Navigate, useLocation, useNavigate } from "react-router-dom";
 
 import { api, ApiError } from "../api/client";
 import { useAuth } from "../auth/AuthContext";
@@ -19,6 +19,7 @@ export function LoginPage() {
   const [error, setError] = useState<string | null>(null);
   const [devEmail, setDevEmail] = useState("");
   const [devRole, setDevRole] = useState("user");
+  const [devRoles, setDevRoles] = useState<string[]>(["user", "admin"]);
   const googleBtnRef = useRef<HTMLDivElement>(null);
 
   const loadConfig = () => {
@@ -33,6 +34,19 @@ export function LoginPage() {
   };
 
   useEffect(loadConfig, []);
+
+  // Populate the dev role dropdown with every role (system + custom) when dev login is available.
+  useEffect(() => {
+    if (!config?.dev) return;
+    api
+      .get<string[]>("/api/auth/dev/roles")
+      .then((roles) => {
+        if (roles.length) setDevRoles(roles);
+      })
+      .catch(() => {
+        /* keep the user/admin fallback */
+      });
+  }, [config?.dev]);
 
   const onSuccess = (u: User) => {
     setUser(u);
@@ -156,8 +170,11 @@ export function LoginPage() {
                   value={devRole}
                   onChange={(e) => setDevRole(e.target.value)}
                 >
-                  <option value="user">user</option>
-                  <option value="admin">admin</option>
+                  {devRoles.map((r) => (
+                    <option key={r} value={r}>
+                      {r}
+                    </option>
+                  ))}
                 </select>
               </div>
               <button type="submit" className="btn btn-primary" style={{ marginTop: 4 }}>
@@ -182,6 +199,11 @@ export function LoginPage() {
               <code>DEV_AUTH_ENABLED=true</code> for local dev.
             </p>
           )}
+
+          <div className="auth-links">
+            <Link to="/">← Back to site</Link>
+            <Link to="/security">How access works →</Link>
+          </div>
         </div>
       </section>
     </div>

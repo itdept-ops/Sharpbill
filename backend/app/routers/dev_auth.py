@@ -3,12 +3,14 @@
 """
 
 from fastapi import APIRouter, Depends, Response
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.auth.jwt import create_session_token, set_session_cookie
 from app.auth.service import dev_upsert_user
 from app.db import get_db
 from app.errors import ApiError
+from app.models import Role
 from app.schemas.auth import DevLoginRequest
 from app.schemas.user import UserOut
 
@@ -22,3 +24,9 @@ def dev_login(body: DevLoginRequest, response: Response, db: Session = Depends(g
         raise ApiError(403, "ACCOUNT_DISABLED", "This account has been deactivated")
     set_session_cookie(response, create_session_token(user.id))
     return UserOut.from_user(user, online=True)
+
+
+@router.get("/dev/roles", response_model=list[str])
+def dev_roles(db: Session = Depends(get_db)) -> list[str]:
+    """Role names selectable in the dev-login form (system roles first, then custom)."""
+    return [r.name for r in db.scalars(select(Role).order_by(Role.id))]

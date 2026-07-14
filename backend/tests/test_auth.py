@@ -171,3 +171,12 @@ def test_location_requires_session(client):
     assert (
         client.post("/api/auth/location", json={"latitude": 0, "longitude": 0}).status_code == 401
     )
+
+
+def test_dev_roles_endpoint_lists_all_roles(client):
+    # Create a custom role so the list includes more than the system defaults.
+    client.post("/api/auth/dev", json={"email": "admin@example.com", "role": "admin"})
+    client.post("/api/roles", json={"name": "Analyst", "permission_keys": ["users.read"]})
+    roles = client.get("/api/auth/dev/roles").json()
+    assert "admin" in roles and "user" in roles and "Analyst" in roles
+    assert roles.index("admin") < roles.index("Analyst")  # system roles first

@@ -10,6 +10,7 @@ import { DashboardPage } from "./pages/DashboardPage";
 import { LandingPage } from "./pages/LandingPage";
 import { LogsPage } from "./pages/LogsPage";
 import { LoginPage } from "./pages/LoginPage";
+import { SecurityPage } from "./pages/SecurityPage";
 import { ProfilePage } from "./pages/ProfilePage";
 import { SettingsPage } from "./pages/SettingsPage";
 import { TechnologyPage } from "./pages/TechnologyPage";
@@ -22,6 +23,7 @@ export default function App() {
       <Route path="/" element={<LandingPage />} />
       <Route path="/about" element={<AboutPage />} />
       <Route path="/technology" element={<TechnologyPage />} />
+      <Route path="/security" element={<SecurityPage />} />
       <Route path="/login" element={<LoginPage />} />
 
       {/* authenticated (behind the app shell) */}

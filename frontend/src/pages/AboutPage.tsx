@@ -29,6 +29,8 @@ export function AboutPage() {
         </Link>
         <span className="spacer" />
         <Link to="/">Home</Link>
+        <Link to="/technology">Technology</Link>
+        <Link to="/security">Security</Link>
         <Link to="/login">Sign in</Link>
       </nav>
 

@@ -100,6 +100,12 @@ Identity, profile fields, and admin controls (role / active / kick) — each gat
 ### A user's detail page
 ![User detail](docs/img/user-detail.png)
 
+### Security — auth & permission walkthrough
+A public page that walks the exact path a request takes: verifying the human at sign-in, then the
+per-request permission gate.
+
+![Security walkthrough](docs/img/security.png)
+
 ### Sign in
 ![Login](docs/img/login.png)
 
@@ -181,8 +187,11 @@ Reset the DB: `docker compose down -v && docker compose up -d && docker compose 
 - **Google / Microsoft** buttons appear on the login page only once their client IDs are set
   (`GOOGLE_CLIENT_ID` / `AZURE_CLIENT_ID`, plus the `VITE_*` build vars). Until then they're hidden.
 - **Dev login** (local only): with `DEV_AUTH_ENABLED=true`, the login page shows a dev form
-  (any email + role). `POST /api/auth/dev` is **only mounted when `APP_ENV=local` and
+  (any email, and a **role picker populated with every role** — system + custom — from
+  `GET /api/auth/dev/roles`). `POST /api/auth/dev` is **only mounted when `APP_ENV=local` and
   `DEV_AUTH_ENABLED=true`**. The first email in `ADMIN_EMAILS` becomes an admin.
+- A public **[Security walkthrough](#security--auth--permission-walkthrough)** (`/security`) explains
+  the sign-in verification and the per-request permission gate, step by step.
 
 ---
 
@@ -194,6 +203,7 @@ Reset the DB: `docker compose down -v && docker compose up -d && docker compose 
 | GET | `/api/auth/config` | — | which sign-in methods are available |
 | POST | `/api/auth/google` · `/microsoft` | — | verify ID token → session cookie |
 | POST | `/api/auth/dev` | — (local only) | dev login |
+| GET | `/api/auth/dev/roles` | — (local only) | role names for the dev-login picker |
 | POST | `/api/auth/logout` | — | clear cookie (durable revoke) |
 | GET | `/api/auth/me` | session | current user |
 | POST | `/api/auth/location` | session | store optional last-known GPS |
