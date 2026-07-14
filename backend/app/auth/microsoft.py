@@ -24,7 +24,9 @@ def verify_microsoft_id_token(raw_token: str) -> VerifiedIdentity:
             leeway=30,
             options={"require": ["exp", "iat", "aud", "iss", "sub"], "verify_iss": False},
         )
-    except jwt.InvalidTokenError as exc:
+    except (jwt.PyJWTError, ValueError) as exc:
+        # Covers InvalidTokenError plus PyJWKClientError (JWKS fetch / kid resolution failures),
+        # so a provider-side hiccup becomes a clean 401 rather than an unhandled 500.
         raise ProviderTokenError(str(exc)) from exc
 
     # Multi-tenant issuer validation: with the 'common' authority, 'iss' is per-tenant.

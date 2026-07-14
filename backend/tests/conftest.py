@@ -7,7 +7,7 @@ the test database. Schema is created by running the real migrations (never creat
 
 import os
 
-from sqlalchemy import create_engine, text
+from sqlalchemy import create_engine, select, text
 from sqlalchemy.engine import make_url
 
 # --- Redirect to the test database before importing app code ---------------------------
@@ -55,7 +55,7 @@ from alembic import command  # noqa: E402
 from alembic.config import Config  # noqa: E402
 from app.db import SessionLocal, engine  # noqa: E402
 from app.main import app  # noqa: E402
-from app.models import User, UserIdentity  # noqa: E402
+from app.models import Role, User, UserIdentity  # noqa: E402
 
 
 @pytest.fixture(scope="session", autouse=True)
@@ -65,10 +65,28 @@ def _migrate() -> None:
 
 @pytest.fixture(autouse=True)
 def _clean_tables():
-    # Reset between tests (FK-safe order).
+    # Reset between tests: wipe users + any custom roles/permissions, then restore the
+    # canonical system role<->permission seed so RBAC starts identical for every test.
     with engine.begin() as conn:
         conn.execute(text("DELETE FROM user_identities"))
         conn.execute(text("DELETE FROM users"))
+        conn.execute(text("DELETE FROM roles WHERE is_system = 0"))
+        conn.execute(text("DELETE FROM permissions WHERE is_system = 0"))
+        conn.execute(text("DELETE FROM role_permissions"))
+        conn.execute(
+            text(
+                "INSERT INTO role_permissions (role_id, permission_id) "
+                "SELECT r.id, p.id FROM roles r JOIN permissions p "
+                "WHERE r.name = 'admin' AND p.is_system = 1"
+            )
+        )
+        conn.execute(
+            text(
+                "INSERT INTO role_permissions (role_id, permission_id) "
+                "SELECT r.id, p.id FROM roles r JOIN permissions p "
+                "WHERE r.name = 'user' AND p.key = 'presence.view'"
+            )
+        )
     yield
 
 
@@ -87,8 +105,12 @@ def client():
 
 
 def make_user(db, *, email="user@example.com", role="user", is_active=True, provider="dev") -> User:
+    role_obj = db.scalar(select(Role).where(Role.name == role))
     user = User(
-        email=email.lower(), display_name=email.split("@")[0], role=role, is_active=is_active
+        email=email.lower(),
+        display_name=email.split("@")[0],
+        role=role_obj,
+        is_active=is_active,
     )
     db.add(user)
     db.flush()

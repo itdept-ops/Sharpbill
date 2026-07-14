@@ -1,5 +1,3 @@
-from typing import Literal
-
 from pydantic import BaseModel, EmailStr, Field
 
 
@@ -8,10 +6,10 @@ class TokenLoginRequest(BaseModel):
 
 
 class DevLoginRequest(BaseModel):
-    """Body for the dev-only /api/auth/dev endpoint."""
+    """Body for the dev-only /api/auth/dev endpoint. `role` is a role NAME (e.g. 'admin')."""
 
     email: EmailStr
-    role: Literal["admin", "user"] | None = None
+    role: str | None = None
     display_name: str | None = None
 
 

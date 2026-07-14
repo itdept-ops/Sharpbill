@@ -4,7 +4,8 @@ import { Navigate, useLocation, useNavigate } from "react-router-dom";
 import { api, ApiError } from "../api/client";
 import { useAuth } from "../auth/AuthContext";
 import { microsoftLogin } from "../auth/msal";
-import type { AuthConfig, Role, User } from "../types";
+import { MatrixRain } from "../components/MatrixRain";
+import type { AuthConfig, User } from "../types";
 
 export function LoginPage() {
   const { user, setUser } = useAuth();
@@ -15,7 +16,7 @@ export function LoginPage() {
   const [config, setConfig] = useState<AuthConfig | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [devEmail, setDevEmail] = useState("");
-  const [devRole, setDevRole] = useState<Role>("user");
+  const [devRole, setDevRole] = useState("user");
   const googleBtnRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -36,7 +37,6 @@ export function LoginPage() {
     }
   };
 
-  // Google Identity Services button
   useEffect(() => {
     if (!config?.google) return;
     let tries = 0;
@@ -48,9 +48,9 @@ export function LoginPage() {
           callback: (resp) => submitToken("/api/auth/google", resp.credential),
         });
         window.google.accounts.id.renderButton(googleBtnRef.current, {
-          theme: "outline",
+          theme: "filled_black",
           size: "large",
-          width: 280,
+          width: 320,
         });
       } else if (++tries > 50) {
         clearInterval(timer);
@@ -62,8 +62,7 @@ export function LoginPage() {
   const handleMicrosoft = async () => {
     setError(null);
     try {
-      const idToken = await microsoftLogin();
-      await submitToken("/api/auth/microsoft", idToken);
+      await submitToken("/api/auth/microsoft", await microsoftLogin());
     } catch {
       setError("Microsoft sign-in was cancelled or failed");
     }
@@ -84,52 +83,85 @@ export function LoginPage() {
   const noProviders = config && !config.google && !config.microsoft && !config.dev;
 
   return (
-    <div className="login-hero">
-      <div className="login-card">
-        <span className="logo lg">KF</span>
-        <h1>Kingfisher CRM</h1>
-        <p className="muted">Sign in with your work account</p>
+    <div className="auth-wrap">
+      <MatrixRain opacity={0.24} />
+      <div className="scanlines" />
 
-        {error && <p className="error">{error}</p>}
-
-        {config?.google && <div className="google-btn" ref={googleBtnRef} />}
-
-        {config?.microsoft && (
-          <button className="id-btn microsoft" onClick={handleMicrosoft}>
-            <span className="ms-glyph" aria-hidden="true">
-              <i /><i /><i /><i />
+      <section className="panel panel--brackets auth-panel">
+        <div className="panel-header">
+          <span>
+            // AUTHENTICATE<span className="cursor" />
+          </span>
+          {config?.dev && <span className="pill-amber">DEV MODE</span>}
+        </div>
+        <div className="auth-body">
+          <div className="auth-brand">
+            <span className="logo-glyph" style={{ color: "var(--green)", fontSize: 22 }}>
+              ◈
             </span>
-            Sign in with Microsoft
-          </button>
-        )}
+            <strong style={{ letterSpacing: "0.06em" }}>KINGFISHER CRM</strong>
+          </div>
 
-        {config?.dev && (
-          <form className="dev-login" onSubmit={handleDev}>
-            <div className="dev-tag">Dev login (local only)</div>
-            <input
-              type="email"
-              required
-              placeholder="you@example.com"
-              value={devEmail}
-              onChange={(e) => setDevEmail(e.target.value)}
-            />
-            <select value={devRole} onChange={(e) => setDevRole(e.target.value as Role)}>
-              <option value="user">user</option>
-              <option value="admin">admin</option>
-            </select>
-            <button type="submit" className="id-btn primary">
-              Dev sign in
+          {error && <div className="auth-error">ERR: {error}</div>}
+
+          {config?.google && <div className="google-slot" ref={googleBtnRef} />}
+
+          {config?.microsoft && (
+            <button className="sso-btn" onClick={handleMicrosoft}>
+              <span className="sso-mark">
+                <span className="msq">
+                  <i />
+                  <i />
+                  <i />
+                  <i />
+                </span>
+              </span>
+              Continue with Microsoft
             </button>
-          </form>
-        )}
+          )}
 
-        {noProviders && (
-          <p className="muted small">
-            No sign-in methods are configured yet. Add Google/Microsoft client IDs to
-            <code> .env</code>, or set <code>DEV_AUTH_ENABLED=true</code> for local dev.
-          </p>
-        )}
-      </div>
+          {config?.dev && (config.google || config.microsoft) && (
+            <div className="auth-divider">── OR // LOCAL DEV ──</div>
+          )}
+
+          {config?.dev && (
+            <form className="auth-body" style={{ padding: 0, gap: 10 }} onSubmit={handleDev}>
+              <div className="field">
+                <label className="field-label">&gt; email</label>
+                <input
+                  className="field-input"
+                  type="email"
+                  required
+                  placeholder="you@example.com"
+                  value={devEmail}
+                  onChange={(e) => setDevEmail(e.target.value)}
+                />
+              </div>
+              <div className="field">
+                <label className="field-label">&gt; role</label>
+                <select
+                  className="field-input"
+                  value={devRole}
+                  onChange={(e) => setDevRole(e.target.value)}
+                >
+                  <option value="user">user</option>
+                  <option value="admin">admin</option>
+                </select>
+              </div>
+              <button type="submit" className="btn btn-primary" style={{ marginTop: 4 }}>
+                Authenticate ▍
+              </button>
+            </form>
+          )}
+
+          {noProviders && (
+            <p className="muted" style={{ fontSize: 12 }}>
+              No sign-in methods are configured. Add Google/Microsoft client IDs, or set{" "}
+              <code>DEV_AUTH_ENABLED=true</code> for local dev.
+            </p>
+          )}
+        </div>
+      </section>
     </div>
   );
 }

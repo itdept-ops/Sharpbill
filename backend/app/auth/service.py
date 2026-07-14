@@ -7,19 +7,34 @@ from sqlalchemy.orm import Session
 from app.auth import VerifiedIdentity
 from app.config import settings
 from app.errors import ApiError
-from app.models import User, UserIdentity
+from app.models import Role, User, UserIdentity
+from app.permissions import ADMIN_ROLE, DEFAULT_ROLE
 
 
 def _utcnow() -> datetime:
     return datetime.now(UTC)
 
 
+def _now_naive() -> datetime:
+    # last_seen_at is stored/compared as naive UTC (see app.auth.deps / app.presence).
+    return datetime.now(UTC).replace(tzinfo=None)
+
+
+def _role_by_name(db: Session, name: str) -> Role:
+    role = db.scalar(select(Role).where(Role.name == name))
+    if role is None:
+        role = db.scalar(select(Role).where(Role.name == DEFAULT_ROLE))
+    if role is None:  # pragma: no cover - system roles are seeded by migration
+        raise ApiError(500, "INTERNAL_ERROR", "Default role is missing")
+    return role
+
+
 def _admin_bootstrap(ident: VerifiedIdentity) -> bool:
     """Whether a first-login identity should be provisioned as admin.
 
-    Only provider-verified identities qualify (decision: unverified Microsoft email claims
-    must not grant admin): Google logins (email_verified is enforced upstream) or Microsoft
-    logins from the configured company tenant.
+    Only provider-verified identities qualify (unverified Microsoft email claims must not
+    grant admin): Google logins (email_verified enforced upstream) or Microsoft logins from
+    the configured company tenant.
     """
     if ident.email not in settings.admin_email_set:
         return False
@@ -33,11 +48,26 @@ def _admin_bootstrap(ident: VerifiedIdentity) -> bool:
     return False
 
 
+def _assert_login_allowed(ident: VerifiedIdentity) -> None:
+    """Optional allowlist gate (empty config = allow any verified account)."""
+    if ident.provider == "google":
+        domains = settings.allowed_email_domain_set
+        if domains and ident.email.rsplit("@", 1)[-1] not in domains:
+            raise ApiError(403, "LOGIN_NOT_ALLOWED", "This account is not permitted to sign in")
+    elif ident.provider == "microsoft":
+        tenants = settings.allowed_azure_tenant_set
+        if tenants and (ident.tenant_id or "") not in tenants:
+            raise ApiError(403, "LOGIN_NOT_ALLOWED", "This account is not permitted to sign in")
+
+
 def find_or_create_user(db: Session, ident: VerifiedIdentity) -> User:
     """Look up by (provider, provider_subject); provision on first login.
 
-    Never links accounts by email. Same email via two providers = two accounts.
+    Identity is keyed on the provider's immutable subject id (Google `sub` / Microsoft `oid`),
+    NEVER the email — a user changing their provider email cannot become another account, and
+    two providers sharing an email are two separate accounts.
     """
+    _assert_login_allowed(ident)
     identity = db.scalar(
         select(UserIdentity).where(
             UserIdentity.provider == ident.provider,
@@ -49,17 +79,19 @@ def find_or_create_user(db: Session, ident: VerifiedIdentity) -> User:
         if not user.is_active:
             raise ApiError(403, "ACCOUNT_DISABLED", "This account has been deactivated")
         user.last_login_at = _utcnow()
-        identity.provider_email = ident.email
+        user.last_seen_at = _now_naive()  # appear online immediately on login
+        identity.provider_email = ident.email  # audit trail only; not used for lookups
         db.commit()
         return user
 
-    role = "admin" if _admin_bootstrap(ident) else "user"
+    role = _role_by_name(db, ADMIN_ROLE if _admin_bootstrap(ident) else DEFAULT_ROLE)
     user = User(
         email=ident.email,
         display_name=ident.display_name,
         role=role,
         is_active=True,
         last_login_at=_utcnow(),
+        last_seen_at=_now_naive(),
     )
     db.add(user)
     db.add(
@@ -86,7 +118,9 @@ def find_or_create_user(db: Session, ident: VerifiedIdentity) -> User:
     return user
 
 
-def dev_upsert_user(db: Session, email: str, role: str | None, display_name: str | None) -> User:
+def dev_upsert_user(
+    db: Session, email: str, role_name: str | None, display_name: str | None
+) -> User:
     """Local dev only: find-or-create a user by email and mint/refresh a 'dev' identity.
 
     Bypasses provider verification entirely; used exclusively by the gated /api/auth/dev route.
@@ -94,26 +128,27 @@ def dev_upsert_user(db: Session, email: str, role: str | None, display_name: str
     email = email.lower()
     user = db.scalar(select(User).where(User.email == email).order_by(User.id))
     if user is None:
-        resolved_role = role or ("admin" if email in settings.admin_email_set else "user")
+        resolved = role_name or (ADMIN_ROLE if email in settings.admin_email_set else DEFAULT_ROLE)
         user = User(
             email=email,
             display_name=display_name or email.split("@")[0],
-            role=resolved_role,
+            role=_role_by_name(db, resolved),
             is_active=True,
             last_login_at=_utcnow(),
+            last_seen_at=_now_naive(),
         )
         db.add(user)
         db.add(
             UserIdentity(user=user, provider="dev", provider_subject=email, provider_email=email)
         )
     else:
-        if role is not None:
-            user.role = role
+        if role_name is not None:
+            user.role = _role_by_name(db, role_name)
         if display_name is not None:
             user.display_name = display_name
         user.last_login_at = _utcnow()
-        has_dev = any(i.provider == "dev" for i in user.identities)
-        if not has_dev:
+        user.last_seen_at = _now_naive()
+        if not any(i.provider == "dev" for i in user.identities):
             db.add(
                 UserIdentity(
                     user=user, provider="dev", provider_subject=email, provider_email=email

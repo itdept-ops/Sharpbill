@@ -2,62 +2,74 @@ import { useEffect, useState } from "react";
 
 import { api, ApiError } from "../api/client";
 import { useAuth } from "../auth/AuthContext";
-import { ProviderBadge } from "../components/ProviderBadge";
+import { ProviderBadge, RoleBadge, StatusPill } from "../components/badges";
 import type { Role, User, UserList } from "../types";
+
+function shortId(s: string): string {
+  return s.length > 10 ? `${s.slice(0, 8)}…` : s;
+}
 
 export function AdminUsersPage() {
   const { user: me } = useAuth();
   const [users, setUsers] = useState<User[]>([]);
-  const [banner, setBanner] = useState<string | null>(null);
+  const [roles, setRoles] = useState<Role[]>([]);
+  const [banner, setBanner] = useState<{ msg: string; ok?: boolean } | null>(null);
   const [loading, setLoading] = useState(true);
+
+  const canManage = !!me?.permissions.includes("users.manage");
+  const canManageRoles = !!me?.permissions.includes("roles.manage");
+  const canKick = !!me?.permissions.includes("presence.kick");
+  const canEditRole = canManage && canManageRoles;
 
   const load = () => {
     api
       .get<UserList>("/api/users")
       .then((r) => setUsers(r.items))
-      .catch((e) => setBanner(e instanceof ApiError ? e.message : "Failed to load users"))
+      .catch((e) => setBanner({ msg: e instanceof ApiError ? e.message : "Failed to load users" }))
       .finally(() => setLoading(false));
   };
 
-  useEffect(load, []);
+  useEffect(() => {
+    load();
+    if (canManageRoles) api.get<Role[]>("/api/roles").then(setRoles).catch(() => setRoles([]));
+  }, []);
 
-  const replaceRow = (updated: User) =>
-    setUsers((rows) => rows.map((u) => (u.id === updated.id ? updated : u)));
+  const replace = (u: User) => setUsers((rows) => rows.map((r) => (r.id === u.id ? u : r)));
 
-  const changeRole = async (u: User, role: Role) => {
+  const act = async (fn: () => Promise<User>, prev: User) => {
     setBanner(null);
     try {
-      replaceRow(await api.patch<User>(`/api/users/${u.id}/role`, { role }));
+      replace(await fn());
     } catch (e) {
-      setBanner(e instanceof ApiError ? e.message : "Update failed");
-      replaceRow(u); // revert
+      setBanner({ msg: e instanceof ApiError ? e.message : "Action failed" });
+      replace(prev); // revert
     }
   };
 
-  const changeStatus = async (u: User, is_active: boolean) => {
+  const doKick = async (u: User) => {
     setBanner(null);
     try {
-      replaceRow(await api.patch<User>(`/api/users/${u.id}/status`, { is_active }));
+      replace(await api.post<User>(`/api/users/${u.id}/kick`));
+      setBanner({ msg: `Kicked ${u.email}. Their session is now revoked.`, ok: true });
     } catch (e) {
-      setBanner(e instanceof ApiError ? e.message : "Update failed");
-      replaceRow(u); // revert
+      setBanner({ msg: e instanceof ApiError ? e.message : "Kick failed" });
     }
   };
 
   return (
-    <div className="page">
-      <h1 className="page-title">User management</h1>
-      <p className="muted">
-        {users.length} user{users.length === 1 ? "" : "s"} · role changes apply on the user&apos;s
-        next request
+    <div>
+      <h1 className="page-title">SYS://admin / users</h1>
+      <p className="page-sub">
+        {users.length} record{users.length === 1 ? "" : "s"} · roles read fresh from the database
+        every request
       </p>
 
       {banner && (
-        <div className="banner error" role="alert">
-          {banner}
-          <button className="banner-close" onClick={() => setBanner(null)}>
-            ✕
-          </button>
+        <div className={`banner ${banner.ok ? "ok" : ""}`} role="alert">
+          {banner.ok ? "" : "ERR: "}
+          {banner.msg}
+          <span className="spacer" />
+          <button onClick={() => setBanner(null)}>✕</button>
         </div>
       )}
 
@@ -65,25 +77,27 @@ export function AdminUsersPage() {
         <table>
           <thead>
             <tr>
+              <th>Status</th>
               <th>Email</th>
               <th>Name</th>
               <th>Providers</th>
+              <th>Provider ID (verified)</th>
               <th>Role</th>
               <th>Active</th>
-              <th>Created</th>
+              <th style={{ textAlign: "right" }}>Actions</th>
             </tr>
           </thead>
           <tbody>
             {loading && (
               <tr>
-                <td colSpan={6} className="muted">
+                <td colSpan={8} className="muted">
                   Loading…
                 </td>
               </tr>
             )}
             {!loading && users.length === 0 && (
               <tr>
-                <td colSpan={6} className="muted">
+                <td colSpan={8} className="muted">
                   No users yet.
                 </td>
               </tr>
@@ -93,38 +107,83 @@ export function AdminUsersPage() {
               return (
                 <tr key={u.id} className={u.is_active ? "" : "row-inactive"}>
                   <td>
-                    {u.email}
-                    {isSelf && <span className="muted small"> (you)</span>}
+                    <StatusPill online={u.online} />
                   </td>
-                  <td>{u.display_name ?? "—"}</td>
+                  <td>
+                    {u.email}
+                    {isSelf && <span className="muted"> (you)</span>}
+                  </td>
+                  <td className="sans">{u.display_name ?? "—"}</td>
                   <td>
                     {u.auth_providers.map((p) => (
                       <ProviderBadge key={p} provider={p} />
                     ))}
                   </td>
                   <td>
-                    <select
-                      value={u.role}
-                      disabled={isSelf}
-                      title={isSelf ? "You cannot change your own role" : undefined}
-                      onChange={(e) => changeRole(u, e.target.value as Role)}
-                    >
-                      <option value="user">user</option>
-                      <option value="admin">admin</option>
-                    </select>
+                    {u.identities.map((i) => (
+                      <div key={i.provider + i.subject} className="mono-id" title={i.subject}>
+                        {i.provider}:{shortId(i.subject)}
+                      </div>
+                    ))}
                   </td>
                   <td>
-                    <label className="switch" title={isSelf ? "You cannot deactivate yourself" : undefined}>
+                    {canEditRole && !isSelf ? (
+                      <select
+                        className="field-input"
+                        value={u.role_id}
+                        onChange={(e) =>
+                          act(
+                            () =>
+                              api.patch<User>(`/api/users/${u.id}/role`, {
+                                role_id: Number(e.target.value),
+                              }),
+                            u,
+                          )
+                        }
+                      >
+                        {roles.map((r) => (
+                          <option key={r.id} value={r.id}>
+                            {r.name}
+                          </option>
+                        ))}
+                      </select>
+                    ) : (
+                      <RoleBadge role={u.role} />
+                    )}
+                  </td>
+                  <td>
+                    <label className="switch" title={isSelf ? "You cannot deactivate yourself" : ""}>
                       <input
                         type="checkbox"
                         checked={u.is_active}
-                        disabled={isSelf}
-                        onChange={(e) => changeStatus(u, e.target.checked)}
+                        disabled={!canManage || isSelf}
+                        onChange={(e) =>
+                          act(
+                            () =>
+                              api.patch<User>(`/api/users/${u.id}/status`, {
+                                is_active: e.target.checked,
+                              }),
+                            u,
+                          )
+                        }
                       />
                       <span className="slider" />
                     </label>
                   </td>
-                  <td>{new Date(u.created_at).toLocaleDateString()}</td>
+                  <td>
+                    <div className="row-actions">
+                      {canKick && (
+                        <button
+                          className="icon-btn danger"
+                          disabled={isSelf}
+                          title={isSelf ? "You cannot kick yourself" : "Force sign-out"}
+                          onClick={() => doKick(u)}
+                        >
+                          Kick
+                        </button>
+                      )}
+                    </div>
+                  </td>
                 </tr>
               );
             })}

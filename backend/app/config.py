@@ -20,6 +20,11 @@ class Settings(BaseSettings):
     azure_admin_tenant_id: str = ""
     admin_emails: str = ""
 
+    # Optional provisioning allowlists (empty = allow any verified account). When set, a
+    # provider login is rejected unless it matches — closes "any internet account can sign up".
+    allowed_email_domains: str = ""  # ALLOWED_EMAIL_DOMAINS, comma-separated (Google)
+    allowed_azure_tenants: str = ""  # ALLOWED_AZURE_TENANTS, comma-separated tenant ids
+
     log_level: str = "INFO"
 
     # Dev-only login bypass. Only honored when app_env == "local" (see is_dev_auth_enabled).
@@ -35,6 +40,14 @@ class Settings(BaseSettings):
     @property
     def admin_email_set(self) -> set[str]:
         return {e.strip().lower() for e in self.admin_emails.split(",") if e.strip()}
+
+    @property
+    def allowed_email_domain_set(self) -> set[str]:
+        return {d.strip().lower() for d in self.allowed_email_domains.split(",") if d.strip()}
+
+    @property
+    def allowed_azure_tenant_set(self) -> set[str]:
+        return {t.strip() for t in self.allowed_azure_tenants.split(",") if t.strip()}
 
     @property
     def session_ttl_seconds(self) -> int:

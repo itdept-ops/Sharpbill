@@ -21,4 +21,4 @@ def dev_login(body: DevLoginRequest, response: Response, db: Session = Depends(g
     if not user.is_active:
         raise ApiError(403, "ACCOUNT_DISABLED", "This account has been deactivated")
     set_session_cookie(response, create_session_token(user.id))
-    return UserOut.from_user(user)
+    return UserOut.from_user(user, online=True)

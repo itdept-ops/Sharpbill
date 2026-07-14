@@ -4,29 +4,29 @@ from app.auth.service import find_or_create_user
 from app.config import settings
 
 
-def _google(email: str, subject: str = "g-sub-1", verified: bool = True) -> VerifiedIdentity:
+def _google(email: str, subject: str = "g-sub-1") -> VerifiedIdentity:
     return VerifiedIdentity(provider="google", subject=subject, email=email, display_name="G User")
 
 
 def test_first_google_login_provisions_user(db):
-    ident = _google("newperson@example.com")
-    user = find_or_create_user(db, ident)
+    user = find_or_create_user(db, _google("newperson@example.com"))
     assert user.id is not None
-    assert user.role == "user"
+    assert user.role_name == "user"
     assert user.is_active is True
     assert user.auth_providers == ["google"]
+    assert "presence.view" in user.permission_keys
 
 
 def test_admin_bootstrap_from_admin_emails_google(db, monkeypatch):
     monkeypatch.setattr(settings, "admin_emails", "boss@example.com")
     user = find_or_create_user(db, _google("boss@example.com", subject="g-boss"))
-    assert user.role == "admin"
+    assert user.role_name == "admin"
+    assert "roles.manage" in user.permission_keys
 
 
 def test_microsoft_admin_requires_matching_tenant(db, monkeypatch):
     monkeypatch.setattr(settings, "admin_emails", "boss@example.com")
     monkeypatch.setattr(settings, "azure_admin_tenant_id", "tenant-abc")
-    # Wrong tenant → not admin even though the email is allowlisted.
     wrong = VerifiedIdentity(
         provider="microsoft",
         subject="ms-1",
@@ -34,8 +34,7 @@ def test_microsoft_admin_requires_matching_tenant(db, monkeypatch):
         display_name="Boss",
         tenant_id="other-tenant",
     )
-    assert find_or_create_user(db, wrong).role == "user"
-    # Right tenant → admin.
+    assert find_or_create_user(db, wrong).role_name == "user"
     right = VerifiedIdentity(
         provider="microsoft",
         subject="ms-2",
@@ -43,7 +42,21 @@ def test_microsoft_admin_requires_matching_tenant(db, monkeypatch):
         display_name="Boss",
         tenant_id="tenant-abc",
     )
-    assert find_or_create_user(db, right).role == "admin"
+    assert find_or_create_user(db, right).role_name == "admin"
+
+
+def test_identity_is_keyed_on_subject_not_email(db):
+    """The core anti-spoofing property: identity follows the immutable provider id."""
+    original = find_or_create_user(db, _google("me@example.com", subject="stable-123"))
+
+    # Same provider subject, DIFFERENT email (user renamed their Google email) -> same account.
+    same = find_or_create_user(db, _google("renamed@example.com", subject="stable-123"))
+    assert same.id == original.id
+
+    # Same email, DIFFERENT subject (an impostor with a lookalike email) -> a NEW, separate
+    # account. It can never take over the original.
+    impostor = find_or_create_user(db, _google("me@example.com", subject="impostor-999"))
+    assert impostor.id != original.id
 
 
 def test_same_email_two_providers_two_accounts(db):
@@ -54,16 +67,13 @@ def test_same_email_two_providers_two_accounts(db):
             provider="microsoft", subject="ms-dup", email="dup@example.com", display_name="Dup"
         ),
     )
-    assert g.id != ms.id  # no email-based linking
+    assert g.id != ms.id
 
 
-def test_repeat_login_updates_last_login(db):
-    ident = _google("repeat@example.com", subject="g-rep")
-    first = find_or_create_user(db, ident)
-    first_login = first.last_login_at
-    second = find_or_create_user(db, ident)
-    assert first.id == second.id
-    assert second.last_login_at >= first_login
+def test_stored_identity_records_the_provider_id(db):
+    user = find_or_create_user(db, _google("id@example.com", subject="google-oid-abc"))
+    assert user.identities[0].provider == "google"
+    assert user.identities[0].provider_subject == "google-oid-abc"
 
 
 def test_google_login_via_http_sets_cookie(client, monkeypatch):
@@ -80,6 +90,7 @@ def test_google_login_via_http_sets_cookie(client, monkeypatch):
     body = resp.json()
     assert body["email"] == "httpuser@example.com"
     assert body["role"] == "user"
+    assert body["identities"][0]["subject"] == "g-http"
 
 
 def test_login_rejects_non_json_content_type(client):

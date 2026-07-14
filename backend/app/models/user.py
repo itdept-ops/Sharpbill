@@ -1,10 +1,11 @@
 from datetime import datetime
 
-from sqlalchemy import DateTime, String, text
+from sqlalchemy import DateTime, ForeignKey, String, text
 from sqlalchemy.dialects.mysql import TINYINT
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models.base import Base
+from app.models.role import Role
 
 _TABLE_ARGS = {
     "mysql_engine": "InnoDB",
@@ -20,9 +21,13 @@ class User(Base):
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     email: Mapped[str] = mapped_column(String(255), index=True)  # lowercase; not unique
     display_name: Mapped[str | None] = mapped_column(String(255))
-    role: Mapped[str] = mapped_column(String(20), server_default="user")  # 'admin' | 'user'
+    role_id: Mapped[int] = mapped_column(ForeignKey("roles.id", ondelete="RESTRICT"), index=True)
     is_active: Mapped[bool] = mapped_column(TINYINT(1), server_default=text("1"))
     last_login_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=False))
+    # Presence: bumped on authenticated activity; drives the "online" indicator.
+    last_seen_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=False))
+    # Session kill-switch: any session token issued before this instant is rejected.
+    session_valid_after: Mapped[datetime | None] = mapped_column(DateTime(timezone=False))
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=False), server_default=text("CURRENT_TIMESTAMP(6)")
     )
@@ -31,13 +36,21 @@ class User(Base):
         server_default=text("CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6)"),
     )
 
+    role: Mapped[Role] = relationship(lazy="selectin")
     identities: Mapped[list["UserIdentity"]] = relationship(  # noqa: F821
         back_populates="user", cascade="all, delete-orphan", lazy="selectin"
     )
 
     @property
+    def role_name(self) -> str:
+        return self.role.name
+
+    @property
+    def permission_keys(self) -> set[str]:
+        return self.role.permission_keys
+
+    @property
     def auth_providers(self) -> list[str]:
-        # Distinct providers, preserving first-seen order.
         seen: dict[str, None] = {}
         for ident in self.identities:
             seen.setdefault(ident.provider, None)

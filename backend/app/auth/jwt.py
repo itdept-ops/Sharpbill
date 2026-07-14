@@ -21,15 +21,14 @@ def create_session_token(user_id: int) -> str:
     )
 
 
-def decode_session_token(token: str) -> int:
-    """Returns the user id. Raises jwt.InvalidTokenError (or ValueError) on any failure."""
-    payload = jwt.decode(
+def decode_session_token(token: str) -> dict:
+    """Return the decoded payload (sub, iat, exp). Raises jwt.InvalidTokenError on failure."""
+    return jwt.decode(
         token,
         settings.session_jwt_secret,
         algorithms=["HS256"],
         options={"require": ["exp", "iat", "sub"]},
     )
-    return int(payload["sub"])
 
 
 def set_session_cookie(response: Response, token: str) -> None:
