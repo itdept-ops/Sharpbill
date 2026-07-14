@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from sqlalchemy import DateTime, ForeignKey, String, text
+from sqlalchemy import DateTime, Double, ForeignKey, String, text
 from sqlalchemy.dialects.mysql import TINYINT
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -35,6 +35,11 @@ class User(Base):
     last_login_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=False))
     last_seen_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=False))
     session_valid_after: Mapped[datetime | None] = mapped_column(DateTime(timezone=False))
+    # Optional last-known location (only if the user opts in on login).
+    last_latitude: Mapped[float | None] = mapped_column(Double)
+    last_longitude: Mapped[float | None] = mapped_column(Double)
+    last_location_accuracy: Mapped[float | None] = mapped_column(Double)
+    last_location_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=False))
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=False), server_default=text("CURRENT_TIMESTAMP(6)")
     )

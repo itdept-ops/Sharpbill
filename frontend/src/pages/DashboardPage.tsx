@@ -6,22 +6,26 @@ import { OnlineDot, RoleBadge } from "../components/badges";
 import { AreaChart, BarChart, Donut, SegmentBar, SERIES } from "../components/Charts";
 import { Panel } from "../components/Panel";
 import { usePresence } from "../presence/PresenceContext";
-import type { Analytics, DashboardData } from "../types";
+import type { Analytics, ContactStats, DashboardData } from "../types";
 
 const md = (iso: string) => iso.slice(5).replace("-", "/");
+const STAGE_COLOR: Record<string, string> = { lead: SERIES[1], active: SERIES[0], customer: SERIES[2], archived: SERIES[5] };
 
 export function DashboardPage() {
   const { user } = useAuth();
   const presence = usePresence();
   const [data, setData] = useState<DashboardData | null>(null);
   const [an, setAn] = useState<Analytics | null>(null);
+  const [cs, setCs] = useState<ContactStats | null>(null);
 
   const canAnalytics = !!user?.permissions.includes("users.read");
+  const canContacts = !!user?.permissions.includes("contacts.read");
 
   useEffect(() => {
     api.get<DashboardData>("/api/dashboard").then(setData).catch(() => setData(null));
     if (canAnalytics) api.get<Analytics>("/api/dashboard/analytics").then(setAn).catch(() => setAn(null));
-  }, [canAnalytics]);
+    if (canContacts) api.get<ContactStats>("/api/contacts/stats").then(setCs).catch(() => setCs(null));
+  }, [canAnalytics, canContacts]);
 
   const onlineNow = presence.canView ? presence.count : (data?.stats.online_users ?? "—");
 
@@ -91,8 +95,42 @@ export function DashboardPage() {
         </div>
       )}
 
+      {canContacts && cs && (
+        <div className="grid-2" style={{ marginBottom: 16 }}>
+          <Panel title="// CONTACT PIPELINE" right={<span className="muted" style={{ fontSize: 10 }}>{cs.total} total</span>}>
+            <BarChart data={cs.by_status.map((s) => ({ label: s.status, value: s.count }))} />
+            <div style={{ marginTop: 14 }}>
+              <SegmentBar
+                segments={cs.by_status.map((s) => ({
+                  label: s.status,
+                  value: s.count,
+                  color: STAGE_COLOR[s.status] ?? SERIES[5],
+                  glyph: "◆",
+                }))}
+              />
+            </div>
+          </Panel>
+          <Panel title="// CONTACTS ADDED · 14 DAYS">
+            <AreaChart color={SERIES[1]} points={cs.created.map((s) => ({ label: md(s.date), value: s.count }))} />
+            {cs.by_owner.length > 0 && (
+              <>
+                <div className="kpi-label" style={{ marginTop: 14 }}>Top owners</div>
+                <BarChart data={cs.by_owner.map((o) => ({ label: o.owner, value: o.count }))} />
+              </>
+            )}
+          </Panel>
+        </div>
+      )}
+
       <div className="grid-2">
-        <Panel title="// ONLINE NOW" right={<span className="status-dot" />}>
+        <Panel
+          title="// ONLINE NOW"
+          right={
+            <span className="online-count" style={{ fontSize: 10 }}>
+              {presence.live ? "● live" : "polling"}
+            </span>
+          }
+        >
           {!presence.canView ? (
             <div className="online-empty">Requires the presence.view permission.</div>
           ) : presence.online.length === 0 ? (

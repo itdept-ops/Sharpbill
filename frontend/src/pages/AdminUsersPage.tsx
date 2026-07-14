@@ -16,12 +16,18 @@ function statusChip(u: User) {
   );
 }
 
+interface BulkResult {
+  applied: number;
+  results: { id: number; ok: boolean; error?: string }[];
+}
+
 export function AdminUsersPage() {
   const { user: me } = useAuth();
   const [users, setUsers] = useState<User[]>([]);
   const [roles, setRoles] = useState<Role[]>([]);
   const [banner, setBanner] = useState<{ msg: string; ok?: boolean } | null>(null);
   const [loading, setLoading] = useState(true);
+  const [selected, setSelected] = useState<Set<number>>(new Set());
 
   const [search, setSearch] = useState("");
   const [roleId, setRoleId] = useState("");
@@ -32,22 +38,26 @@ export function AdminUsersPage() {
   const canManageRoles = !!me?.permissions.includes("roles.manage");
   const canEditRole = canManage && canManageRoles;
 
-  const load = useCallback(() => {
+  const query = useCallback(() => {
     const q = new URLSearchParams();
     if (search.trim()) q.set("search", search.trim());
     if (roleId) q.set("role_id", roleId);
     if (status) q.set("status", status);
     if (onlineOnly) q.set("online", "true");
+    return q;
+  }, [search, roleId, status, onlineOnly]);
+
+  const load = useCallback(() => {
     setLoading(true);
     api
-      .get<UserList>(`/api/users?${q.toString()}`)
+      .get<UserList>(`/api/users?${query().toString()}`)
       .then((r) => setUsers(r.items))
       .catch((e) => setBanner({ msg: e instanceof ApiError ? e.message : "Failed to load" }))
       .finally(() => setLoading(false));
-  }, [search, roleId, status, onlineOnly]);
+  }, [query]);
 
   useEffect(() => {
-    const t = setTimeout(load, 200); // debounce search typing
+    const t = setTimeout(load, 200);
     return () => clearTimeout(t);
   }, [load]);
 
@@ -65,6 +75,47 @@ export function AdminUsersPage() {
     } catch (e) {
       setBanner({ msg: e instanceof ApiError ? e.message : "Action failed" });
       replace(prev);
+    }
+  };
+
+  const toggleSel = (id: number) =>
+    setSelected((s) => {
+      const n = new Set(s);
+      if (n.has(id)) n.delete(id);
+      else n.add(id);
+      return n;
+    });
+  const allSelected = users.length > 0 && users.every((u) => selected.has(u.id));
+  const toggleAll = () =>
+    setSelected(allSelected ? new Set() : new Set(users.map((u) => u.id)));
+
+  const bulk = async (action: string, role_id?: number) => {
+    const ids = [...selected];
+    if (!ids.length) return;
+    setBanner(null);
+    try {
+      const r = await api.post<BulkResult>("/api/users/bulk", { ids, action, role_id });
+      setSelected(new Set());
+      load();
+      const failed = r.results.filter((x) => !x.ok).length;
+      setBanner({ msg: `${r.applied} updated${failed ? `, ${failed} skipped` : ""}.`, ok: true });
+    } catch (e) {
+      setBanner({ msg: e instanceof ApiError ? e.message : "Bulk action failed" });
+    }
+  };
+
+  const exportCsv = async () => {
+    try {
+      const res = await fetch(`/api/users/export.csv?${query().toString()}`, { credentials: "same-origin" });
+      if (!res.ok) throw new Error();
+      const url = URL.createObjectURL(await res.blob());
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "users.csv";
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch {
+      setBanner({ msg: "Export failed" });
     }
   };
 
@@ -110,25 +161,45 @@ export function AdminUsersPage() {
           online only
         </label>
         <span className="spacer" />
-        {(search || roleId || status || onlineOnly) && (
-          <button
-            className="link-btn"
-            onClick={() => {
-              setSearch("");
-              setRoleId("");
-              setStatus("");
-              setOnlineOnly(false);
-            }}
-          >
-            clear filters
-          </button>
-        )}
+        <button className="icon-btn" onClick={exportCsv}>
+          ⭳ Export CSV
+        </button>
       </div>
+
+      {canManage && selected.size > 0 && (
+        <div className="bulkbar">
+          <span className="bulk-count">{selected.size} selected</span>
+          <button className="btn btn-ghost btn-sm" onClick={() => bulk("approve")}>Approve</button>
+          <button className="btn btn-ghost btn-sm" onClick={() => bulk("activate")}>Activate</button>
+          <button className="btn btn-danger btn-sm" onClick={() => bulk("deactivate")}>Deactivate</button>
+          {canEditRole && (
+            <select
+              className="field-input"
+              defaultValue=""
+              onChange={(e) => e.target.value && bulk("assign_role", Number(e.target.value))}
+            >
+              <option value="">assign role…</option>
+              {roles.map((r) => (
+                <option key={r.id} value={r.id}>
+                  {r.name}
+                </option>
+              ))}
+            </select>
+          )}
+          <span className="spacer" />
+          <button className="link-btn" onClick={() => setSelected(new Set())}>clear</button>
+        </div>
+      )}
 
       <div className="table-wrap">
         <table>
           <thead>
             <tr>
+              {canManage && (
+                <th style={{ width: 28 }}>
+                  <input type="checkbox" checked={allSelected} onChange={toggleAll} />
+                </th>
+              )}
               <th>Status</th>
               <th>Email</th>
               <th>Name</th>
@@ -140,15 +211,25 @@ export function AdminUsersPage() {
           </thead>
           <tbody>
             {loading && (
-              <tr><td colSpan={7} className="muted">Loading…</td></tr>
+              <tr><td colSpan={canManage ? 8 : 7} className="muted">Loading…</td></tr>
             )}
             {!loading && users.length === 0 && (
-              <tr><td colSpan={7} className="muted">No users match.</td></tr>
+              <tr><td colSpan={canManage ? 8 : 7} className="muted">No users match.</td></tr>
             )}
             {users.map((u) => {
               const isSelf = u.id === me?.id;
               return (
                 <tr key={u.id} className={u.is_active && u.is_approved ? "" : "row-inactive"}>
+                  {canManage && (
+                    <td>
+                      <input
+                        type="checkbox"
+                        checked={selected.has(u.id)}
+                        onChange={() => toggleSel(u.id)}
+                        disabled={isSelf}
+                      />
+                    </td>
+                  )}
                   <td>{statusChip(u)}</td>
                   <td>
                     <Link to={`/admin/users/${u.id}`}>{u.email}</Link>
@@ -183,16 +264,12 @@ export function AdminUsersPage() {
                       {canManage && u.status === "pending" && (
                         <button
                           className="icon-btn"
-                          onClick={() =>
-                            act(() => api.post<User>(`/api/users/${u.id}/approve`), u, `Approved ${u.email}.`)
-                          }
+                          onClick={() => act(() => api.post<User>(`/api/users/${u.id}/approve`), u, `Approved ${u.email}.`)}
                         >
                           Approve
                         </button>
                       )}
-                      <Link className="icon-btn" to={`/admin/users/${u.id}`}>
-                        View
-                      </Link>
+                      <Link className="icon-btn" to={`/admin/users/${u.id}`}>View</Link>
                     </div>
                   </td>
                 </tr>

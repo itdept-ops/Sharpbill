@@ -118,6 +118,24 @@ export function UserProfile({ user: initial }: { user: User }) {
           </div>
           <div className="kv-row"><span className="k">Joined</span><span className="v">{new Date(user.created_at).toLocaleDateString()}</span></div>
           <div className="kv-row"><span className="k">Last login</span><span className="v">{user.last_login_at ? new Date(user.last_login_at).toLocaleString() : "—"}</span></div>
+          {user.last_location_at && user.last_latitude != null && user.last_longitude != null && (
+            <div className="kv-row">
+              <span className="k">Last location</span>
+              <span className="v">
+                <a
+                  href={`https://www.google.com/maps?q=${user.last_latitude},${user.last_longitude}`}
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  {user.last_latitude.toFixed(4)}, {user.last_longitude.toFixed(4)}
+                </a>
+                {user.last_location_accuracy != null && (
+                  <span className="muted"> ±{Math.round(user.last_location_accuracy)}m</span>
+                )}
+                <div className="muted small">{new Date(user.last_location_at).toLocaleString()}</div>
+              </span>
+            </div>
+          )}
         </div>
       </Panel>
 

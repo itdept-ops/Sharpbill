@@ -6,8 +6,10 @@ import { AppShell } from "./components/AppShell";
 import { AboutPage } from "./pages/AboutPage";
 import { AdminRolesPage } from "./pages/AdminRolesPage";
 import { AdminUsersPage } from "./pages/AdminUsersPage";
+import { ContactsPage } from "./pages/ContactsPage";
 import { DashboardPage } from "./pages/DashboardPage";
 import { LandingPage } from "./pages/LandingPage";
+import { LogsPage } from "./pages/LogsPage";
 import { LoginPage } from "./pages/LoginPage";
 import { ProfilePage } from "./pages/ProfilePage";
 import { SettingsPage } from "./pages/SettingsPage";
@@ -27,6 +29,14 @@ export default function App() {
       <Route element={<ProtectedRoute />}>
         <Route element={<AppShell />}>
           <Route path="/dashboard" element={<DashboardPage />} />
+          <Route
+            path="/contacts"
+            element={
+              <RequirePermission perm="contacts.read">
+                <ContactsPage />
+              </RequirePermission>
+            }
+          />
           <Route path="/profile" element={<ProfilePage />} />
           <Route
             path="/admin/users"
@@ -57,6 +67,14 @@ export default function App() {
             element={
               <RequirePermission perm="settings.manage">
                 <SettingsPage />
+              </RequirePermission>
+            }
+          />
+          <Route
+            path="/admin/logs"
+            element={
+              <RequirePermission perm="logs.view">
+                <LogsPage />
               </RequirePermission>
             }
           />

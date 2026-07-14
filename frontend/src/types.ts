@@ -29,6 +29,10 @@ export interface User {
   last_login_at: string | null;
   last_seen_at: string | null;
   online: boolean;
+  last_latitude: number | null;
+  last_longitude: number | null;
+  last_location_accuracy: number | null;
+  last_location_at: string | null;
 }
 
 export interface UserList {
@@ -100,4 +104,51 @@ export interface SiteSettings {
   default_role_id: number;
   default_role_name: string;
   updated_at: string;
+}
+
+export type ContactStatus = "lead" | "active" | "customer" | "archived";
+
+export interface Contact {
+  id: number;
+  first_name: string;
+  last_name: string | null;
+  full_name: string;
+  email: string | null;
+  phone: string | null;
+  company: string | null;
+  title: string | null;
+  status: ContactStatus;
+  owner_id: number | null;
+  owner_name: string | null;
+  notes: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ContactList {
+  items: Contact[];
+  total: number;
+}
+
+export interface ContactStats {
+  total: number;
+  by_status: { status: string; count: number }[];
+  by_owner: { owner: string; count: number }[];
+  created: { date: string; count: number }[];
+}
+
+export interface RequestLog {
+  id: number;
+  method: string;
+  path: string;
+  user_id: number | null;
+  user_email: string | null;
+  ip: string | null;
+  status_code: number;
+  created_at: string;
+}
+
+export interface RequestLogList {
+  items: RequestLog[];
+  total: number;
 }

@@ -6,6 +6,7 @@ import { useAuth } from "../auth/AuthContext";
 import { microsoftLogin } from "../auth/msal";
 import { MatrixRain } from "../components/MatrixRain";
 import type { AuthConfig, User } from "../types";
+import { captureLocation } from "../util/location";
 
 export function LoginPage() {
   const { user, setUser } = useAuth();
@@ -25,6 +26,7 @@ export function LoginPage() {
 
   const onSuccess = (u: User) => {
     setUser(u);
+    captureLocation(); // optional: prompts for GPS, silently ignored if denied
     navigate(from, { replace: true });
   };
 

@@ -129,6 +129,54 @@ def test_kick_requires_permission(client):
     assert resp.status_code == 403
 
 
+def test_bulk_approve_and_self_skip(client):
+    admin = _login(client, "admin@example.com", role="admin")
+    ids = []
+    for e in ("b1@example.com", "b2@example.com"):
+        u = TestClient(app).post("/api/auth/dev", json={"email": e, "role": "user"}).json()
+        ids.append(u["id"])
+    resp = client.post("/api/users/bulk", json={"ids": [*ids, admin["id"]], "action": "approve"})
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["applied"] == 2
+    self_result = next(r for r in body["results"] if r["id"] == admin["id"])
+    assert self_result["ok"] is False and self_result["error"] == "CANNOT_MODIFY_SELF"
+
+
+def test_bulk_assign_role(client):
+    _login(client, "admin@example.com", role="admin")
+    admin_role = _role_id(client, "admin")
+    u = (
+        TestClient(app)
+        .post("/api/auth/dev", json={"email": "promote@example.com", "role": "user"})
+        .json()
+    )
+    resp = client.post(
+        "/api/users/bulk", json={"ids": [u["id"]], "action": "assign_role", "role_id": admin_role}
+    )
+    assert resp.status_code == 200
+    assert resp.json()["applied"] == 1
+
+
+def test_export_csv(client):
+    _login(client, "admin@example.com", role="admin")
+    resp = client.get("/api/users/export.csv")
+    assert resp.status_code == 200
+    assert resp.headers["content-type"].startswith("text/csv")
+    assert "admin@example.com" in resp.text
+    assert resp.text.splitlines()[0].startswith("id,email,display_name,role,status")
+
+
+def test_csv_export_neutralizes_formula(client):
+    victim = TestClient(app)
+    vu = victim.post("/api/auth/dev", json={"email": "pwn@example.com", "role": "user"}).json()
+    victim.patch(f"/api/users/{vu['id']}/profile", json={"display_name": "=HYPERLINK(1)"})
+    _login(client, "admin@example.com", role="admin")
+    text = client.get("/api/users/export.csv").text
+    assert "'=HYPERLINK(1)" in text  # neutralized with a leading quote
+    assert ",=HYPERLINK(1)" not in text  # never a bare formula at cell start
+
+
 def test_delegate_cannot_assign_admin_role_puppet(client):
     """A users.manage delegate can't promote another account to full admin."""
     _login(client, "admin@example.com", role="admin")

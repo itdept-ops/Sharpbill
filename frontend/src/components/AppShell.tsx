@@ -39,10 +39,15 @@ function ShellInner() {
         <NavLink to="/dashboard" className="rail-item">
           ▸ Dashboard
         </NavLink>
+        {can("contacts.read") && (
+          <NavLink to="/contacts" className="rail-item">
+            ▸ Contacts
+          </NavLink>
+        )}
         <NavLink to="/profile" className="rail-item">
           ▸ My Profile
         </NavLink>
-        {(can("users.read") || can("roles.manage") || can("settings.manage")) && (
+        {(can("users.read") || can("roles.manage") || can("settings.manage") || can("logs.view")) && (
           <div className="rail-section">Admin</div>
         )}
         {can("users.read") && (
@@ -58,6 +63,11 @@ function ShellInner() {
         {can("settings.manage") && (
           <NavLink to="/admin/settings" className="rail-item">
             ▸ Site Settings
+          </NavLink>
+        )}
+        {can("logs.view") && (
+          <NavLink to="/admin/logs" className="rail-item">
+            ▸ Request Log
           </NavLink>
         )}
         <div className="rail-spacer" />

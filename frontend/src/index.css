@@ -917,6 +917,99 @@ td select.field-input {
 .status-pill.off {
   color: var(--muted);
 }
+.status-pill.warn {
+  color: var(--amber);
+  border-color: rgba(255, 194, 75, 0.4);
+}
+
+/* ---- request-log method tags ---- */
+.method-tag {
+  display: inline-block;
+  min-width: 52px;
+  text-align: center;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  padding: 2px 6px;
+  border-radius: 2px;
+  border: 1px solid var(--border);
+  color: var(--muted);
+}
+.method-tag.m-get {
+  color: var(--teal);
+  border-color: rgba(25, 229, 208, 0.35);
+}
+.method-tag.m-post {
+  color: var(--green);
+  border-color: rgba(53, 255, 116, 0.35);
+}
+.method-tag.m-patch,
+.method-tag.m-put {
+  color: var(--amber);
+  border-color: rgba(255, 194, 75, 0.35);
+}
+.method-tag.m-delete {
+  color: var(--danger);
+  border-color: rgba(255, 90, 71, 0.35);
+}
+
+/* ---- contacts pipeline ---- */
+.pipeline {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  gap: 12px;
+  margin-bottom: 16px;
+}
+.pipe-stage {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-left: 2px solid var(--border);
+  border-radius: 2px;
+  padding: 12px 14px;
+  cursor: pointer;
+  font-family: var(--font-mono);
+}
+.pipe-stage:hover {
+  border-color: var(--teal);
+}
+.pipe-stage.active {
+  border-left-color: var(--green);
+  background: var(--panel-2);
+}
+.pipe-count {
+  font-size: 26px;
+  font-weight: 600;
+  color: var(--ink);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---- bulk action bar ---- */
+.bulkbar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  padding: 10px 14px;
+  margin-bottom: 12px;
+  background: var(--panel-2);
+  border: 1px solid var(--green);
+  border-radius: 2px;
+}
+.bulk-count {
+  color: var(--green);
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+.bulkbar .field-input {
+  padding: 5px 9px;
+  font-size: 12px;
+}
 
 .role-badge {
   display: inline-block;

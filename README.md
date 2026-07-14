@@ -15,18 +15,32 @@ UI. FastAPI + React + MySQL, run locally with Docker Compose.
 - **Roles & permissions (RBAC).** Every user has one role; roles hold permissions; admins can
   **create new permissions** and roles and assign them, via a grouped permission-matrix builder.
   Access is read from the DB on every request. Built-in permissions: `users.read`, `users.manage`,
-  `roles.manage`, `presence.view`, `presence.kick`, `settings.manage`. System roles are protected.
+  `roles.manage`, `presence.view`, `presence.kick`, `settings.manage`, `contacts.read`, `contacts.write`,
+  `logs.view`. System roles are protected.
+- **Contacts CRM.** The first real entity: create/edit/delete contacts with a status pipeline
+  (lead → active → customer → archived), owner, search + stage filters, and a clickable pipeline
+  summary. `contacts.read` / `contacts.write` (granted to everyone by default).
 - **User management.** Rich profiles (title, department, phone, location, timezone, bio) with
-  self-service and admin edit; a filterable directory (search, role, status, online); a detailed
-  per-user page; role/activation/kick/approve controls.
-- **Live presence + kick.** See who's online; force sign-out any user (session revoked next
-  request via a per-user token epoch). Deactivation and logout are durable revocations too.
+  self-service and admin edit; a filterable directory (search, role, status, online); a per-user
+  page; role/activation/kick/approve controls; **bulk actions** (approve/activate/deactivate/
+  assign-role) and **CSV export** of the filtered view.
+- **Real-time presence + kick.** Who's online updates live over a **WebSocket** (polling
+  fallback). Force sign-out any user (session revoked next request via a per-user token epoch);
+  deactivation and logout are durable revocations too.
 - **Site settings.** Admins choose the sign-up mode (**open / approval / closed**), toggle each
   provider, set the default role, and **approve pending sign-ups** from a queue.
+- **Optional login GPS.** After sign-in the browser asks (natively) to share location — deny is
+  fine and nothing is stored; if allowed, the last-known coordinates + accuracy + time show on the
+  profile with a maps link. `POST /api/auth/location`.
+- **Request activity log.** Every `/api` call is recorded (method, endpoint, user, IP, status) via
+  middleware; admins with `logs.view` browse and filter it at **Admin → Request Log**. Health,
+  presence, docs, and auth-noise endpoints are skipped.
 - **Dashboard analytics.** Hand-built SVG charts — sign-ups over 14 days, account-status split,
-  users-by-role, and sign-in providers.
+  users-by-role, sign-in providers, and the contact pipeline / top owners.
 - **Pages.** Matrix-rain landing, a Technology showcase, an About page, the themed console
-  (dashboard, users, user detail, roles, settings, profile). A "Calm" toggle reduces motion.
+  (dashboard, contacts, users, user detail, roles, settings, profile). A "Calm" toggle reduces motion.
+
+Seed demo data (local): `docker compose exec api python -m app.scripts.seed_demo`.
 
 ## Stack
 
@@ -69,6 +83,7 @@ Reset the DB: `docker compose down -v && docker compose up -d && docker compose 
 | POST | `/api/auth/dev` | — (local only) | dev login |
 | POST | `/api/auth/logout` | — | clear cookie |
 | GET | `/api/auth/me` | session | current user |
+| POST | `/api/auth/location` | session | store optional last-known GPS |
 | GET | `/api/dashboard` | session | stats (incl. online count) |
 | GET | `/api/dashboard/analytics` | `users.read` | chart data (roles, providers, signups, status) |
 | GET | `/api/users` | `users.read` | directory + filters (`search`, `role_id`, `status`, `online`) |
@@ -77,13 +92,19 @@ Reset the DB: `docker compose down -v && docker compose up -d && docker compose 
 | PATCH | `/api/users/{id}/role` | `users.manage` | reassign role |
 | PATCH | `/api/users/{id}/status` | `users.manage` | activate / deactivate |
 | POST | `/api/users/{id}/approve` | `users.manage` | approve a pending sign-up |
-| GET · PUT | `/api/admin/settings` | `settings.manage` | site settings (signup mode, providers, default role) |
 | POST | `/api/users/{id}/kick` | `presence.kick` | force sign-out |
+| POST | `/api/users/bulk` | `users.manage` | bulk approve/activate/deactivate/assign-role |
+| GET | `/api/users/export.csv` | `users.read` | CSV of the filtered directory |
+| GET · PUT | `/api/admin/settings` | `settings.manage` | site settings (signup mode, providers, default role) |
+| GET · POST | `/api/contacts` | `contacts.read` / `.write` | list (filters) / create |
+| GET · PATCH · DELETE | `/api/contacts/{id}` | `contacts.read` / `.write` | detail / edit / delete |
+| GET | `/api/contacts/stats` | `contacts.read` | pipeline + owner + created-over-time |
 | GET | `/api/roles` · `/api/permissions` | `roles.manage` | list |
 | POST | `/api/roles` · `/api/permissions` | `roles.manage` | create |
 | PATCH · DELETE | `/api/roles/{id}` | `roles.manage` | edit / delete (custom, unused) |
 | GET | `/api/presence/online` | `presence.view` | who's online |
-| POST | `/api/presence/heartbeat` | session | stay online |
+| WS | `/api/ws/presence` | session | real-time presence stream |
+| GET | `/api/admin/logs` | `logs.view` | request activity log (filters: `search`, `method`, `user_id`) |
 
 ## Security model
 
@@ -102,7 +123,7 @@ Hardened after an adversarial review pass. Highlights:
 ## Layout
 
 ```
-backend/   FastAPI app, SQLAlchemy models, Alembic migrations (0001 schema, 0002 RBAC), tests
+backend/   FastAPI app, SQLAlchemy models, Alembic migrations (0001 schema … 0005 GPS + logs), tests
 frontend/  React + Vite SPA (DATASTREAM terminal theme)
 deploy/    production compose + Caddyfile (reference; not used locally)
 .github/   CI: lint, migrate, pytest, frontend build — no deploy job

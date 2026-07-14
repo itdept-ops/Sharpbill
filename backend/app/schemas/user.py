@@ -1,4 +1,5 @@
 from datetime import datetime
+from typing import Literal
 
 from pydantic import BaseModel, Field
 
@@ -34,6 +35,10 @@ class UserOut(BaseModel):
     last_login_at: datetime | None
     last_seen_at: datetime | None
     online: bool
+    last_latitude: float | None
+    last_longitude: float | None
+    last_location_accuracy: float | None
+    last_location_at: datetime | None
 
     @classmethod
     def from_user(cls, user: User, *, online: bool = False) -> "UserOut":
@@ -62,6 +67,10 @@ class UserOut(BaseModel):
             last_login_at=user.last_login_at,
             last_seen_at=user.last_seen_at,
             online=online,
+            last_latitude=user.last_latitude,
+            last_longitude=user.last_longitude,
+            last_location_accuracy=user.last_location_accuracy,
+            last_location_at=user.last_location_at,
         )
 
 
@@ -76,6 +85,12 @@ class RoleAssignRequest(BaseModel):
 
 class StatusUpdateRequest(BaseModel):
     is_active: bool
+
+
+class BulkActionRequest(BaseModel):
+    ids: list[int] = Field(min_length=1, max_length=500)
+    action: Literal["activate", "deactivate", "approve", "assign_role"]
+    role_id: int | None = None
 
 
 class ProfileUpdate(BaseModel):

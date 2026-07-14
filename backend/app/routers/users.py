@@ -1,7 +1,9 @@
+import csv
+import io
 from datetime import UTC, datetime
 
-from fastapi import APIRouter, Depends, Query
-from sqlalchemy import func, or_, select
+from fastapi import APIRouter, Depends, Query, Response
+from sqlalchemy import Select, func, or_, select
 from sqlalchemy.orm import Session
 
 from app.auth.deps import get_current_user, require_permission
@@ -11,6 +13,7 @@ from app.models import Role, User
 from app.permissions import ADMIN_ROLE, PRESENCE_KICK, USERS_MANAGE, USERS_READ
 from app.presence import is_online, online_cutoff
 from app.schemas.user import (
+    BulkActionRequest,
     ProfileUpdate,
     RoleAssignRequest,
     StatusUpdateRequest,
@@ -19,6 +22,11 @@ from app.schemas.user import (
 )
 
 router = APIRouter()
+
+
+def _csv_safe(value: str) -> str:
+    # Neutralize spreadsheet formula injection (=, +, -, @, tab, CR at a cell's start).
+    return "'" + value if value and value[0] in "=+-@\t\r" else value
 
 
 def _get_target(db: Session, user_id: int) -> User:
@@ -44,15 +52,9 @@ def _active_admin_count(db: Session) -> int:
     )
 
 
-@router.get("", response_model=UserListOut)
-def list_users(
-    db: Session = Depends(get_db),
-    _: User = Depends(require_permission(USERS_READ)),
-    search: str | None = Query(None),
-    role_id: int | None = Query(None),
-    status: str | None = Query(None, pattern="^(active|pending|disabled)$"),
-    online: bool | None = Query(None),
-) -> UserListOut:
+def _filtered(
+    search: str | None, role_id: int | None, status: str | None, online: bool | None
+) -> Select:
     stmt = select(User)
     if search:
         like = f"%{search.lower()}%"
@@ -72,19 +74,132 @@ def list_users(
         stmt = stmt.where(User.is_active.is_(False), User.is_approved.is_(True))
     if online:
         stmt = stmt.where(User.last_seen_at.is_not(None), User.last_seen_at >= online_cutoff())
+    return stmt.order_by(User.created_at.asc(), User.id.asc())
 
-    users = list(db.scalars(stmt.order_by(User.created_at.asc(), User.id.asc())))
+
+@router.get("", response_model=UserListOut)
+def list_users(
+    db: Session = Depends(get_db),
+    _: User = Depends(require_permission(USERS_READ)),
+    search: str | None = Query(None, max_length=100),
+    role_id: int | None = Query(None),
+    status: str | None = Query(None, pattern="^(active|pending|disabled)$"),
+    online: bool | None = Query(None),
+) -> UserListOut:
+    users = list(db.scalars(_filtered(search, role_id, status, online)))
     return UserListOut(
         items=[UserOut.from_user(u, online=is_online(u.last_seen_at)) for u in users],
         total=len(users),
     )
 
 
+@router.get("/export.csv")
+def export_users_csv(
+    db: Session = Depends(get_db),
+    _: User = Depends(require_permission(USERS_READ)),
+    search: str | None = Query(None, max_length=100),
+    role_id: int | None = Query(None),
+    status: str | None = Query(None, pattern="^(active|pending|disabled)$"),
+    online: bool | None = Query(None),
+) -> Response:
+    users = list(db.scalars(_filtered(search, role_id, status, online)))
+    buf = io.StringIO()
+    w = csv.writer(buf)
+    w.writerow(
+        [
+            "id",
+            "email",
+            "display_name",
+            "role",
+            "status",
+            "title",
+            "department",
+            "location",
+            "created_at",
+            "last_login_at",
+        ]
+    )
+    for u in users:
+        w.writerow(
+            [
+                u.id,
+                _csv_safe(u.email),
+                _csv_safe(u.display_name or ""),
+                _csv_safe(u.role_name),
+                _csv_safe(u.status),
+                _csv_safe(u.title or ""),
+                _csv_safe(u.department or ""),
+                _csv_safe(u.location or ""),
+                u.created_at.isoformat() if u.created_at else "",
+                u.last_login_at.isoformat() if u.last_login_at else "",
+            ]
+        )
+    return Response(
+        content=buf.getvalue(),
+        media_type="text/csv",
+        headers={"Content-Disposition": "attachment; filename=users.csv"},
+    )
+
+
+@router.post("/bulk")
+def bulk_action(
+    body: BulkActionRequest,
+    db: Session = Depends(get_db),
+    actor: User = Depends(require_permission(USERS_MANAGE)),
+) -> dict:
+    """Apply an action to many users. Each id is committed independently; per-item errors are
+    reported without aborting the batch. All the single-user guards apply."""
+    role: Role | None = None
+    if body.action == "assign_role":
+        if body.role_id is None:
+            raise ApiError(400, "UNKNOWN_ROLE", "role_id is required for assign_role")
+        role = db.get(Role, body.role_id)
+        if role is None:
+            raise ApiError(400, "UNKNOWN_ROLE", "No such role")
+        if not _is_admin(actor) and not role.permission_keys <= actor.permission_keys:
+            raise ApiError(
+                403,
+                "INSUFFICIENT_PRIVILEGE",
+                "You cannot assign a role with permissions you do not hold",
+            )
+
+    results = []
+    for uid in body.ids:
+        try:
+            if uid == actor.id:
+                raise ApiError(400, "CANNOT_MODIFY_SELF", "Cannot act on yourself")
+            user = _get_target(db, uid)
+            if body.action == "activate":
+                user.is_active = True
+            elif body.action == "deactivate":
+                if user.role_name == ADMIN_ROLE and _active_admin_count(db) <= 1:
+                    raise ApiError(403, "LAST_ADMIN", "Cannot deactivate the last remaining admin")
+                user.is_active = False
+                user.session_valid_after = datetime.now(UTC).replace(tzinfo=None)
+            elif body.action == "approve":
+                user.is_approved = True
+            elif body.action == "assign_role":
+                assert role is not None
+                if (
+                    user.role_name == ADMIN_ROLE
+                    and role.name != ADMIN_ROLE
+                    and _active_admin_count(db) <= 1
+                ):
+                    raise ApiError(403, "LAST_ADMIN", "Cannot demote the last remaining admin")
+                user.role = role
+            db.commit()
+            results.append({"id": uid, "ok": True})
+        except ApiError as e:
+            db.rollback()
+            results.append({"id": uid, "ok": False, "error": e.detail["code"]})
+
+    return {"applied": sum(1 for r in results if r["ok"]), "results": results}
+
+
 @router.get("/{user_id}", response_model=UserOut)
 def get_user(
     user_id: int, db: Session = Depends(get_db), current: User = Depends(get_current_user)
 ) -> UserOut:
-    # Anyone may view their own record; viewing others needs users.read.
     if user_id != current.id and USERS_READ not in current.permission_keys:
         raise ApiError(403, "FORBIDDEN", "Missing permission: users.read")
     user = _get_target(db, user_id)
@@ -98,7 +213,6 @@ def update_profile(
     db: Session = Depends(get_db),
     current: User = Depends(get_current_user),
 ) -> UserOut:
-    # You may edit your own profile; editing someone else's needs users.manage.
     if user_id != current.id and USERS_MANAGE not in current.permission_keys:
         raise ApiError(403, "FORBIDDEN", "You can only edit your own profile")
     user = _get_target(db, user_id)
@@ -121,14 +235,12 @@ def update_role(
     role = db.get(Role, body.role_id)
     if role is None:
         raise ApiError(400, "UNKNOWN_ROLE", "No such role")
-    # Amplification guard: you cannot hand out a role more powerful than your own.
     if not _is_admin(actor) and not role.permission_keys <= actor.permission_keys:
         raise ApiError(
             403,
             "INSUFFICIENT_PRIVILEGE",
             "You cannot assign a role with permissions you do not hold",
         )
-    # Last-admin guard: never demote away the final active admin.
     if user.role_name == ADMIN_ROLE and role.name != ADMIN_ROLE and _active_admin_count(db) <= 1:
         raise ApiError(403, "LAST_ADMIN", "Cannot demote the last remaining admin")
     user.role = role
@@ -149,7 +261,6 @@ def update_status(
     if not body.is_active:
         if user.role_name == ADMIN_ROLE and _active_admin_count(db) <= 1:
             raise ApiError(403, "LAST_ADMIN", "Cannot deactivate the last remaining admin")
-        # Durable revocation: kill existing sessions so reactivation can't resurrect old tokens.
         user.session_valid_after = datetime.now(UTC).replace(tzinfo=None)
     user.is_active = body.is_active
     db.commit()
@@ -158,11 +269,8 @@ def update_status(
 
 @router.post("/{user_id}/approve", response_model=UserOut)
 def approve_user(
-    user_id: int,
-    db: Session = Depends(get_db),
-    _: User = Depends(require_permission(USERS_MANAGE)),
+    user_id: int, db: Session = Depends(get_db), _: User = Depends(require_permission(USERS_MANAGE))
 ) -> UserOut:
-    """Approve a pending sign-up so the account can log in."""
     user = _get_target(db, user_id)
     user.is_approved = True
     db.commit()
@@ -175,7 +283,6 @@ def kick_user(
     db: Session = Depends(get_db),
     _: User = Depends(require_permission(PRESENCE_KICK)),
 ) -> UserOut:
-    """Force sign-out: invalidate every session token this user currently holds."""
     user = _get_target(db, user_id)
     user.session_valid_after = datetime.now(UTC).replace(tzinfo=None)
     db.commit()

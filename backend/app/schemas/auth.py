@@ -17,3 +17,9 @@ class AuthConfig(BaseModel):
     google: bool
     microsoft: bool
     dev: bool
+
+
+class LocationUpdate(BaseModel):
+    latitude: float = Field(ge=-90, le=90)
+    longitude: float = Field(ge=-180, le=180)
+    accuracy: float | None = Field(default=None, ge=0)

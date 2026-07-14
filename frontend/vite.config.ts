@@ -15,6 +15,7 @@ export default defineConfig({
         // In docker-compose this is http://api:8000; running Vite on the host falls back to localhost.
         target: process.env.VITE_API_PROXY_TARGET ?? "http://localhost:8000",
         changeOrigin: false,
+        ws: true, // proxy the presence WebSocket too
       },
     },
   },

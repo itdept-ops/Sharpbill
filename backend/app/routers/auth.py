@@ -19,7 +19,7 @@ from app.config import settings
 from app.db import get_db
 from app.errors import ApiError
 from app.models import User
-from app.schemas.auth import AuthConfig, TokenLoginRequest
+from app.schemas.auth import AuthConfig, LocationUpdate, TokenLoginRequest
 from app.schemas.user import UserOut
 
 # The login-CSRF guard (reject non-JSON Content-Type on these two routes) is enforced by
@@ -83,3 +83,20 @@ def logout(request: Request, response: Response, db: Session = Depends(get_db)) 
 @router.get("/me", response_model=UserOut)
 def me(user: User = Depends(get_current_user)) -> UserOut:
     return UserOut.from_user(user, online=True)
+
+
+@router.post("/location", status_code=204)
+def update_location(
+    body: LocationUpdate,
+    response: Response,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+) -> Response:
+    """Store the user's opt-in location. The frontend only calls this if the user grants it."""
+    user.last_latitude = body.latitude
+    user.last_longitude = body.longitude
+    user.last_location_accuracy = body.accuracy
+    user.last_location_at = datetime.now(UTC).replace(tzinfo=None)
+    db.commit()
+    response.status_code = 204
+    return response

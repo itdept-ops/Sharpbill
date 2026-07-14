@@ -146,3 +146,28 @@ def test_auth_config_reports_dev_enabled(client):
     resp = client.get("/api/auth/config")
     assert resp.status_code == 200
     assert resp.json()["dev"] is True
+
+
+def test_update_location(client):
+    client.post("/api/auth/dev", json={"email": "geo@example.com"})
+    r = client.post(
+        "/api/auth/location", json={"latitude": 37.7749, "longitude": -122.4194, "accuracy": 12.5}
+    )
+    assert r.status_code == 204
+    me = client.get("/api/auth/me").json()
+    assert me["last_latitude"] == 37.7749
+    assert me["last_longitude"] == -122.4194
+    assert me["last_location_at"] is not None
+
+
+def test_location_validates_range(client):
+    client.post("/api/auth/dev", json={"email": "geo2@example.com"})
+    assert (
+        client.post("/api/auth/location", json={"latitude": 200, "longitude": 0}).status_code == 422
+    )
+
+
+def test_location_requires_session(client):
+    assert (
+        client.post("/api/auth/location", json={"latitude": 0, "longitude": 0}).status_code == 401
+    )

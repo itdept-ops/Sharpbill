@@ -5,7 +5,8 @@ from fastapi.responses import JSONResponse
 
 from app.config import settings
 from app.errors import install_error_handlers
-from app.routers import auth, dashboard, health, presence, roles, users
+from app.request_logging import record_request
+from app.routers import auth, contacts, dashboard, health, logs, presence, roles, users, ws
 from app.routers import settings as settings_router
 
 logging.basicConfig(level=settings.log_level)
@@ -43,13 +44,28 @@ async def _enforce_json_on_login(request: Request, call_next):
     return await call_next(request)
 
 
+# Request activity log: records endpoint + user + IP for meaningful requests. Registered after
+# the CSRF guard so it is the outermost middleware and observes the final response status.
+@app.middleware("http")
+async def _request_log(request: Request, call_next):
+    response = await call_next(request)
+    try:
+        record_request(request, response.status_code)
+    except Exception:
+        logging.getLogger("app.requests").exception("request logging error")
+    return response
+
+
 app.include_router(health.router, prefix="/api")
 app.include_router(auth.router, prefix="/api/auth", tags=["auth"])
 app.include_router(users.router, prefix="/api/users", tags=["users"])
 app.include_router(roles.router, prefix="/api", tags=["rbac"])
 app.include_router(presence.router, prefix="/api/presence", tags=["presence"])
+app.include_router(contacts.router, prefix="/api/contacts", tags=["contacts"])
 app.include_router(settings_router.router, prefix="/api/admin", tags=["settings"])
+app.include_router(logs.router, prefix="/api/admin", tags=["logs"])
 app.include_router(dashboard.router, prefix="/api", tags=["dashboard"])
+app.include_router(ws.router, prefix="/api/ws")
 
 # Dev-only login endpoint — mounted solely in a local environment with the flag on.
 if settings.is_dev_auth_enabled:
