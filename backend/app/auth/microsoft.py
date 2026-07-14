@@ -1,9 +1,11 @@
 import re
+import time
 
 import jwt
 from jwt import PyJWKClient
 
 from app.auth import ProviderTokenError, VerifiedIdentity
+from app.auth.replay import check_replay
 from app.config import settings
 
 _JWKS_URL = "https://login.microsoftonline.com/common/discovery/v2.0/keys"
@@ -45,6 +47,10 @@ def verify_microsoft_id_token(raw_token: str) -> VerifiedIdentity:
     email = (claims.get("email") or claims.get("preferred_username") or "").lower()
     if "@" not in email:
         raise ProviderTokenError("no usable email claim")
+
+    # Single-use: reject a token already presented within its validity window.
+    if check_replay(raw_token, float(claims["exp"]) - time.time()):
+        raise ProviderTokenError("token already used")
 
     return VerifiedIdentity(
         provider="microsoft",

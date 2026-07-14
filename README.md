@@ -135,8 +135,14 @@ re-read from the DB on every request.
 
 Hardened across several adversarial-review passes (each one caught and fixed real bugs). Highlights:
 
-- **Identity = provider subject id, never email.** Two providers sharing an email are two accounts;
-  a changed email never merges or hijacks.
+- **Verified provider identity.** ID tokens are validated server-side — signature (Google certs /
+  Microsoft JWKS), `aud` == client id, issuer (Google allowlist / Microsoft `tid`-bound), expiry,
+  `email_verified` (Google), `RS256` pinned (no alg-confusion) — and identity is keyed on the
+  **immutable subject** (Google `sub` / Microsoft `oid`), never email. Two providers sharing an
+  email are two accounts; a changed email never merges or hijacks.
+- **Single-use tokens.** A verified id_token is rejected if the same token is replayed within its
+  validity window (in-memory guard). Provider nonce binding is the remaining defense-in-depth,
+  wired up once live OAuth keys exist.
 - **No privilege amplification.** You can only grant a role/permission you already hold; system
   roles are admin-only to edit; the `admin` role is locked.
 - **Last-admin protection.** The final active admin can't be demoted or deactivated.

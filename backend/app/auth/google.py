@@ -1,8 +1,11 @@
+import time
+
 import google.auth.transport.requests
 from google.auth.exceptions import GoogleAuthError
 from google.oauth2 import id_token as google_id_token
 
 from app.auth import ProviderTokenError, VerifiedIdentity
+from app.auth.replay import check_replay
 from app.config import settings
 
 _transport = google.auth.transport.requests.Request()
@@ -31,6 +34,10 @@ def verify_google_id_token(raw_token: str) -> VerifiedIdentity:
         raise ProviderTokenError("google email not verified")
     if not claims.get("sub") or not claims.get("email"):
         raise ProviderTokenError("missing sub/email")
+
+    # Single-use: reject a token already presented within its validity window.
+    if check_replay(raw_token, float(claims["exp"]) - time.time()):
+        raise ProviderTokenError("token already used")
 
     return VerifiedIdentity(
         provider="google",
