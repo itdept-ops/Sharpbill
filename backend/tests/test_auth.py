@@ -1,0 +1,127 @@
+from app.auth import VerifiedIdentity
+from app.auth.jwt import COOKIE_NAME
+from app.auth.service import find_or_create_user
+from app.config import settings
+
+
+def _google(email: str, subject: str = "g-sub-1", verified: bool = True) -> VerifiedIdentity:
+    return VerifiedIdentity(provider="google", subject=subject, email=email, display_name="G User")
+
+
+def test_first_google_login_provisions_user(db):
+    ident = _google("newperson@example.com")
+    user = find_or_create_user(db, ident)
+    assert user.id is not None
+    assert user.role == "user"
+    assert user.is_active is True
+    assert user.auth_providers == ["google"]
+
+
+def test_admin_bootstrap_from_admin_emails_google(db, monkeypatch):
+    monkeypatch.setattr(settings, "admin_emails", "boss@example.com")
+    user = find_or_create_user(db, _google("boss@example.com", subject="g-boss"))
+    assert user.role == "admin"
+
+
+def test_microsoft_admin_requires_matching_tenant(db, monkeypatch):
+    monkeypatch.setattr(settings, "admin_emails", "boss@example.com")
+    monkeypatch.setattr(settings, "azure_admin_tenant_id", "tenant-abc")
+    # Wrong tenant → not admin even though the email is allowlisted.
+    wrong = VerifiedIdentity(
+        provider="microsoft",
+        subject="ms-1",
+        email="boss@example.com",
+        display_name="Boss",
+        tenant_id="other-tenant",
+    )
+    assert find_or_create_user(db, wrong).role == "user"
+    # Right tenant → admin.
+    right = VerifiedIdentity(
+        provider="microsoft",
+        subject="ms-2",
+        email="boss@example.com",
+        display_name="Boss",
+        tenant_id="tenant-abc",
+    )
+    assert find_or_create_user(db, right).role == "admin"
+
+
+def test_same_email_two_providers_two_accounts(db):
+    g = find_or_create_user(db, _google("dup@example.com", subject="g-dup"))
+    ms = find_or_create_user(
+        db,
+        VerifiedIdentity(
+            provider="microsoft", subject="ms-dup", email="dup@example.com", display_name="Dup"
+        ),
+    )
+    assert g.id != ms.id  # no email-based linking
+
+
+def test_repeat_login_updates_last_login(db):
+    ident = _google("repeat@example.com", subject="g-rep")
+    first = find_or_create_user(db, ident)
+    first_login = first.last_login_at
+    second = find_or_create_user(db, ident)
+    assert first.id == second.id
+    assert second.last_login_at >= first_login
+
+
+def test_google_login_via_http_sets_cookie(client, monkeypatch):
+    from app.routers import auth as auth_router
+
+    monkeypatch.setattr(
+        auth_router,
+        "verify_google_id_token",
+        lambda _t: _google("httpuser@example.com", subject="g-http"),
+    )
+    resp = client.post("/api/auth/google", json={"id_token": "whatever"})
+    assert resp.status_code == 200
+    assert COOKIE_NAME in resp.cookies
+    body = resp.json()
+    assert body["email"] == "httpuser@example.com"
+    assert body["role"] == "user"
+
+
+def test_login_rejects_non_json_content_type(client):
+    resp = client.post(
+        "/api/auth/google", data="id_token=x", headers={"content-type": "text/plain"}
+    )
+    assert resp.status_code == 415
+    assert resp.json()["detail"]["code"] == "UNSUPPORTED_MEDIA_TYPE"
+
+
+def test_me_requires_session(client):
+    resp = client.get("/api/auth/me")
+    assert resp.status_code == 401
+    assert resp.json()["detail"]["code"] == "NOT_AUTHENTICATED"
+
+
+def test_disabled_account_cannot_login(db, client, monkeypatch):
+    from app.models import User
+    from app.routers import auth as auth_router
+
+    find_or_create_user(db, _google("dis@example.com", subject="g-dis"))
+    u = db.query(User).filter(User.email == "dis@example.com").first()
+    u.is_active = False
+    db.commit()
+
+    monkeypatch.setattr(
+        auth_router,
+        "verify_google_id_token",
+        lambda _t: _google("dis@example.com", subject="g-dis"),
+    )
+    resp = client.post("/api/auth/google", json={"id_token": "x"})
+    assert resp.status_code == 403
+    assert resp.json()["detail"]["code"] == "ACCOUNT_DISABLED"
+
+
+def test_logout_clears_cookie(client):
+    client.post("/api/auth/dev", json={"email": "who@example.com"})
+    resp = client.post("/api/auth/logout")
+    assert resp.status_code == 204
+
+
+def test_auth_config_reports_dev_enabled(client):
+    resp = client.get("/api/auth/config")
+    assert resp.status_code == 200
+    assert resp.json()["dev"] is True

@@ -1,0 +1,8 @@
+# Normalize line endings to LF for everyone — this repo builds Linux Docker images,
+# and CRLF in scripts/configs breaks them.
+* text=auto eol=lf
+
+# Binary-ish assets should not be touched.
+*.png binary
+*.jpg binary
+*.ico binary

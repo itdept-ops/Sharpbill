@@ -1,0 +1,26 @@
+# secrets & local env
+.env
+frontend/.env
+
+# python
+__pycache__/
+*.pyc
+.venv/
+.pytest_cache/
+.ruff_cache/
+
+# node / vite
+node_modules/
+dist/
+
+# playwright
+/e2e-artifacts/
+test-results/
+playwright-report/
+
+# os / editor
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/*
+!.vscode/extensions.json

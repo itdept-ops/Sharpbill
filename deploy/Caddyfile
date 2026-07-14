@@ -1,0 +1,12 @@
+# Reference only. Caddy fetches/renews Let's Encrypt automatically once DNS resolves.
+{$DOMAIN} {
+	encode gzip zstd
+
+	handle /api/* {
+		reverse_proxy api:8000
+	}
+
+	handle {
+		reverse_proxy web:80
+	}
+}
