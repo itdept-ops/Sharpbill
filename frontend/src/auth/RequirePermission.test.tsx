@@ -10,7 +10,7 @@ import { RequirePermission } from "./RequirePermission";
 
 function renderGated(perm: string) {
   return render(
-    <MemoryRouter>
+    <MemoryRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
       <RequirePermission perm={perm}>
         <div>secret-content</div>
       </RequirePermission>

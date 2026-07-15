@@ -48,19 +48,20 @@
   --dur-fast: 120ms;
   --dur: 200ms;
   --ease: cubic-bezier(0.2, 0.7, 0.2, 1);
-  --rain-opacity: 0.4;
+  /* Global rain dimmer — multiplies each canvas's own --rain-base opacity. */
+  --rain-mult: 1;
 }
 
 @media (prefers-reduced-motion: reduce) {
   :root {
     --dur-fast: 0ms;
     --dur: 0ms;
-    --rain-opacity: 0.14;
+    --rain-mult: 0.5;
   }
 }
 :root[data-calm="true"] {
   --scanline: none;
-  --rain-opacity: 0.06;
+  --rain-mult: 0.35;
 }
 
 * {
@@ -129,7 +130,8 @@ code {
   inset: 0;
   z-index: -2;
   pointer-events: none;
-  opacity: var(--rain-opacity);
+  /* Per-instance base opacity (set inline) scaled by the global calm/reduced-motion dimmer. */
+  opacity: calc(var(--rain-base, 0.4) * var(--rain-mult, 1));
 }
 .scanlines {
   position: fixed;

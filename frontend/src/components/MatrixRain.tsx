@@ -1,13 +1,14 @@
-import { useEffect, useRef } from "react";
+import { type CSSProperties, useEffect, useRef } from "react";
 
 const KATAKANA = "アカサタナハマヤラワンイキシチニミリ0123456789ABCDEF<>/\\|:.*#=+";
 const ASCII = "01<>/[]{}#*+=~:.|";
 const F = 16; // cell size, matches --lane-w
+const FALLBACK: [number, number, number] = [53, 255, 116];
 
 /**
- * Full-viewport falling code-rain. Recolored as a telemetry deck: teal "data-pulse"
- * columns + faint lane rules. Throttled to ~24fps, DPR-capped, paused when hidden, and
- * reduced to a single static frame under prefers-reduced-motion.
+ * Full-viewport falling code-rain. Follows the live accent color (--accent-rgb), so the
+ * telemetry deck recolors with each user's theme. Throttled to ~24fps, DPR-capped, paused
+ * when hidden, and reduced to a single static frame under prefers-reduced-motion.
  */
 export function MatrixRain({ opacity = 0.4 }: { opacity?: number }) {
   const ref = useRef<HTMLCanvasElement>(null);
@@ -27,6 +28,23 @@ export function MatrixRain({ opacity = 0.4 }: { opacity?: number }) {
     let last = 0;
     let running = true;
 
+    // Live accent — re-read whenever the theme variable changes.
+    let charColor = "rgba(53,255,116,0.5)";
+    let laneColor = "rgba(53,255,116,0.06)";
+    let headColor = "#cfffe0";
+    let glowColor = "rgb(53,255,116)";
+    const readAccent = () => {
+      const raw = getComputedStyle(document.documentElement).getPropertyValue("--accent-rgb").trim();
+      const parts = raw.split(/[\s,]+/).map(Number).filter((n) => !Number.isNaN(n));
+      const [r, g, b] = parts.length === 3 ? (parts as [number, number, number]) : FALLBACK;
+      charColor = `rgba(${r},${g},${b},0.5)`;
+      laneColor = `rgba(${r},${g},${b},0.06)`;
+      glowColor = `rgb(${r},${g},${b})`;
+      // Bright head: accent lightened toward white so the leading glyph reads hot.
+      const lift = (c: number) => Math.round((c + 255 * 2) / 3);
+      headColor = `rgb(${lift(r)},${lift(g)},${lift(b)})`;
+    };
+
     const mono = () =>
       getComputedStyle(document.body).getPropertyValue("--font-mono") || "monospace";
 
@@ -43,16 +61,17 @@ export function MatrixRain({ opacity = 0.4 }: { opacity?: number }) {
       chars = ctx.measureText("ア").width > 2 ? KATAKANA : ASCII;
       cols = Math.max(1, Math.floor(W / F));
       drops = Array.from({ length: cols }, () => (Math.random() * -H) / F);
+      readAccent();
     };
 
     const frame = () => {
-      ctx.fillStyle = "rgba(6,10,8,0.10)"; // trail fade
+      ctx.fillStyle = "rgba(6,10,8,0.10)"; // trail fade toward the deck background
       ctx.fillRect(0, 0, W, H);
       ctx.font = `${F}px ${mono()}`;
       for (let i = 0; i < cols; i++) {
         const x = i * F;
         if (i % 4 === 0) {
-          ctx.strokeStyle = "rgba(25,229,208,0.10)";
+          ctx.strokeStyle = laneColor;
           ctx.lineWidth = 1;
           ctx.beginPath();
           ctx.moveTo(x + 0.5, 0);
@@ -62,10 +81,10 @@ export function MatrixRain({ opacity = 0.4 }: { opacity?: number }) {
         const y = drops[i] * F;
         const ch = chars[(Math.random() * chars.length) | 0];
         ctx.shadowBlur = 0;
-        ctx.fillStyle = i % 40 === 0 ? "rgba(25,229,208,0.5)" : "rgba(53,255,116,0.35)";
+        ctx.fillStyle = charColor;
         ctx.fillText(ch, x, y);
-        ctx.fillStyle = "#9cffc0"; // bright head
-        ctx.shadowColor = "#35ff74";
+        ctx.fillStyle = headColor; // bright leading glyph
+        ctx.shadowColor = glowColor;
         ctx.shadowBlur = 8;
         ctx.fillText(ch, x, y);
         ctx.shadowBlur = 0;
@@ -77,7 +96,7 @@ export function MatrixRain({ opacity = 0.4 }: { opacity?: number }) {
     const staticFrame = () => {
       ctx.clearRect(0, 0, W, H);
       ctx.font = `${F}px ${mono()}`;
-      ctx.fillStyle = "rgba(53,255,116,0.28)";
+      ctx.fillStyle = charColor;
       const rows = Math.floor(H / F);
       for (let i = 0; i < cols; i++) {
         for (let j = 0; j < rows; j += 3) {
@@ -106,6 +125,15 @@ export function MatrixRain({ opacity = 0.4 }: { opacity?: number }) {
         raf = requestAnimationFrame(loop);
       }
     };
+    // Recolor immediately when the accent theme variable changes.
+    const themeObserver = new MutationObserver(() => {
+      readAccent();
+      if (reduced) staticFrame();
+    });
+    themeObserver.observe(document.documentElement, {
+      attributes: true,
+      attributeFilter: ["style", "data-calm"],
+    });
 
     setup();
     if (reduced) staticFrame();
@@ -116,10 +144,18 @@ export function MatrixRain({ opacity = 0.4 }: { opacity?: number }) {
     return () => {
       running = false;
       cancelAnimationFrame(raf);
+      themeObserver.disconnect();
       window.removeEventListener("resize", onResize);
       document.removeEventListener("visibilitychange", onVis);
     };
   }, []);
 
-  return <canvas ref={ref} className="rain-canvas" style={{ opacity }} aria-hidden="true" />;
+  return (
+    <canvas
+      ref={ref}
+      className="rain-canvas"
+      style={{ "--rain-base": opacity } as CSSProperties}
+      aria-hidden="true"
+    />
+  );
 }

@@ -3,6 +3,7 @@ import { Link, NavLink, Outlet, useLocation, useNavigate } from "react-router-do
 import { useAuth } from "../auth/AuthContext";
 import { PresenceProvider, usePresence } from "../presence/PresenceContext";
 import { RoleBadge } from "./badges";
+import { MatrixRain } from "./MatrixRain";
 
 function breadcrumb(pathname: string): string {
   const parts = pathname.replace(/^\/+/, "").split("/").filter(Boolean);
@@ -24,6 +25,7 @@ function ShellInner() {
 
   return (
     <div className="shell">
+      <MatrixRain opacity={0.14} />
       <aside className="rail">
         <div className="rail-brand">
           <span className="logo-glyph">◈</span> KINGFISHER
