@@ -158,6 +158,9 @@ def test_update_location(client):
     assert me["last_latitude"] == 37.7749
     assert me["last_longitude"] == -122.4194
     assert me["last_location_at"] is not None
+    # location + timezone are derived from the GPS coordinates (offline reverse-geocode)
+    assert me["timezone"] == "America/Los_Angeles"
+    assert "San Francisco" in (me["location"] or "")
 
 
 def test_location_validates_range(client):

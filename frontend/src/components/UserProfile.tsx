@@ -106,16 +106,6 @@ export function UserProfile({ user: initial }: { user: User }) {
           <div className="kv-row"><span className="k">Timezone</span><span className="v">{user.timezone ?? "—"}</span></div>
           <div className="kv-row"><span className="k">Phone</span><span className="v">{user.phone ?? "—"}</span></div>
           <div className="kv-row"><span className="k">Providers</span><span className="v">{user.auth_providers.map((p) => <ProviderBadge key={p} provider={p} />)}</span></div>
-          <div className="kv-row">
-            <span className="k">Verified ID</span>
-            <span className="v">
-              {user.identities.map((i) => (
-                <div key={i.provider + i.subject} className="mono-id" title={i.subject}>
-                  {i.provider}:{i.subject.length > 16 ? `${i.subject.slice(0, 14)}…` : i.subject}
-                </div>
-              ))}
-            </span>
-          </div>
           <div className="kv-row"><span className="k">Joined</span><span className="v">{new Date(user.created_at).toLocaleDateString()}</span></div>
           <div className="kv-row"><span className="k">Last login</span><span className="v">{user.last_login_at ? new Date(user.last_login_at).toLocaleString() : "—"}</span></div>
           {user.last_location_at && user.last_latitude != null && user.last_longitude != null && (

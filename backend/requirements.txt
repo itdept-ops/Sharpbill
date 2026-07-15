@@ -10,3 +10,5 @@ email-validator==2.2.0
 google-auth==2.40.1
 requests==2.32.3
 PyJWT==2.10.1
+timezonefinder==8.2.5
+reverse_geocoder==1.5.1

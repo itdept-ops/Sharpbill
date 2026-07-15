@@ -14,6 +14,7 @@ from app.auth.sessions import revoke_session, start_session
 from app.config import settings
 from app.db import get_db
 from app.errors import ApiError
+from app.geo import place_for, timezone_for
 from app.models import User, UserSession
 from app.schemas.auth import AuthConfig, LocationUpdate, SessionOut, TokenLoginRequest
 from app.schemas.user import UserOut
@@ -126,11 +127,23 @@ def update_location(
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
 ) -> Response:
-    """Store the user's opt-in location. The frontend only calls this if the user grants it."""
+    """Store the user's opt-in location, and derive their place + timezone from it (offline).
+
+    The frontend only calls this if the user grants location access.
+    """
     user.last_latitude = body.latitude
     user.last_longitude = body.longitude
     user.last_location_accuracy = body.accuracy
     user.last_location_at = datetime.now(UTC).replace(tzinfo=None)
+
+    # Fill in location + timezone from the coordinates (offline reverse-geocode).
+    place = place_for(body.latitude, body.longitude)
+    tz = timezone_for(body.latitude, body.longitude)
+    if place:
+        user.location = place
+    if tz:
+        user.timezone = tz
+
     db.commit()
     response.status_code = 204
     return response
