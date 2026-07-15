@@ -1,7 +1,7 @@
 from datetime import datetime
 
 from sqlalchemy import DateTime, Double, ForeignKey, String, text
-from sqlalchemy.dialects.mysql import TINYINT
+from sqlalchemy.dialects.mysql import JSON, TINYINT
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models.base import Base
@@ -44,6 +44,9 @@ class User(Base):
     last_location_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=False))
     # Per-user UI accent color (hex, e.g. "#35ff74"); null = the default green.
     accent_color: Mapped[str | None] = mapped_column(String(9))
+    # Extensible per-user UI preferences bag (base tone, glow, motion, rain, density,
+    # typography, accessibility). NULL / missing key => that axis renders at today's default.
+    ui_prefs: Mapped[dict | None] = mapped_column(JSON)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=False), server_default=text("CURRENT_TIMESTAMP(6)")
     )

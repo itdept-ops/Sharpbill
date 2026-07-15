@@ -75,7 +75,7 @@ def _clean_tables():
         conn.execute(
             text(
                 "UPDATE site_settings SET signup_mode='open', allow_google=1, allow_microsoft=1, "
-                "default_role_id=(SELECT id FROM roles WHERE name='user') WHERE id=1"
+                "calm_mode=0, default_role_id=(SELECT id FROM roles WHERE name='user') WHERE id=1"
             )
         )
         conn.execute(text("DELETE FROM request_logs"))

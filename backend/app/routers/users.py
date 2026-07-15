@@ -236,7 +236,19 @@ def update_profile(
     if user_id != current.id and USERS_MANAGE not in current.permission_keys:
         raise ApiError(403, "FORBIDDEN", "You can only edit your own profile")
     user = _get_target(db, user_id)
-    for field, value in body.model_dump(exclude_unset=True).items():
+    data = body.model_dump(exclude_unset=True)
+    if "ui_prefs" in data:
+        incoming = data.pop("ui_prefs")
+        if incoming is None:
+            user.ui_prefs = None  # explicit null resets every axis to defaults
+        else:
+            # Row-lock before the read-modify-write so concurrent single-key PATCHes serialize
+            # instead of clobbering each other (JSON columns have no atomic in-place merge, and
+            # a lost update would silently drop a just-changed setting). Reassign a fresh dict —
+            # MySQL JSON has no in-place dirty tracking, so mutating the dict would not persist.
+            db.refresh(user, with_for_update=True)
+            user.ui_prefs = {**(user.ui_prefs or {}), **incoming}
+    for field, value in data.items():
         setattr(user, field, value)
     db.commit()
     return UserOut.from_user(user, online=is_online(user.last_seen_at))

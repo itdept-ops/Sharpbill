@@ -1,13 +1,21 @@
-import { createContext, type ReactNode, useContext, useEffect, useState } from "react";
+import {
+  createContext,
+  type Dispatch,
+  type ReactNode,
+  type SetStateAction,
+  useContext,
+  useEffect,
+  useState,
+} from "react";
 
 import { api, setUnauthorizedHandler } from "../api/client";
 import type { AuthConfig, User } from "../types";
-import { applyAccent, applyCalm } from "../util/theme";
+import { applyAccent, applyCalm, applyUiPrefs } from "../util/theme";
 
 interface AuthContextValue {
   user: User | null;
   loading: boolean;
-  setUser: (u: User | null) => void;
+  setUser: Dispatch<SetStateAction<User | null>>;
   logout: () => Promise<void>;
 }
 
@@ -37,6 +45,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     applyAccent(user?.accent_color);
   }, [user?.accent_color]);
+
+  // Apply the signed-in user's UI preference bag (reverts to defaults when signed out).
+  useEffect(() => {
+    applyUiPrefs(user?.ui_prefs ?? null);
+  }, [user?.ui_prefs]);
 
   const logout = async () => {
     await api.post("/api/auth/logout");

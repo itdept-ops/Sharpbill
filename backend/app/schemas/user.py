@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 from app.models import User
 
@@ -24,6 +24,7 @@ class UserOut(BaseModel):
     timezone: str | None
     bio: str | None
     accent_color: str | None
+    ui_prefs: dict | None
     role: str
     role_id: int
     permissions: list[str]  # effective = role ∪ direct grants
@@ -60,6 +61,7 @@ class UserOut(BaseModel):
             timezone=user.timezone,
             bio=user.bio,
             accent_color=user.accent_color,
+            ui_prefs=user.ui_prefs,
             role=user.role_name,
             role_id=user.role_id,
             permissions=sorted(user.permission_keys),
@@ -109,6 +111,44 @@ class BulkActionRequest(BaseModel):
     role_id: int | None = None
 
 
+class UiPrefs(BaseModel):
+    """Per-user UI customization axes. Every field is optional so a PATCH can carry a single
+    key; the router MERGES incoming keys into the stored bag. Values flow into
+    documentElement style/dataset on the client, so each is strictly enum/range-validated and
+    unknown keys are rejected — no free strings reach the DOM. A missing key renders at today's
+    default on the frontend."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    # Color
+    base_tone: Literal["abyss", "ink", "graphite", "midnight", "warm-black"] | None = None
+    background_depth: Literal["pure-black", "standard", "elevated"] | None = None
+    border_glow: Literal["hairline", "standard", "neon"] | None = None
+    # Glow & texture
+    glow_intensity: Literal["off", "subtle", "normal", "intense"] | None = None
+    scanlines: Literal["off", "subtle", "standard", "heavy"] | None = None
+    corner_radius: Literal["sharp", "soft", "round"] | None = None
+    # Motion & rain
+    motion: Literal["full", "calm", "reduced"] | None = None
+    rain_density: float | None = Field(default=None, ge=0, le=0.8)
+    rain_speed: Literal["still", "slow", "normal", "fast"] | None = None
+    rain_glyphs: Literal["katakana", "ascii", "binary", "hex"] | None = None
+    # Typography & density
+    font_family: (
+        Literal["system", "high-legibility", "cascadia", "jetbrains", "consolas", "menlo"] | None
+    ) = None
+    text_scale: Literal["90", "100", "112", "125"] | None = None
+    density: Literal["compact", "comfortable", "spacious"] | None = None
+    # Accessibility
+    high_contrast_text: bool | None = None
+    reduce_transparency: bool | None = None
+    focus_ring: Literal["standard", "bold", "high-contrast"] | None = None
+    zebra_rows: bool | None = None
+    link_underlines: bool | None = None
+    # Schema version for future client-side upgrade shims.
+    v: int | None = None
+
+
 class ProfileUpdate(BaseModel):
     display_name: str | None = Field(default=None, max_length=255)
     title: str | None = Field(default=None, max_length=120)
@@ -118,3 +158,5 @@ class ProfileUpdate(BaseModel):
     timezone: str | None = Field(default=None, max_length=60)
     bio: str | None = Field(default=None, max_length=500)
     accent_color: str | None = Field(default=None, pattern=r"^#[0-9a-fA-F]{6}$")
+    # A single-key PATCH merges into the stored bag; explicit null clears all prefs to defaults.
+    ui_prefs: UiPrefs | None = None

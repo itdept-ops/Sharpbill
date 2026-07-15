@@ -271,6 +271,51 @@ def test_user_can_set_and_clear_accent_color(client):
     )
 
 
+def test_user_can_merge_and_reset_ui_prefs(client):
+    me = _login(client, "prefs@example.com", role="user")
+    uid = me["id"]
+
+    def patch(prefs):
+        return client.patch(f"/api/users/{uid}/profile", json={"ui_prefs": prefs})
+
+    # a single-key PATCH stores that key
+    r = patch({"glow_intensity": "off"})
+    assert r.status_code == 200
+    assert r.json()["ui_prefs"] == {"glow_intensity": "off"}
+    # a second single-key PATCH MERGES (does not replace) the bag
+    assert patch({"density": "compact"}).json()["ui_prefs"] == {
+        "glow_intensity": "off",
+        "density": "compact",
+    }
+    # overwriting an existing key updates just that key, keeping the rest
+    assert patch({"glow_intensity": "intense"}).json()["ui_prefs"] == {
+        "glow_intensity": "intense",
+        "density": "compact",
+    }
+    # explicit null resets every axis back to defaults
+    assert patch(None).json()["ui_prefs"] is None
+
+
+def test_ui_prefs_rejects_invalid_values(client):
+    me = _login(client, "badprefs@example.com", role="user")
+    uid = me["id"]
+
+    def status(prefs):
+        return client.patch(f"/api/users/{uid}/profile", json={"ui_prefs": prefs}).status_code
+
+    assert status({"motion": "hyper"}) == 422  # not a valid enum member
+    assert status({"bogus": "x"}) == 422  # unknown key (extra='forbid')
+    assert status({"rain_density": 5}) == 422  # outside [0, 0.8]
+    # accent_color and ui_prefs coexist in one PATCH without interfering
+    r = client.patch(
+        f"/api/users/{uid}/profile",
+        json={"accent_color": "#a3e635", "ui_prefs": {"scanlines": "heavy"}},
+    )
+    assert r.status_code == 200
+    assert r.json()["accent_color"] == "#a3e635"
+    assert r.json()["ui_prefs"] == {"scanlines": "heavy"}
+
+
 def test_user_cannot_edit_others_profile(client):
     other = TestClient(app)
     ou = other.post("/api/auth/dev", json={"email": "other@example.com", "role": "user"}).json()

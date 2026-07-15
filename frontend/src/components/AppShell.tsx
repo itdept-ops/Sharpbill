@@ -4,6 +4,7 @@ import { useAuth } from "../auth/AuthContext";
 import { PresenceProvider, usePresence } from "../presence/PresenceContext";
 import { RoleBadge } from "./badges";
 import { MatrixRain } from "./MatrixRain";
+import { DEFAULT_RAIN_DENSITY } from "../util/theme";
 
 function breadcrumb(pathname: string): string {
   const parts = pathname.replace(/^\/+/, "").split("/").filter(Boolean);
@@ -23,9 +24,12 @@ function ShellInner() {
     navigate("/login", { replace: true });
   };
 
+  // Console rain honors the user's density preference (0 hides it entirely).
+  const rainOpacity = user?.ui_prefs?.rain_density ?? DEFAULT_RAIN_DENSITY;
+
   return (
     <div className="shell">
-      <MatrixRain opacity={0.14} />
+      {rainOpacity > 0 && <MatrixRain opacity={rainOpacity} />}
       <aside className="rail">
         <div className="rail-brand">
           <span className="logo-glyph">◈</span> KINGFISHER

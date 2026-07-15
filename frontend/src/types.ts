@@ -7,6 +7,30 @@ export interface Identity {
   subject: string; // immutable provider id (Google sub / Microsoft oid)
 }
 
+/** Per-user UI customization axes. Every field optional; a missing key renders at today's
+ *  default. Mirrors the backend `UiPrefs` pydantic submodel. */
+export interface UiPrefs {
+  base_tone?: "abyss" | "ink" | "graphite" | "midnight" | "warm-black";
+  background_depth?: "pure-black" | "standard" | "elevated";
+  border_glow?: "hairline" | "standard" | "neon";
+  glow_intensity?: "off" | "subtle" | "normal" | "intense";
+  scanlines?: "off" | "subtle" | "standard" | "heavy";
+  corner_radius?: "sharp" | "soft" | "round";
+  motion?: "full" | "calm" | "reduced";
+  rain_density?: number;
+  rain_speed?: "still" | "slow" | "normal" | "fast";
+  rain_glyphs?: "katakana" | "ascii" | "binary" | "hex";
+  font_family?: "system" | "high-legibility" | "cascadia" | "jetbrains" | "consolas" | "menlo";
+  text_scale?: "90" | "100" | "112" | "125";
+  density?: "compact" | "comfortable" | "spacious";
+  high_contrast_text?: boolean;
+  reduce_transparency?: boolean;
+  focus_ring?: "standard" | "bold" | "high-contrast";
+  zebra_rows?: boolean;
+  link_underlines?: boolean;
+  v?: number;
+}
+
 export interface User {
   id: number;
   email: string;
@@ -18,6 +42,7 @@ export interface User {
   timezone: string | null;
   bio: string | null;
   accent_color: string | null;
+  ui_prefs: UiPrefs | null;
   role: string;
   role_id: number;
   permissions: string[]; // effective = role ∪ direct grants
@@ -51,6 +76,8 @@ export interface ProfileUpdate {
   location?: string | null;
   timezone?: string | null;
   bio?: string | null;
+  accent_color?: string | null;
+  ui_prefs?: UiPrefs | null;
 }
 
 export interface AuthConfig {

@@ -2,8 +2,8 @@ import { useEffect, useState } from "react";
 
 import { api } from "../api/client";
 import { useAuth } from "../auth/AuthContext";
+import { AppearancePanel } from "../components/AppearancePanel";
 import { SessionsPanel } from "../components/SessionsPanel";
-import { ThemePicker } from "../components/ThemePicker";
 import { UserProfile } from "../components/UserProfile";
 import type { User } from "../types";
 
@@ -21,7 +21,7 @@ export function ProfilePage() {
       <p className="page-sub">Your account, identity, and profile — edit anything below.</p>
       {user ? <UserProfile user={user} /> : <div className="muted">Loading…</div>}
       <div style={{ marginTop: 16 }}>
-        <ThemePicker />
+        <AppearancePanel />
       </div>
       <div style={{ marginTop: 16 }}>
         <SessionsPanel
