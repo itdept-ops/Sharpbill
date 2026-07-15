@@ -60,6 +60,9 @@ def get_current_user(request: Request, db: Session = Depends(get_db)) -> User:
     if session is None:
         raise ApiError(401, "SESSION_REVOKED", "This session was signed out")
 
+    # Stash the resolved principal so the request-logging middleware can reuse it instead of
+    # decoding the JWT a second time on the way out.
+    request.state.user_id = user.id
     _touch(db, user, session)
     return user
 

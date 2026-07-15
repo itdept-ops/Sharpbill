@@ -3,6 +3,7 @@ import io
 from datetime import UTC, datetime
 
 from fastapi import APIRouter, Depends, Query, Response
+from fastapi.responses import StreamingResponse
 from sqlalchemy import Select, func, or_, select
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session, selectinload
@@ -147,43 +148,56 @@ def export_users_csv(
     role_id: int | None = Query(None),
     status: str | None = Query(None, pattern="^(active|pending|disabled)$"),
     online: bool | None = Query(None),
-) -> Response:
-    users = list(db.scalars(_filtered(search, role_id, status, online)))
+) -> StreamingResponse:
     # Location can be GPS-derived, so only a manager exports it (matches the API gating).
     can_loc = USERS_MANAGE in current.permission_keys
-    buf = io.StringIO()
-    w = csv.writer(buf)
-    w.writerow(
-        [
-            "id",
-            "email",
-            "display_name",
-            "role",
-            "status",
-            "title",
-            "department",
-            "location",
-            "created_at",
-            "last_login_at",
-        ]
-    )
-    for u in users:
-        w.writerow(
-            [
-                u.id,
-                _csv_safe(u.email),
-                _csv_safe(u.display_name or ""),
-                _csv_safe(u.role_name),
-                _csv_safe(u.status),
-                _csv_safe(u.title or ""),
-                _csv_safe(u.department or ""),
-                _csv_safe(u.location or "") if can_loc else "",
-                u.created_at.isoformat() if u.created_at else "",
-                u.last_login_at.isoformat() if u.last_login_at else "",
-            ]
-        )
-    return Response(
-        content=buf.getvalue(),
+    header = [
+        "id",
+        "email",
+        "display_name",
+        "role",
+        "status",
+        "title",
+        "department",
+        "location",
+        "created_at",
+        "last_login_at",
+    ]
+
+    def generate():
+        buf = io.StringIO()
+        w = csv.writer(buf)
+
+        def flush() -> str:
+            data = buf.getvalue()
+            buf.seek(0)
+            buf.truncate(0)
+            return data
+
+        w.writerow(header)
+        yield flush()
+        # Stream rows in batches from the DB cursor (yield_per) so the whole matching set is
+        # never materialized in memory at once, no matter how large the directory grows.
+        stmt = _filtered(search, role_id, status, online).execution_options(yield_per=500)
+        for u in db.scalars(stmt):
+            w.writerow(
+                [
+                    u.id,
+                    _csv_safe(u.email),
+                    _csv_safe(u.display_name or ""),
+                    _csv_safe(u.role_name),
+                    _csv_safe(u.status),
+                    _csv_safe(u.title or ""),
+                    _csv_safe(u.department or ""),
+                    _csv_safe(u.location or "") if can_loc else "",
+                    u.created_at.isoformat() if u.created_at else "",
+                    u.last_login_at.isoformat() if u.last_login_at else "",
+                ]
+            )
+            yield flush()
+
+    return StreamingResponse(
+        generate(),
         media_type="text/csv",
         headers={"Content-Disposition": "attachment; filename=users.csv"},
     )

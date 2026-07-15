@@ -1,3 +1,4 @@
+import time
 from datetime import UTC, datetime, timedelta
 
 from fastapi import APIRouter, Depends
@@ -11,6 +12,18 @@ from app.permissions import USERS_READ
 from app.presence import online_cutoff
 
 router = APIRouter()
+
+# The analytics payload is site-wide (identical for every viewer) and runs four aggregate scans,
+# so cache it briefly. This caps DB load to one computation per _ANALYTICS_TTL regardless of how
+# often the dashboard is refreshed, closing the "one user saturates the DB" hole.
+_ANALYTICS_TTL_SECONDS = 15.0
+_analytics_cache: dict = {"at": 0.0, "data": None}
+
+
+def _reset_analytics_cache() -> None:
+    """Clear the cache (used between tests so each starts from a fresh DB state)."""
+    _analytics_cache["at"] = 0.0
+    _analytics_cache["data"] = None
 
 
 def _count(db: Session, *conditions) -> int:
@@ -40,6 +53,11 @@ def dashboard(db: Session = Depends(get_db), user: User = Depends(get_current_us
 def analytics(
     db: Session = Depends(get_db), _: User = Depends(require_permission(USERS_READ))
 ) -> dict:
+    now = time.monotonic()
+    cached = _analytics_cache["data"]
+    if cached is not None and now - _analytics_cache["at"] < _ANALYTICS_TTL_SECONDS:
+        return cached
+
     # Users per role (left join so empty roles show 0).
     role_rows = db.execute(
         select(Role.name, func.count(User.id))
@@ -88,4 +106,7 @@ def analytics(
             User.last_seen_at >= online_cutoff(),
         ),
     }
-    return {"roles": roles, "providers": providers, "signups": signups, "status": status}
+    result = {"roles": roles, "providers": providers, "signups": signups, "status": status}
+    _analytics_cache["at"] = now
+    _analytics_cache["data"] = result
+    return result
