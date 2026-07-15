@@ -56,6 +56,7 @@ from alembic.config import Config  # noqa: E402
 from app.db import SessionLocal, engine  # noqa: E402
 from app.main import app  # noqa: E402
 from app.models import Role, User, UserIdentity  # noqa: E402
+from app.ratelimit import reset as reset_ratelimit  # noqa: E402
 
 
 @pytest.fixture(scope="session", autouse=True)
@@ -67,6 +68,7 @@ def _migrate() -> None:
 def _clean_tables():
     # Reset between tests: wipe users + any custom roles/permissions, then restore the
     # canonical system role<->permission seed so RBAC starts identical for every test.
+    reset_ratelimit()  # each test starts with a fresh per-IP rate-limit window
     with engine.begin() as conn:
         # Reset the site-settings singleton first (its FK to roles would otherwise block the
         # custom-role cleanup below).

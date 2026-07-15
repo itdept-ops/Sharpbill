@@ -6,6 +6,7 @@ from starlette.concurrency import run_in_threadpool
 
 from app.config import settings
 from app.errors import install_error_handlers
+from app.ratelimit import check as rate_check
 from app.request_logging import record_request
 from app.routers import auth, dashboard, health, logs, presence, roles, users, ws
 from app.routers import settings as settings_router
@@ -57,6 +58,35 @@ async def _request_log(request: Request, call_next):
     except Exception:
         logging.getLogger("app.requests").exception("request logging error")
     return response
+
+
+# Per-IP rate limiting. Registered LAST so it is the OUTERMOST middleware: a throttled request is
+# rejected here before it reaches the request log (so a flood can't also flood the audit table) or
+# the CPU-heavy token verification. IP is the socket peer (never a spoofable X-Forwarded-For).
+_LOGIN_PATHS = {"/api/auth/google", "/api/auth/microsoft", "/api/auth/dev"}
+_LOGIN_LIMIT = (20, 60)  # strict: 20 sign-in attempts / minute / IP
+_API_LIMIT = (600, 60)  # loose global backstop: 600 requests / minute / IP
+
+
+@app.middleware("http")
+async def _rate_limit(request: Request, call_next):
+    ip = request.client.host if request.client else "unknown"
+    path = request.url.path
+    if path in _LOGIN_PATHS:
+        retry = rate_check(f"login:{ip}", *_LOGIN_LIMIT)
+    elif path.startswith("/api"):
+        retry = rate_check(f"api:{ip}", *_API_LIMIT)
+    else:
+        retry = 0
+    if retry:
+        return JSONResponse(
+            status_code=429,
+            content={
+                "detail": {"code": "RATE_LIMITED", "message": "Too many requests — slow down."}
+            },
+            headers={"Retry-After": str(retry)},
+        )
+    return await call_next(request)
 
 
 app.include_router(health.router, prefix="/api")

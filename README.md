@@ -158,6 +158,9 @@ Hardened across several adversarial-review passes (each one caught and fixed rea
   response* — for anyone who isn't the user themselves or a `users.manage` holder.
 - **CSV-injection safe.** Exported cells beginning with `= + - @` are neutralised.
 - **Login-CSRF guard** (JSON-only Content-Type on the cookie-setting login routes) + `SameSite=Lax`.
+- **Rate limiting.** Per-IP throttling on the sign-in routes (strict) plus a global `/api` backstop,
+  keyed on the socket peer (never a spoofable `X-Forwarded-For`), returning `429` in the shared
+  error envelope with a `Retry-After` header.
 - Optional `ALLOWED_EMAIL_DOMAINS` / `ALLOWED_AZURE_TENANTS` lock provisioning to your org.
 
 ---
