@@ -5,7 +5,11 @@ from sqlalchemy.orm import Session, sessionmaker
 
 from app.config import settings
 
-_connect_args: dict = {}
+_connect_args: dict = {
+    # Pin every connection's session time zone to UTC so DB-generated timestamps
+    # (CURRENT_TIMESTAMP) and app-generated UTC-naive datetimes share one frame.
+    "init_command": "SET time_zone = '+00:00'",
+}
 if settings.db_require_tls:
     # RDS certs chain to Amazon's private RDS CAs, not the system trust store.
     # The Dockerfile downloads this bundle.

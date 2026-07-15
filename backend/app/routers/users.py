@@ -4,6 +4,7 @@ from datetime import UTC, datetime
 
 from fastapi import APIRouter, Depends, Query, Response
 from sqlalchemy import Select, func, or_, select
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
 from app.auth.deps import get_current_user, require_permission
@@ -97,8 +98,12 @@ def _filtered(
         stmt = stmt.where(User.is_approved.is_(False))
     elif status == "disabled":
         stmt = stmt.where(User.is_active.is_(False), User.is_approved.is_(True))
-    if online:
-        stmt = stmt.where(User.last_seen_at.is_not(None), User.last_seen_at >= online_cutoff())
+    if online is not None:
+        cutoff = online_cutoff()
+        if online:
+            stmt = stmt.where(User.last_seen_at.is_not(None), User.last_seen_at >= cutoff)
+        else:  # online=false must mean "offline only", not "no filter"
+            stmt = stmt.where(or_(User.last_seen_at.is_(None), User.last_seen_at < cutoff))
     return stmt.order_by(User.created_at.asc(), User.id.asc())
 
 
@@ -235,6 +240,11 @@ def bulk_action(
         except ApiError as e:
             db.rollback()
             results.append({"id": uid, "ok": False, "error": e.detail["code"]})
+        except SQLAlchemyError:
+            # A commit-time DB error (deadlock, lock-wait, integrity) must not abort the whole
+            # batch with a 500 and leave an unreported partial application — record and continue.
+            db.rollback()
+            results.append({"id": uid, "ok": False, "error": "DB_ERROR"})
 
     return {"applied": sum(1 for r in results if r["ok"]), "results": results}
 

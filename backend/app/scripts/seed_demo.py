@@ -91,6 +91,9 @@ def run() -> None:
                 is_approved=(status != "pending"),
                 created_at=created,
                 last_login_at=created,
+                # Stamp active users as recently seen so the dashboard's "online" metric and the
+                # live-presence roster aren't flat zero right after seeding.
+                last_seen_at=(now if status == "active" else None),
             )
             db.add(u)
             db.flush()

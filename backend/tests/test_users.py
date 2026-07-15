@@ -456,6 +456,47 @@ def test_kick_response_hides_location_from_non_manager(client):
     assert admin_resp.json()["last_latitude"] == 51.5
 
 
+def test_online_false_filters_to_offline_users(client):
+    """FND-029: online=false returns only offline users instead of acting as a no-op."""
+    online_u = (
+        TestClient(app)
+        .post("/api/auth/dev", json={"email": "on@example.com", "role": "user"})
+        .json()
+    )
+    _login(client, "admin@example.com", role="admin")
+
+    on_ids = {u["id"] for u in client.get("/api/users", params={"online": "true"}).json()["items"]}
+    assert online_u["id"] in on_ids
+
+    off_ids = {
+        u["id"] for u in client.get("/api/users", params={"online": "false"}).json()["items"]
+    }
+    assert online_u["id"] not in off_ids  # a freshly-active user must not appear in "offline"
+
+
+def test_bulk_action_reports_db_error_without_aborting(client, monkeypatch):
+    """FND-017: a commit-time DB error is reported per-item, not raised as a 500."""
+    from sqlalchemy.exc import OperationalError
+
+    from app.routers import users as users_router
+
+    _login(client, "admin@example.com", role="admin")
+    u = (
+        TestClient(app)
+        .post("/api/auth/dev", json={"email": "dberr@example.com", "role": "user"})
+        .json()
+    )
+
+    def boom(*a, **k):
+        raise OperationalError("stmt", {}, Exception("simulated deadlock"))
+
+    monkeypatch.setattr(users_router, "revoke_all_for_user", boom)
+    resp = client.post("/api/users/bulk", json={"ids": [u["id"]], "action": "deactivate"})
+    assert resp.status_code == 200
+    assert resp.json()["applied"] == 0
+    assert resp.json()["results"][0]["error"] == "DB_ERROR"
+
+
 def test_user_list_pagination(client):
     _login(client, "admin@example.com", role="admin")
     for i in range(4):

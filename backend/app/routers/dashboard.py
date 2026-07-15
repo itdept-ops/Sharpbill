@@ -27,7 +27,10 @@ def dashboard(db: Session = Depends(get_db), user: User = Depends(get_current_us
             "total_users": _count(db),
             "active_users": _count(db, User.is_active.is_(True), User.is_approved.is_(True)),
             "online_users": _count(
-                db, User.is_active.is_(True), User.last_seen_at >= online_cutoff()
+                db,
+                User.is_active.is_(True),
+                User.is_approved.is_(True),
+                User.last_seen_at >= online_cutoff(),
             ),
         },
     }
@@ -78,6 +81,11 @@ def analytics(
         "active": _count(db, User.is_active.is_(True), User.is_approved.is_(True)),
         "pending": _count(db, User.is_approved.is_(False)),
         "disabled": _count(db, User.is_active.is_(False), User.is_approved.is_(True)),
-        "online": _count(db, User.is_active.is_(True), User.last_seen_at >= online_cutoff()),
+        "online": _count(
+            db,
+            User.is_active.is_(True),
+            User.is_approved.is_(True),
+            User.last_seen_at >= online_cutoff(),
+        ),
     }
     return {"roles": roles, "providers": providers, "signups": signups, "status": status}

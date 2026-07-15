@@ -159,7 +159,13 @@ def upgrade() -> None:
 
 def downgrade() -> None:
     op.add_column("users", sa.Column("role", sa.String(20), nullable=False, server_default="user"))
-    op.execute("UPDATE users u JOIN roles r ON u.role_id = r.id SET u.role = r.name")
+    # The pre-RBAC string column only ever held 'admin'/'user'. Custom roles (up to 50 chars) do
+    # not round-trip into this String(20) — collapse anything that isn't a system role to 'user'
+    # so the downgrade can't truncate or fail on a long custom role name.
+    op.execute(
+        "UPDATE users u JOIN roles r ON u.role_id = r.id "
+        "SET u.role = CASE WHEN r.name IN ('admin', 'user') THEN r.name ELSE 'user' END"
+    )
     op.drop_constraint("fk_users_role_id_roles", "users", type_="foreignkey")
     op.drop_index("ix_users_role_id", table_name="users")
     op.drop_column("users", "session_valid_after")
