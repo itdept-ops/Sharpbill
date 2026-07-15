@@ -65,6 +65,19 @@ jobs:
       - run: npm run build
         working-directory: frontend
 
+      # ---- supply chain + production image build ----
+      - name: Audit backend dependencies (fail on any known vuln)
+        run: |
+          pip install pip-audit
+          pip-audit -r backend/requirements.txt -r backend/requirements-dev.txt --no-deps
+      - name: Audit frontend production dependencies (fail on high+)
+        working-directory: frontend
+        run: npm audit --omit=dev --audit-level=high
+      - name: Build production images
+        run: |
+          docker build --target prod -t kingfisher-api:ci ./backend
+          docker build --target prod -t kingfisher-web:ci ./frontend
+
   e2e:
     # End-to-end: boot the real stack (Vite + FastAPI + MySQL) with Docker Compose and drive it in a
     # browser via the local-only dev-login, proving sign-in + per-request RBAC work together.
