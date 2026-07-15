@@ -235,7 +235,12 @@ export function AdminUsersPage() {
             <tr>
               {canManage && (
                 <th style={{ width: 28 }}>
-                  <input type="checkbox" checked={allSelected} onChange={toggleAll} />
+                  <input
+                    type="checkbox"
+                    aria-label="Select all users"
+                    checked={allSelected}
+                    onChange={toggleAll}
+                  />
                 </th>
               )}
               <th>Status</th>
@@ -264,6 +269,7 @@ export function AdminUsersPage() {
                       <td>
                         <input
                           type="checkbox"
+                          aria-label={`Select ${u.email}`}
                           checked={selected.has(u.id)}
                           onChange={() => toggleSel(u.id)}
                           disabled={isSelf}

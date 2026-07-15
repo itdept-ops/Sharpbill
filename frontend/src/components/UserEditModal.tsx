@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { api, ApiError } from "../api/client";
 import { useAuth } from "../auth/AuthContext";
@@ -31,7 +31,43 @@ export function UserEditModal({
   onChange: (u: User) => void;
 }) {
   const { user: me } = useAuth();
+  const panelRef = useRef<HTMLElement>(null);
   const [user, setUser] = useState<User>(initial);
+
+  // Accessible-dialog behaviour: focus the panel on open, restore focus on close, close on
+  // Escape, and trap Tab within the dialog (WCAG 2.4.3 / 2.1.2 / 4.1.2).
+  useEffect(() => {
+    const prevFocus = document.activeElement as HTMLElement | null;
+    const panel = panelRef.current;
+    panel?.focus();
+
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        e.stopPropagation();
+        onClose();
+        return;
+      }
+      if (e.key !== "Tab" || !panel) return;
+      const focusable = panel.querySelectorAll<HTMLElement>(
+        'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
+      );
+      if (focusable.length === 0) return;
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (e.shiftKey && document.activeElement === first) {
+        e.preventDefault();
+        last.focus();
+      } else if (!e.shiftKey && document.activeElement === last) {
+        e.preventDefault();
+        first.focus();
+      }
+    };
+    document.addEventListener("keydown", onKeyDown, true);
+    return () => {
+      document.removeEventListener("keydown", onKeyDown, true);
+      prevFocus?.focus?.();
+    };
+  }, [onClose]);
   const [draft, setDraft] = useState<ProfileUpdate>({
     display_name: initial.display_name,
     title: initial.title,
@@ -109,11 +145,16 @@ export function UserEditModal({
   return (
     <div className="modal" onClick={onClose}>
       <section
+        ref={panelRef}
         className="panel panel--brackets modal-panel edit-modal"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="edit-user-title"
+        tabIndex={-1}
         onClick={(e) => e.stopPropagation()}
       >
         <div className="panel-header">
-          // EDIT USER
+          <span id="edit-user-title">// EDIT USER</span>
           <span className="spacer" />
           <button className="icon-btn" onClick={onClose}>
             ✕ close
@@ -144,7 +185,9 @@ export function UserEditModal({
               {banner.ok ? "" : "ERR: "}
               {banner.msg}
               <span className="spacer" />
-              <button onClick={() => setBanner(null)}>✕</button>
+              <button aria-label="Dismiss" onClick={() => setBanner(null)}>
+                ✕
+              </button>
             </div>
           )}
 

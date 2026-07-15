@@ -14,7 +14,9 @@
 
   --ink: #dcf5e6;
   --ink-dim: #a7c6b6;
-  --muted: #5e8b7b;
+  /* Lightened from #5e8b7b to clear WCAG AA (4.5:1) for secondary text on the elevated
+     panel-2 surface (table/section headers). */
+  --muted: #78a494;
 
   /* The single UI accent (space-separated RGB). Per-user override sets --accent-rgb; everything
      "green" derives from it, so a user can recolor the whole console while staying dark. */
@@ -258,6 +260,12 @@ textarea.field-input {
   border-color: var(--green);
   border-bottom-color: var(--amber);
   box-shadow: var(--focus-ring);
+}
+/* Keyboard focus gets a clearly visible outline (the subtle box-shadow ring alone is too
+   faint to meet WCAG 2.4.7). Mouse focus keeps the quieter treatment above. */
+.field-input:focus-visible {
+  outline: 2px solid var(--green);
+  outline-offset: 1px;
 }
 .field-input::placeholder {
   color: var(--muted);
