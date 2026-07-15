@@ -137,7 +137,7 @@ per-request permission gate.
   All routes live under `/api`. Errors share a `{"detail": {"code", "message"}}` envelope.
 - **Frontend** — **React 18 + TypeScript + Vite**, React Router v6, hand-written CSS
   (the "DATASTREAM" terminal theme). Vite proxies `/api` (incl. WebSocket upgrade) to the API.
-- **Database** — **MySQL 8.0** (`utf8mb4`), schema owned entirely by Alembic (migrations `0001`…`0006`).
+- **Database** — **MySQL 8.0** (`utf8mb4`), schema owned entirely by Alembic (migrations `0001`…`0010`).
 - **Runtime** — **Docker Compose** (mysql + api + web with hot reload). CI runs on **Node 24**.
 
 ```
@@ -204,12 +204,16 @@ Reset the DB: `docker compose down -v && docker compose up -d && docker compose 
 
 ## Signing in
 
-- **Google / Microsoft** buttons appear on the login page only once their client IDs are set
-  (`GOOGLE_CLIENT_ID` / `AZURE_CLIENT_ID`, plus the `VITE_*` build vars). Until then they're hidden.
-- **Dev login** (local only): with `DEV_AUTH_ENABLED=true`, the login page shows a dev form
-  (any email, and a **role picker populated with every role** — system + custom — from
-  `GET /api/auth/dev/roles`). `POST /api/auth/dev` is **only mounted when `APP_ENV=local` and
-  `DEV_AUTH_ENABLED=true`**. The first email in `ADMIN_EMAILS` becomes an admin.
+- **Google** is the sign-in method on the login page — its button appears once `GOOGLE_CLIENT_ID`
+  (plus the `VITE_GOOGLE_CLIENT_ID` build var) is set; until then the page says it isn't configured.
+  Microsoft ID tokens are still verified server-side (`POST /api/auth/microsoft`, keyed on the
+  immutable `oid`), but the current login page surfaces Google only.
+- **Dev login** (local only): `POST /api/auth/dev` is **mounted only when `APP_ENV=local` and
+  `DEV_AUTH_ENABLED=true`**. It mints a session for any email (with an optional role from
+  `GET /api/auth/dev/roles`) without OAuth — used by the e2e/tests and callable directly to click
+  into the app before OAuth is configured. **Any** email listed in `ADMIN_EMAILS` is promoted to
+  admin on first login (Google requires a verified email; Microsoft additionally requires the tenant
+  to match).
 - A public **[Security walkthrough](#security--auth--permission-walkthrough)** (`/security`) explains
   the sign-in verification and the per-request permission gate, step by step.
 
@@ -274,7 +278,7 @@ Reset the DB: `docker compose down -v && docker compose up -d && docker compose 
 ## Project layout
 
 ```
-backend/   FastAPI app, SQLAlchemy models, Alembic migrations (0001 schema … 0006), pytest suite
+backend/   FastAPI app, SQLAlchemy models, Alembic migrations (0001 schema … 0010), pytest suite
 frontend/  React + Vite SPA (DATASTREAM terminal theme)
 deploy/    production compose + Caddyfile (reference; not used locally)
 docs/img/  README screenshots

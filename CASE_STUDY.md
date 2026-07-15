@@ -65,7 +65,7 @@ before it shipped, and each has a test named after the failure it prevents.
 ## What verifies it
 
 - **Backend:** the full HTTP stack under `pytest` against a real MySQL database, schema built by the
-  actual Alembic migrations — 86 tests spanning auth, token replay, RBAC guards, per-device
+  actual Alembic migrations — 90-plus tests spanning auth, token replay, RBAC guards, per-device
   sessions, presence/kick, rate limiting, CSV-safety, location privacy, and the audit log.
 - **Frontend:** Vitest + Testing Library over the code that gates access in the browser.
 - **End-to-end:** a Playwright job boots the real stack (Vite + FastAPI + MySQL via Docker Compose)
