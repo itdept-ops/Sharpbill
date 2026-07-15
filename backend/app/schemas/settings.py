@@ -12,6 +12,7 @@ class SiteSettingsOut(BaseModel):
     allow_microsoft: bool
     default_role_id: int
     default_role_name: str
+    calm_mode: bool
     updated_at: datetime
 
 
@@ -20,3 +21,4 @@ class SiteSettingsUpdate(BaseModel):
     allow_google: bool | None = None
     allow_microsoft: bool | None = None
     default_role_id: int | None = None
+    calm_mode: bool | None = None

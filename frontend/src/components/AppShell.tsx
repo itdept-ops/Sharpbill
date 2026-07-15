@@ -1,4 +1,3 @@
-import { useEffect, useState } from "react";
 import { Link, NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 
 import { useAuth } from "../auth/AuthContext";
@@ -15,12 +14,6 @@ function ShellInner() {
   const presence = usePresence();
   const location = useLocation();
   const navigate = useNavigate();
-  const [calm, setCalm] = useState(() => localStorage.getItem("kf-calm") === "1");
-
-  useEffect(() => {
-    document.documentElement.dataset.calm = calm ? "true" : "false";
-    localStorage.setItem("kf-calm", calm ? "1" : "0");
-  }, [calm]);
 
   const can = (p: string) => !!user?.permissions.includes(p);
 
@@ -86,13 +79,6 @@ function ShellInner() {
             <span className="online-dot on" /> {presence.count} online
           </span>
         )}
-        <button
-          className="calm-toggle"
-          onClick={() => setCalm((c) => !c)}
-          title="Reduce motion and scanlines"
-        >
-          {calm ? "Calm: on" : "Calm: off"}
-        </button>
         {user && (
           <span className="user-chip">
             <Link to="/profile" className="email">

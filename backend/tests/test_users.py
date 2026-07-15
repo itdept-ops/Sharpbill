@@ -252,6 +252,25 @@ def test_user_can_edit_own_profile(client):
     assert body["department"] == "Ops"
 
 
+def test_user_can_set_and_clear_accent_color(client):
+    me = _login(client, "styler@example.com", role="user")
+    r = client.patch(f"/api/users/{me['id']}/profile", json={"accent_color": "#19E5D0"})
+    assert r.status_code == 200
+    assert r.json()["accent_color"] == "#19E5D0"
+    # a bad hex is rejected by validation
+    assert (
+        client.patch(f"/api/users/{me['id']}/profile", json={"accent_color": "blue"}).status_code
+        == 422
+    )
+    # null clears it back to the default
+    assert (
+        client.patch(f"/api/users/{me['id']}/profile", json={"accent_color": None}).json()[
+            "accent_color"
+        ]
+        is None
+    )
+
+
 def test_user_cannot_edit_others_profile(client):
     other = TestClient(app)
     ou = other.post("/api/auth/dev", json={"email": "other@example.com", "role": "user"}).json()

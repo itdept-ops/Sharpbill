@@ -5,6 +5,7 @@ import { api, ApiError } from "../api/client";
 import { RoleBadge } from "../components/badges";
 import { Panel } from "../components/Panel";
 import type { Role, SignupMode, SiteSettings, User, UserList } from "../types";
+import { applyCalm } from "../util/theme";
 
 const MODES: { v: SignupMode; label: string; desc: string }[] = [
   { v: "open", label: "Open", desc: "Anyone who signs in gets an account immediately." },
@@ -129,6 +130,23 @@ export function SettingsPage() {
                     </option>
                   ))}
                 </select>
+              </div>
+              <div className="set-row">
+                <div className="set-label">
+                  <div className="st">Calm mode</div>
+                  <div className="sd">Site-wide: dim the code-rain and drop the scanlines for everyone.</div>
+                </div>
+                <label className="switch">
+                  <input
+                    type="checkbox"
+                    checked={s.calm_mode}
+                    onChange={(e) => {
+                      applyCalm(e.target.checked); // reflect immediately for the admin
+                      update({ calm_mode: e.target.checked });
+                    }}
+                  />
+                  <span className="slider" />
+                </label>
               </div>
             </>
           )}

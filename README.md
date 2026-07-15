@@ -69,10 +69,16 @@ polling fallback). Deactivation and logout are durable too, so old cookies can't
 
 ### Admin controls, GPS, and an audit log
 Admins set the sign-up mode (**open / approval / closed**), toggle each provider, choose the default
-role, and **approve pending sign-ups**. An **optional GPS capture** on login (native prompt; denial
-is a no-op) records last-known coordinates — visible only to the user themselves and to
-`users.manage` holders. A **request activity log** records every `/api` call (method · endpoint ·
-user · IP · status) for holders of `logs.view`.
+role, **approve pending sign-ups**, and flip a site-wide **calm mode** (dims the code-rain and drops
+the scanlines for everyone). An **optional GPS capture** on login (native prompt; denial is a no-op)
+records last-known coordinates — visible only to the user themselves and to `users.manage` holders —
+and derives the user's **location + timezone offline** from them. A **request activity log** records
+every `/api` call (method · endpoint · user · IP · status) for holders of `logs.view`.
+
+### Personal theming
+Each user picks a **UI accent color** (presets or a custom picker) from their profile — the whole
+console recolors from a single `--accent-rgb` CSS variable while staying dark. The choice is stored
+per account and follows them across devices.
 
 Seed realistic demo data (local): `docker compose exec api python -m app.scripts.seed_demo`.
 

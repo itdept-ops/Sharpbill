@@ -16,22 +16,25 @@
   --ink-dim: #a7c6b6;
   --muted: #5e8b7b;
 
-  --green: #35ff74;
-  --green-bright: #9cffc0;
+  /* The single UI accent (space-separated RGB). Per-user override sets --accent-rgb; everything
+     "green" derives from it, so a user can recolor the whole console while staying dark. */
+  --accent-rgb: 53 255 116;
+  --green: rgb(var(--accent-rgb));
+  --green-bright: color-mix(in srgb, rgb(var(--accent-rgb)), #ffffff 42%);
   --green-ink: #041008;
-  --green-dim: rgba(53, 255, 116, 0.35);
+  --green-dim: rgb(var(--accent-rgb) / 0.35);
 
   --teal: #19e5d0;
   --amber: #ffc24b;
   --danger: #ff5a47;
 
-  --focus-ring: 0 0 0 3px rgba(53, 255, 116, 0.18);
-  --glow-green: 0 0 16px -6px rgba(53, 255, 116, 0.6);
+  --focus-ring: 0 0 0 3px rgb(var(--accent-rgb) / 0.18);
+  --glow-green: 0 0 16px -6px rgb(var(--accent-rgb) / 0.6);
   --glow-teal: 0 0 18px -6px rgba(25, 229, 208, 0.55);
 
   --grid-line: rgba(25, 229, 208, 0.1);
   --zebra: rgba(25, 229, 208, 0.03);
-  --row-hover: rgba(53, 255, 116, 0.06);
+  --row-hover: rgb(var(--accent-rgb) / 0.06);
   --scanline: repeating-linear-gradient(0deg, transparent 0 3px, rgba(0, 0, 0, 0.22) 3px 4px);
   --shadow: 0 8px 30px rgba(0, 0, 0, 0.5);
 
@@ -176,10 +179,10 @@ code {
   background: var(--green);
   color: var(--green-ink);
   border-color: var(--green);
-  box-shadow: 0 0 0 1px rgba(53, 255, 116, 0.4), var(--glow-green);
+  box-shadow: 0 0 0 1px rgb(var(--accent-rgb) / 0.4), var(--glow-green);
 }
 .btn-primary:hover:not(:disabled) {
-  box-shadow: 0 0 0 1px var(--green), 0 0 22px -4px rgba(53, 255, 116, 0.7);
+  box-shadow: 0 0 0 1px var(--green), 0 0 22px -4px rgb(var(--accent-rgb) / 0.7);
 }
 .btn-primary:active {
   transform: translateY(1px);
@@ -375,7 +378,7 @@ textarea.field-input {
 }
 .hero-title .lit {
   color: var(--green);
-  text-shadow: 0 0 18px rgba(53, 255, 116, 0.5);
+  text-shadow: 0 0 18px rgb(var(--accent-rgb) / 0.5);
 }
 .hero-sub {
   font-family: var(--font-sans);
@@ -890,7 +893,7 @@ td select.field-input {
 }
 .status-pill.ok {
   color: var(--green);
-  border-color: rgba(53, 255, 116, 0.4);
+  border-color: rgb(var(--accent-rgb) / 0.4);
 }
 .status-pill.err {
   color: var(--danger);
@@ -928,7 +931,7 @@ td select.field-input {
 }
 .method-tag.m-post {
   color: var(--green);
-  border-color: rgba(53, 255, 116, 0.35);
+  border-color: rgb(var(--accent-rgb) / 0.35);
 }
 .method-tag.m-patch,
 .method-tag.m-put {
@@ -998,6 +1001,47 @@ td select.field-input {
   color: var(--green);
 }
 
+/* ---- accent theme picker ---- */
+.swatch-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 10px;
+}
+.swatch {
+  width: 30px;
+  height: 30px;
+  border-radius: 4px;
+  border: 2px solid var(--border);
+  background: var(--sw);
+  cursor: pointer;
+  padding: 0;
+  transition: transform var(--dur-fast) var(--ease);
+}
+.swatch:hover {
+  transform: scale(1.08);
+}
+.swatch.active {
+  border-color: var(--ink);
+  box-shadow: 0 0 0 2px var(--sw);
+}
+.swatch-custom {
+  position: relative;
+  overflow: hidden;
+  background: conic-gradient(from 0deg, #ff5a47, #ffc24b, #a3e635, #19e5d0, #38bdf8, #9085e9, #f472b6, #ff5a47);
+}
+.swatch-custom input {
+  position: absolute;
+  inset: -6px;
+  width: 46px;
+  height: 46px;
+  border: none;
+  padding: 0;
+  background: transparent;
+  cursor: pointer;
+  opacity: 0;
+}
+
 /* ---- bulk action bar ---- */
 .bulkbar {
   display: flex;
@@ -1034,7 +1078,7 @@ td select.field-input {
 }
 .role-badge.admin {
   color: var(--green);
-  border-color: rgba(53, 255, 116, 0.4);
+  border-color: rgb(var(--accent-rgb) / 0.4);
 }
 .provider-badge {
   display: inline-block;
@@ -1125,7 +1169,7 @@ td select.field-input {
   transition: transform var(--dur-fast);
 }
 .switch input:checked + .slider {
-  background: rgba(53, 255, 116, 0.25);
+  background: rgb(var(--accent-rgb) / 0.25);
 }
 .switch input:checked + .slider::before {
   transform: translateX(16px);
@@ -1151,7 +1195,7 @@ td select.field-input {
 }
 .banner.ok {
   border-left-color: var(--green);
-  background: rgba(53, 255, 116, 0.08);
+  background: rgb(var(--accent-rgb) / 0.08);
   color: var(--green);
 }
 .banner .spacer {
@@ -1740,7 +1784,7 @@ td select.field-input {
 .mode-opt.active {
   border-color: var(--green);
   color: var(--green);
-  background: rgba(53, 255, 116, 0.08);
+  background: rgb(var(--accent-rgb) / 0.08);
 }
 .pending-row {
   display: flex;
@@ -1777,7 +1821,7 @@ td select.field-input {
 }
 .tech-hero .lit {
   color: var(--green);
-  text-shadow: 0 0 18px rgba(53, 255, 116, 0.4);
+  text-shadow: 0 0 18px rgb(var(--accent-rgb) / 0.4);
 }
 .tech-hero p {
   font-family: var(--font-sans);

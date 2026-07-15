@@ -1,7 +1,8 @@
 // Self-contained SVG charts in the terminal palette. Every series is paired with a labelled
 // legend so meaning never rides on color alone; numbers use tabular figures.
 
-export const SERIES = ["#35ff74", "#19e5d0", "#ffc24b", "#9085e9", "#ff5a47", "#5e8b7b"];
+// The primary series follows the per-user accent (var(--green)); the rest are fixed categoricals.
+export const SERIES = ["var(--green)", "#19e5d0", "#ffc24b", "#9085e9", "#ff5a47", "#5e8b7b"];
 
 export function BarChart({ data }: { data: { label: string; value: number }[] }) {
   const max = Math.max(1, ...data.map((d) => d.value));
@@ -88,7 +89,7 @@ export function Donut({
 
 export function AreaChart({
   points,
-  color = "#35ff74",
+  color = "var(--green)",
 }: {
   points: { label: string; value: number }[];
   color?: string;

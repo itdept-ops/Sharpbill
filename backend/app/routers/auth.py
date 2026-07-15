@@ -15,7 +15,7 @@ from app.config import settings
 from app.db import get_db
 from app.errors import ApiError
 from app.geo import place_for, timezone_for
-from app.models import User, UserSession
+from app.models import SiteSettings, User, UserSession
 from app.schemas.auth import AuthConfig, LocationUpdate, SessionOut, TokenLoginRequest
 from app.schemas.user import UserOut
 
@@ -36,11 +36,13 @@ router = APIRouter()
 
 
 @router.get("/config", response_model=AuthConfig)
-def auth_config() -> AuthConfig:
+def auth_config(db: Session = Depends(get_db)) -> AuthConfig:
+    site = db.get(SiteSettings, 1)
     return AuthConfig(
         google=bool(settings.google_client_id),
         microsoft=bool(settings.azure_client_id),
         dev=settings.is_dev_auth_enabled,
+        calm=bool(site.calm_mode) if site else False,
     )
 
 

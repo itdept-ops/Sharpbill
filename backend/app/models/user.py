@@ -42,6 +42,8 @@ class User(Base):
     last_longitude: Mapped[float | None] = mapped_column(Double)
     last_location_accuracy: Mapped[float | None] = mapped_column(Double)
     last_location_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=False))
+    # Per-user UI accent color (hex, e.g. "#35ff74"); null = the default green.
+    accent_color: Mapped[str | None] = mapped_column(String(9))
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=False), server_default=text("CURRENT_TIMESTAMP(6)")
     )

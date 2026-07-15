@@ -26,6 +26,8 @@ class SiteSettings(Base):
     allow_google: Mapped[bool] = mapped_column(TINYINT(1), server_default=text("1"))
     allow_microsoft: Mapped[bool] = mapped_column(TINYINT(1), server_default=text("1"))
     default_role_id: Mapped[int] = mapped_column(ForeignKey("roles.id", ondelete="RESTRICT"))
+    # Global "calm" mode: dims the code-rain and drops the scanline overlay for everyone.
+    calm_mode: Mapped[bool] = mapped_column(TINYINT(1), server_default=text("0"))
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=False),
         server_default=text("CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6)"),

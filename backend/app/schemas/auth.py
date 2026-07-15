@@ -21,6 +21,7 @@ class AuthConfig(BaseModel):
     google: bool
     microsoft: bool
     dev: bool
+    calm: bool  # global calm/reduced-motion mode (admin-set site setting)
 
 
 class LocationUpdate(BaseModel):

@@ -17,6 +17,7 @@ export interface User {
   location: string | null;
   timezone: string | null;
   bio: string | null;
+  accent_color: string | null;
   role: string;
   role_id: number;
   permissions: string[]; // effective = role ∪ direct grants
@@ -56,6 +57,7 @@ export interface AuthConfig {
   google: boolean;
   microsoft: boolean;
   dev: boolean;
+  calm: boolean;
 }
 
 export interface DashboardData {
@@ -104,6 +106,7 @@ export interface SiteSettings {
   allow_microsoft: boolean;
   default_role_id: number;
   default_role_name: string;
+  calm_mode: boolean;
   updated_at: string;
 }
 

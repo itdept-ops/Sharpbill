@@ -20,6 +20,7 @@ def _out(db: Session, s: SiteSettings) -> SiteSettingsOut:
         allow_microsoft=s.allow_microsoft,
         default_role_id=s.default_role_id,
         default_role_name=role.name if role else "",
+        calm_mode=s.calm_mode,
         updated_at=s.updated_at,
     )
 

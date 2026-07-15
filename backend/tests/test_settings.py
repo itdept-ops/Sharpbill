@@ -40,6 +40,15 @@ def test_update_settings(client):
     assert resp.json()["allow_google"] is False
 
 
+def test_calm_mode_round_trips_and_surfaces_in_public_config(client):
+    _admin(client)
+    assert client.get("/api/auth/config").json()["calm"] is False
+    r = client.put("/api/admin/settings", json={"calm_mode": True})
+    assert r.status_code == 200 and r.json()["calm_mode"] is True
+    # It's exposed on the PUBLIC config so every page can apply it (no auth needed).
+    assert client.get("/api/auth/config").json()["calm"] is True
+
+
 def test_signup_approval_flow(db, monkeypatch):
     from app.routers import auth as auth_router
 

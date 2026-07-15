@@ -23,6 +23,7 @@ class UserOut(BaseModel):
     location: str | None
     timezone: str | None
     bio: str | None
+    accent_color: str | None
     role: str
     role_id: int
     permissions: list[str]  # effective = role ∪ direct grants
@@ -58,6 +59,7 @@ class UserOut(BaseModel):
             location=user.location,
             timezone=user.timezone,
             bio=user.bio,
+            accent_color=user.accent_color,
             role=user.role_name,
             role_id=user.role_id,
             permissions=sorted(user.permission_keys),
@@ -115,3 +117,4 @@ class ProfileUpdate(BaseModel):
     location: str | None = Field(default=None, max_length=120)
     timezone: str | None = Field(default=None, max_length=60)
     bio: str | None = Field(default=None, max_length=500)
+    accent_color: str | None = Field(default=None, pattern=r"^#[0-9a-fA-F]{6}$")
