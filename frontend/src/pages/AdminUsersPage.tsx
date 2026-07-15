@@ -156,7 +156,7 @@ export function AdminUsersPage() {
           {banner.ok ? "" : "ERR: "}
           {banner.msg}
           <span className="spacer" />
-          <button onClick={() => setBanner(null)}>✕</button>
+          <button aria-label="Dismiss" onClick={() => setBanner(null)}>✕</button>
         </div>
       )}
 
@@ -164,11 +164,17 @@ export function AdminUsersPage() {
         <input
           className="field-input search"
           placeholder="search email or name…"
+          aria-label="Search users by email or name"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
         />
         {canManageRoles && (
-          <select className="field-input" value={roleId} onChange={(e) => setRoleId(e.target.value)}>
+          <select
+            className="field-input"
+            aria-label="Filter by role"
+            value={roleId}
+            onChange={(e) => setRoleId(e.target.value)}
+          >
             <option value="">all roles</option>
             {roles.map((r) => (
               <option key={r.id} value={r.id}>
@@ -177,7 +183,12 @@ export function AdminUsersPage() {
             ))}
           </select>
         )}
-        <select className="field-input" value={status} onChange={(e) => setStatus(e.target.value)}>
+        <select
+          className="field-input"
+          aria-label="Filter by status"
+          value={status}
+          onChange={(e) => setStatus(e.target.value)}
+        >
           <option value="">all status</option>
           <option value="active">active</option>
           <option value="pending">pending</option>

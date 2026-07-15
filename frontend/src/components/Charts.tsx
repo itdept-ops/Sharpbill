@@ -6,7 +6,11 @@ export const SERIES = ["#35ff74", "#19e5d0", "#ffc24b", "#9085e9", "#ff5a47", "#
 export function BarChart({ data }: { data: { label: string; value: number }[] }) {
   const max = Math.max(1, ...data.map((d) => d.value));
   return (
-    <div className="chart-bars">
+    <div
+      className="chart-bars"
+      role="img"
+      aria-label={`Bar chart. ${data.map((d) => `${d.label}: ${d.value}`).join(", ")}`}
+    >
       {data.map((d, i) => (
         <div className="bar-row" key={d.label}>
           <span className="bar-label">{d.label}</span>
@@ -36,7 +40,12 @@ export function Donut({
   let offset = 0;
   return (
     <div className="chart-donut">
-      <svg viewBox="0 0 100 100" className="donut-svg" role="img">
+      <svg
+        viewBox="0 0 100 100"
+        className="donut-svg"
+        role="img"
+        aria-label={`${caption}: ${total}. ${segments.map((s) => `${s.label} ${s.value}`).join(", ")}`}
+      >
         <circle cx="50" cy="50" r={R} fill="none" stroke="var(--border)" strokeWidth="11" />
         {segments.map((s, i) => {
           const len = (s.value / total) * CIRC;
@@ -95,7 +104,12 @@ export function AreaChart({
   const area = `${line} L${x(n - 1).toFixed(1)} ${H - P} L${x(0).toFixed(1)} ${H - P} Z`;
   return (
     <div>
-      <svg viewBox={`0 0 ${W} ${H}`} className="area-svg" role="img">
+      <svg
+        viewBox={`0 0 ${W} ${H}`}
+        className="area-svg"
+        role="img"
+        aria-label={`Trend, ${points[0]?.label} to ${points[n - 1]?.label}, peak ${max}.`}
+      >
         <path d={area} fill={color} opacity="0.12" />
         <path d={line} fill="none" stroke={color} strokeWidth="2" strokeLinejoin="round" strokeLinecap="round" />
         <circle cx={x(n - 1)} cy={y(points[n - 1].value)} r="3.2" fill={color} />
@@ -117,7 +131,11 @@ export function SegmentBar({
   const total = segments.reduce((a, s) => a + s.value, 0) || 1;
   return (
     <div>
-      <div className="segbar">
+      <div
+        className="segbar"
+        role="img"
+        aria-label={segments.map((s) => `${s.label} ${s.value}`).join(", ")}
+      >
         {segments
           .filter((s) => s.value > 0)
           .map((s) => (

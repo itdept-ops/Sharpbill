@@ -54,7 +54,7 @@ export function LogsPage() {
           {banner.ok ? "" : "ERR: "}
           {banner.msg}
           <span className="spacer" />
-          <button onClick={() => setBanner(null)}>✕</button>
+          <button aria-label="Dismiss" onClick={() => setBanner(null)}>✕</button>
         </div>
       )}
 
@@ -62,10 +62,16 @@ export function LogsPage() {
         <input
           className="field-input search"
           placeholder="filter by endpoint path…"
+          aria-label="Filter logs by endpoint path"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
         />
-        <select className="field-input" value={method} onChange={(e) => setMethod(e.target.value)}>
+        <select
+          className="field-input"
+          aria-label="Filter by HTTP method"
+          value={method}
+          onChange={(e) => setMethod(e.target.value)}
+        >
           <option value="">all methods</option>
           {METHODS.map((m) => (
             <option key={m} value={m}>

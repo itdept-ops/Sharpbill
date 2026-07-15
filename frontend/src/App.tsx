@@ -1,24 +1,30 @@
+import { lazy, Suspense } from "react";
 import { Navigate, Route, Routes } from "react-router-dom";
 
 import { ProtectedRoute } from "./auth/ProtectedRoute";
 import { RequirePermission } from "./auth/RequirePermission";
 import { AppShell } from "./components/AppShell";
-import { AboutPage } from "./pages/AboutPage";
-import { AdminRolesPage } from "./pages/AdminRolesPage";
-import { AdminUsersPage } from "./pages/AdminUsersPage";
-import { DashboardPage } from "./pages/DashboardPage";
-import { LandingPage } from "./pages/LandingPage";
-import { LogsPage } from "./pages/LogsPage";
-import { LoginPage } from "./pages/LoginPage";
-import { SecurityPage } from "./pages/SecurityPage";
-import { ProfilePage } from "./pages/ProfilePage";
-import { SettingsPage } from "./pages/SettingsPage";
-import { TechnologyPage } from "./pages/TechnologyPage";
-import { UserDetailPage } from "./pages/UserDetailPage";
+
+// Route-level code-splitting: each page is its own chunk, so the public marketing pages don't
+// ship the whole admin console (and vice-versa). Named exports are adapted to default for lazy().
+const named = <T,>(p: Promise<T>, key: keyof T) => p.then((m) => ({ default: m[key] }));
+const LandingPage = lazy(() => named(import("./pages/LandingPage"), "LandingPage"));
+const AboutPage = lazy(() => named(import("./pages/AboutPage"), "AboutPage"));
+const TechnologyPage = lazy(() => named(import("./pages/TechnologyPage"), "TechnologyPage"));
+const SecurityPage = lazy(() => named(import("./pages/SecurityPage"), "SecurityPage"));
+const LoginPage = lazy(() => named(import("./pages/LoginPage"), "LoginPage"));
+const DashboardPage = lazy(() => named(import("./pages/DashboardPage"), "DashboardPage"));
+const ProfilePage = lazy(() => named(import("./pages/ProfilePage"), "ProfilePage"));
+const AdminUsersPage = lazy(() => named(import("./pages/AdminUsersPage"), "AdminUsersPage"));
+const UserDetailPage = lazy(() => named(import("./pages/UserDetailPage"), "UserDetailPage"));
+const AdminRolesPage = lazy(() => named(import("./pages/AdminRolesPage"), "AdminRolesPage"));
+const SettingsPage = lazy(() => named(import("./pages/SettingsPage"), "SettingsPage"));
+const LogsPage = lazy(() => named(import("./pages/LogsPage"), "LogsPage"));
 
 export default function App() {
   return (
-    <Routes>
+    <Suspense fallback={<div className="page-loader">Loading…</div>}>
+      <Routes>
       {/* public */}
       <Route path="/" element={<LandingPage />} />
       <Route path="/about" element={<AboutPage />} />
@@ -74,7 +80,8 @@ export default function App() {
         </Route>
       </Route>
 
-      <Route path="*" element={<Navigate to="/" replace />} />
-    </Routes>
+        <Route path="*" element={<Navigate to="/" replace />} />
+      </Routes>
+    </Suspense>
   );
 }
