@@ -18,6 +18,8 @@ ENV VITE_GOOGLE_CLIENT_ID=$VITE_GOOGLE_CLIENT_ID \
 RUN npm run build
 
 # ---- prod: nginx serves the SPA with a history fallback ----
-FROM nginx:alpine AS prod
+# Pinned to a specific nginx version (was the floating `nginx:alpine`). The master binds :80 as
+# root and drops workers to the unprivileged `nginx` user, per the official image.
+FROM nginx:1.27-alpine AS prod
 COPY nginx.conf /etc/nginx/conf.d/default.conf
 COPY --from=build /app/dist /usr/share/nginx/html
