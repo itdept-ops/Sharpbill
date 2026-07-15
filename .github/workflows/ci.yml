@@ -72,6 +72,19 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # Install runner-side deps FIRST — before `docker compose up`, which would otherwise create a
+      # root-owned frontend/node_modules mountpoint that blocks `npm ci`.
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci
+        working-directory: frontend
+      - name: Install Playwright browser
+        run: npx playwright install --with-deps chromium
+        working-directory: frontend
+
       - name: Prepare .env for the stack
         run: |
           cp .env.example .env
@@ -95,16 +108,6 @@ jobs:
           docker compose exec -T api alembic upgrade head
           docker compose exec -T api python -m app.scripts.seed_demo
 
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 24
-          cache: npm
-          cache-dependency-path: frontend/package-lock.json
-      - run: npm ci
-        working-directory: frontend
-      - name: Install Playwright browser
-        run: npx playwright install --with-deps chromium
-        working-directory: frontend
       - name: Run E2E
         run: npx playwright test
         working-directory: frontend
