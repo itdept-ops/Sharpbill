@@ -24,25 +24,29 @@ def test_admin_bootstrap_from_admin_emails_google(db, monkeypatch):
     assert "roles.manage" in user.permission_keys
 
 
-def test_microsoft_admin_requires_matching_tenant(db, monkeypatch):
-    monkeypatch.setattr(settings, "admin_emails", "boss@example.com")
+def test_microsoft_admin_requires_matching_tenant_and_object_id(db, monkeypatch):
+    """Microsoft admin bootstrap keys on the immutable oid within the admin tenant (FND-008).
+
+    The email/UPN claim carries no verified signal, so it must never grant admin on its own.
+    """
     monkeypatch.setattr(settings, "azure_admin_tenant_id", "tenant-abc")
-    wrong = VerifiedIdentity(
-        provider="microsoft",
-        subject="ms-1",
-        email="boss@example.com",
-        display_name="Boss",
-        tenant_id="other-tenant",
-    )
-    assert find_or_create_user(db, wrong).role_name == "user"
-    right = VerifiedIdentity(
-        provider="microsoft",
-        subject="ms-2",
-        email="boss@example.com",
-        display_name="Boss",
-        tenant_id="tenant-abc",
-    )
-    assert find_or_create_user(db, right).role_name == "admin"
+    monkeypatch.setattr(settings, "azure_admin_object_ids", "ms-a,ms-b")
+
+    def ms(subject, tenant):
+        return VerifiedIdentity(
+            provider="microsoft",
+            subject=subject,
+            email="boss@example.com",  # same email everywhere: it must not drive the decision
+            display_name="Boss",
+            tenant_id=tenant,
+        )
+
+    # Allowlisted oid + right tenant -> admin.
+    assert find_or_create_user(db, ms("ms-a", "tenant-abc")).role_name == "admin"
+    # Allowlisted oid but WRONG tenant -> not admin.
+    assert find_or_create_user(db, ms("ms-b", "other-tenant")).role_name == "user"
+    # Right tenant but oid NOT allowlisted -> not admin (email alone never bootstraps).
+    assert find_or_create_user(db, ms("ms-c", "tenant-abc")).role_name == "user"
 
 
 def test_identity_is_keyed_on_subject_not_email(db):

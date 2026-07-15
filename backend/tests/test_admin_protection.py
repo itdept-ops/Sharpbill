@@ -124,7 +124,5 @@ def test_roles_delegate_can_manage_role_within_its_privilege():
     _login(delegate, "rmy@example.com", role="RoleMgrY")
 
     # The delegate holds presence.view, so it may edit a role that only grants presence.view.
-    assert (
-        delegate.patch(f"/api/roles/{low}", json={"description": "tweaked"}).status_code == 200
-    )
+    assert delegate.patch(f"/api/roles/{low}", json={"description": "tweaked"}).status_code == 200
     assert delegate.delete(f"/api/roles/{low}").status_code == 204

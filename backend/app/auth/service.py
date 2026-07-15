@@ -39,18 +39,18 @@ def _role_by_name(db: Session, name: str) -> Role:
 def _admin_bootstrap(ident: VerifiedIdentity) -> bool:
     """Whether a first-login identity should be provisioned as admin.
 
-    Only provider-verified identities qualify (unverified Microsoft email claims must not
-    grant admin): Google logins (email_verified enforced upstream) or Microsoft logins from
-    the configured company tenant.
+    Only provider-verified identities qualify. Google enforces `email_verified` upstream, so its
+    email claim is trustworthy and ADMIN_EMAILS drives bootstrap. Microsoft ID tokens carry no
+    verified-email signal and the email/UPN claim is tenant-mutable, so Microsoft bootstrap keys
+    on the immutable object id (oid) allowlist within the configured admin tenant — never email.
     """
-    if ident.email not in settings.admin_email_set:
-        return False
     if ident.provider == "google":
-        return True
+        return ident.email in settings.admin_email_set
     if ident.provider == "microsoft":
         return (
             bool(settings.azure_admin_tenant_id)
             and ident.tenant_id == settings.azure_admin_tenant_id
+            and ident.subject in settings.azure_admin_object_id_set
         )
     return False
 

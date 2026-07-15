@@ -18,6 +18,9 @@ class Settings(BaseSettings):
     google_client_id: str = ""
     azure_client_id: str = ""
     azure_admin_tenant_id: str = ""
+    # Microsoft object-ids (oid) permitted to bootstrap admin. MS ID tokens carry no verified
+    # email signal, so admin bootstrap keys on the immutable oid, never the mutable email/UPN.
+    azure_admin_object_ids: str = ""
     admin_emails: str = ""
 
     # Optional provisioning allowlists (empty = allow any verified account). When set, a
@@ -54,6 +57,10 @@ class Settings(BaseSettings):
     @property
     def allowed_azure_tenant_set(self) -> set[str]:
         return {t.strip() for t in self.allowed_azure_tenants.split(",") if t.strip()}
+
+    @property
+    def azure_admin_object_id_set(self) -> set[str]:
+        return {o.strip() for o in self.azure_admin_object_ids.split(",") if o.strip()}
 
     @property
     def session_ttl_seconds(self) -> int:
