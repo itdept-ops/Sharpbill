@@ -43,7 +43,7 @@ export function TechnologyPage() {
 
       <nav className="landing-nav">
         <Link to="/" className="brand">
-          ◈ KINGFISHER CRM
+          ◈ KINGFISHER
         </Link>
         <span className="spacer" />
         <Link to="/security">Security</Link>
@@ -58,8 +58,8 @@ export function TechnologyPage() {
             Built the modern way — <span className="lit">agentically.</span>
           </h1>
           <p>
-            Kingfisher is a full-stack CRM foundation designed, built, reviewed, and shipped
-            through a multi-agent workflow: models handle the grind — code, tests, docs,
+            Kingfisher is a full-stack access-control console designed, built, reviewed, and
+            shipped through a multi-agent workflow: models handle the grind — code, tests, docs,
             adversarial review — while the architect steers intent. What follows is the actual
             stack under this running system.
           </p>
@@ -149,7 +149,7 @@ export function TechnologyPage() {
         </div>
 
         <footer className="landing-footer" style={{ marginTop: 40, border: "none" }}>
-          <span>KF-CRM v4.0 // BUILD 20260714</span>
+          <span>KINGFISHER // ACCESS CONTROL</span>
           <span className="spacer" />
           <Link to={user ? "/dashboard" : "/login"}>Enter console →</Link>
         </footer>

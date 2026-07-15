@@ -25,7 +25,7 @@ export function AboutPage() {
 
       <nav className="landing-nav">
         <Link to="/" className="brand">
-          ◈ KINGFISHER CRM
+          ◈ KINGFISHER
         </Link>
         <span className="spacer" />
         <Link to="/">Home</Link>

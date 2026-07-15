@@ -109,7 +109,7 @@ export function SecurityPage() {
 
       <nav className="landing-nav">
         <Link to="/" className="brand">
-          ◈ KINGFISHER CRM
+          ◈ KINGFISHER
         </Link>
         <span className="spacer" />
         <Link to="/technology">Technology</Link>
@@ -173,7 +173,7 @@ export function SecurityPage() {
         </div>
 
         <footer className="landing-footer" style={{ marginTop: 40, border: "none" }}>
-          <span>KF-CRM v4.0 // SECURITY</span>
+          <span>KINGFISHER // SECURITY</span>
           <span className="spacer" />
           <Link to={user ? "/dashboard" : "/login"}>Enter console →</Link>
         </footer>

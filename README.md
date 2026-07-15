@@ -1,6 +1,6 @@
-# Kingfisher CRM
+# Kingfisher — Access Control Console
 
-**An operator-grade internal console** — single sign-on that verifies the provider's *immutable*
+**An operator-grade access-control console** — single sign-on that verifies the provider's *immutable*
 identity, a real database-backed **roles + permissions** system, a **live presence** roster with a
 **session kill-switch**, deep user management, an admin request-audit log, and a Matrix/terminal
 ("DATASTREAM") interface. FastAPI + React + MySQL, run locally with Docker Compose.

@@ -22,7 +22,7 @@ export function LandingPage() {
       <div className="scanlines" />
 
       <nav className="landing-nav">
-        <span className="brand">◈ KINGFISHER CRM</span>
+        <span className="brand">◈ KINGFISHER</span>
         <span className="spacer" />
         <Link to="/technology">Technology</Link>
         <Link to="/security">Security</Link>
@@ -32,13 +32,14 @@ export function LandingPage() {
 
       <section className="hero">
         <div>
-          <div className="hero-eyebrow cursor">KINGFISHER CRM // OPERATIONS DECK</div>
+          <div className="hero-eyebrow cursor">KINGFISHER // ACCESS CONTROL CONSOLE</div>
           <h1 className="hero-title">
-            Your pipeline, <span className="lit">on the wire.</span>
+            Access, <span className="lit">proven every request.</span>
           </h1>
           <p className="hero-sub">
-            An operator-grade CRM foundation: single sign-on, database-managed roles and
-            permissions, live presence, and a session kill-switch — built to be run, not just
+            An access-control console: single sign-on verified server-side and keyed to a
+            provider's immutable identity, database-backed roles and permissions enforced on every
+            request, live presence, and a one-click session kill-switch — built to be run, not just
             browsed.
           </p>
           <div className="hero-cta">
@@ -52,16 +53,16 @@ export function LandingPage() {
         </div>
         <div className="status-rail">
           <div className="readout">
-            <span className="status-dot" /> UPTIME <b>99.98%</b>
+            <span className="status-dot" /> IDENTITY <b>IMMUTABLE</b>
           </div>
           <div className="readout">
-            <span className="status-dot" /> NODES <b>12/12</b>
+            <span className="status-dot" /> AUTH <b>EVERY REQUEST</b>
           </div>
           <div className="readout">
-            <span className="status-dot teal" /> LATENCY <b>41ms</b>
+            <span className="status-dot teal" /> SESSIONS <b>REVOCABLE</b>
           </div>
           <div className="readout">
-            <span className="status-dot" /> SESSIONS <b>SECURE</b>
+            <span className="status-dot" /> REVIEW <b>ADVERSARIAL</b>
           </div>
         </div>
       </section>
@@ -78,7 +79,7 @@ export function LandingPage() {
       </div>
 
       <footer className="landing-footer">
-        <span>KF-CRM v4.0 // BUILD 20260713</span>
+        <span>KINGFISHER // ACCESS CONTROL</span>
         <span className="spacer" />
         <span>Local-first · Dockerized · Open</span>
       </footer>
