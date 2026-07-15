@@ -79,12 +79,17 @@
 html,
 body {
   margin: 0;
-  background: var(--bg);
   color: var(--ink);
   font-family: var(--font-mono);
   font-variant-ligatures: none;
   font-variant-numeric: tabular-nums;
   -webkit-font-smoothing: antialiased;
+}
+/* The dark base lives on <html> ONLY. <body> must stay transparent: the fixed rain canvas sits at
+   z-index:-2, which paints above the root (<html>) background but BELOW <body>'s in-flow
+   background — so an opaque <body> background would occlude the code-rain entirely (it did). */
+html {
+  background: var(--bg);
 }
 #root {
   min-height: 100vh;

@@ -86,6 +86,10 @@ export function MatrixRain({ opacity = 0.4 }: { opacity?: number }) {
     const setup = () => {
       W = window.innerWidth;
       H = window.innerHeight;
+      // Never collapse the canvas to 0×0. This happens when the component first paints before
+      // layout (a background tab, a session-restored tab, bfcache) where innerWidth reads 0;
+      // the ResizeObserver below re-runs setup the moment a real size is available.
+      if (W === 0 || H === 0) return;
       const dpr = Math.min(window.devicePixelRatio || 1, 2);
       canvas.width = Math.floor(W * dpr);
       canvas.height = Math.floor(H * dpr);
@@ -163,6 +167,7 @@ export function MatrixRain({ opacity = 0.4 }: { opacity?: number }) {
     };
     const onVis = () => {
       visible = !document.hidden;
+      if (visible) setup(); // a tab that first painted while hidden may have measured 0×0 — re-measure
       start();
     };
     // Any accent/tone/glow (inline style) or motion/speed/glyph (data-attr) change retunes live.
@@ -175,6 +180,12 @@ export function MatrixRain({ opacity = 0.4 }: { opacity?: number }) {
       attributeFilter: ["style", "data-calm", "data-motion", "data-rain-speed", "data-rain-glyphs"],
     });
 
+    // A ResizeObserver on the viewport root catches the initial 0 -> real size transition when the
+    // component first paints while the tab is hidden/laid out late (a plain window "resize" never
+    // fires in that case), plus ordinary viewport resizes.
+    const ro = new ResizeObserver(() => onResize());
+    ro.observe(document.documentElement);
+
     setup();
     start();
     window.addEventListener("resize", onResize);
@@ -183,6 +194,7 @@ export function MatrixRain({ opacity = 0.4 }: { opacity?: number }) {
       visible = false;
       cancelAnimationFrame(raf);
       observer.disconnect();
+      ro.disconnect();
       window.removeEventListener("resize", onResize);
       document.removeEventListener("visibilitychange", onVis);
     };
