@@ -6,11 +6,13 @@ from pydantic import ValidationError
 
 from app.config import Settings
 
+_GOOD_SECRET = "test-secret-0123456789abcdef0123456789abcdef"
+
 
 def _base(**over):
     env = {
         "database_url": "mysql+pymysql://u:p@h:3306/db",
-        "session_jwt_secret": "a" * 40,
+        "session_jwt_secret": _GOOD_SECRET,
         "app_env": "local",
         "cookie_secure": True,
     }
@@ -28,8 +30,13 @@ def test_placeholder_secret_is_rejected():
         Settings(**_base(session_jwt_secret="replace-me-" + "x" * 30))
 
 
+def test_low_entropy_secret_is_rejected():
+    with pytest.raises(ValidationError):
+        Settings(**_base(session_jwt_secret="a" * 40))  # long enough, but only one distinct char
+
+
 def test_strong_secret_is_accepted():
-    assert Settings(**_base()).session_jwt_secret == "a" * 40
+    assert Settings(**_base()).session_jwt_secret == _GOOD_SECRET
 
 
 def test_production_requires_secure_cookie():

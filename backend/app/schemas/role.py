@@ -1,6 +1,6 @@
 import re
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 _KEY_RE = re.compile(r"^[a-z][a-z0-9]*(\.[a-z0-9]+)+$")  # e.g. "reports.export"
 _NAME_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9 _-]{0,48}$")
@@ -14,6 +14,7 @@ class PermissionOut(BaseModel):
 
 
 class PermissionCreate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
     key: str = Field(max_length=100)
     description: str | None = Field(default=None, max_length=255)
 
@@ -36,9 +37,10 @@ class RoleOut(BaseModel):
 
 
 class RoleCreate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
     name: str
     description: str | None = Field(default=None, max_length=255)
-    permission_keys: list[str] = []
+    permission_keys: list[str] = Field(default_factory=list, max_length=100)
 
     @field_validator("name")
     @classmethod
@@ -50,9 +52,10 @@ class RoleCreate(BaseModel):
 
 
 class RoleUpdate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
     name: str | None = None
     description: str | None = Field(default=None, max_length=255)
-    permission_keys: list[str] | None = None
+    permission_keys: list[str] | None = Field(default=None, max_length=100)
 
     @field_validator("name")
     @classmethod

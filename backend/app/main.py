@@ -61,7 +61,16 @@ async def _enforce_json_on_login(request: Request, call_next):
 # the CSRF guard so it is the outermost middleware and observes the final response status.
 @app.middleware("http")
 async def _request_log(request: Request, call_next):
-    response = await call_next(request)
+    try:
+        response = await call_next(request)
+    except Exception:
+        # An unhandled error propagates past here to Starlette's 500 handler; record it as a 500
+        # first so error responses are never missing from the audit log, then re-raise.
+        try:
+            await run_in_threadpool(record_request, request, 500)
+        except Exception:
+            logging.getLogger("app.requests").exception("request logging error")
+        raise
     try:
         # Persistence opens a sync DB session + commits — run it off the event loop so it never
         # blocks request handling or the WebSocket presence loop.

@@ -1,17 +1,19 @@
 from datetime import datetime
 
-from pydantic import BaseModel, EmailStr, Field
+from pydantic import BaseModel, ConfigDict, EmailStr, Field
 
 from app.models import UserSession
 
 
 class TokenLoginRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
     id_token: str = Field(min_length=1)
 
 
 class DevLoginRequest(BaseModel):
     """Body for the dev-only /api/auth/dev endpoint. `role` is a role NAME (e.g. 'admin')."""
 
+    model_config = ConfigDict(extra="forbid")
     email: EmailStr
     role: str | None = None
     display_name: str | None = None
@@ -25,6 +27,7 @@ class AuthConfig(BaseModel):
 
 
 class LocationUpdate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
     latitude: float = Field(ge=-90, le=90)
     longitude: float = Field(ge=-180, le=180)
     accuracy: float | None = Field(default=None, ge=0)

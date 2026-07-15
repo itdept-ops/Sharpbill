@@ -341,6 +341,16 @@ def test_ui_prefs_rejects_invalid_values(client):
     assert r.json()["ui_prefs"] == {"scanlines": "heavy"}
 
 
+def test_profile_update_rejects_unknown_field(client):
+    """FND-032: mutating schemas reject unknown fields (mass-assignment guardrail)."""
+    me = _login(client, "strict@example.com", role="user")
+    r = client.patch(
+        f"/api/users/{me['id']}/profile", json={"title": "ok", "role_id": 1, "is_admin": True}
+    )
+    assert r.status_code == 422
+    assert r.json()["detail"]["code"] == "VALIDATION_ERROR"
+
+
 def test_user_cannot_edit_others_profile(client):
     other = TestClient(app)
     ou = other.post("/api/auth/dev", json={"email": "other@example.com", "role": "user"}).json()

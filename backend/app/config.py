@@ -7,7 +7,9 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", case_sensitive=False, extra="ignore")
 
-    app_env: Literal["local", "production"] = "local"
+    # Default to the safe mode: a missing/typo'd APP_ENV must not silently enable the dev-auth
+    # gate or relax the secure-cookie invariant. Local dev sets APP_ENV=local explicitly (.env).
+    app_env: Literal["local", "production"] = "production"
     database_url: str
     db_require_tls: bool = False
 
@@ -43,6 +45,8 @@ class Settings(BaseSettings):
     def _secret_must_be_strong(cls, v: str) -> str:
         if len(v) < 32 or "replace-me" in v:
             raise ValueError("SESSION_JWT_SECRET must be >= 32 chars and not the placeholder value")
+        if len(set(v)) < 8:  # crude entropy floor — rejects low-diversity secrets like "aaaa..."
+            raise ValueError("SESSION_JWT_SECRET has too little entropy; use secrets.token_hex(32)")
         return v
 
     @model_validator(mode="after")

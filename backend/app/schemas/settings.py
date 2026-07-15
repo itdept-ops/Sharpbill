@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import Literal
 
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 
 SignupMode = Literal["open", "approval", "closed"]
 
@@ -17,6 +17,7 @@ class SiteSettingsOut(BaseModel):
 
 
 class SiteSettingsUpdate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
     signup_mode: SignupMode | None = None
     allow_google: bool | None = None
     allow_microsoft: bool | None = None

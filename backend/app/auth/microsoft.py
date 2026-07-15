@@ -48,8 +48,9 @@ def verify_microsoft_id_token(raw_token: str) -> VerifiedIdentity:
     if "@" not in email:
         raise ProviderTokenError("no usable email claim")
 
-    # Single-use: reject a token already presented within its validity window.
-    if check_replay(raw_token, float(claims["exp"]) - time.time()):
+    # Single-use: reject a token already presented within its validity window. Extend the guard
+    # by the verifier's leeway (30s past exp) so it covers the whole window the token is accepted.
+    if check_replay(raw_token, float(claims["exp"]) - time.time() + 30):
         raise ProviderTokenError("token already used")
 
     return VerifiedIdentity(

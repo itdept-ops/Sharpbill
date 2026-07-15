@@ -16,6 +16,9 @@ def check(key: str, limit: int, window_seconds: float) -> int:
     """Register a hit for ``key``. Return 0 if allowed, else the Retry-After seconds until reset."""
     now = time.monotonic()
     with _lock:
+        if len(_windows) > 10000:  # bound memory: sweep windows that have already reset
+            for k in [k for k, (_, r) in _windows.items() if r <= now]:
+                del _windows[k]
         count, reset_at = _windows.get(key, (0, 0.0))
         if now >= reset_at:
             count, reset_at = 0, now + window_seconds

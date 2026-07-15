@@ -35,8 +35,10 @@ def verify_google_id_token(raw_token: str) -> VerifiedIdentity:
     if not claims.get("sub") or not claims.get("email"):
         raise ProviderTokenError("missing sub/email")
 
-    # Single-use: reject a token already presented within its validity window.
-    if check_replay(raw_token, float(claims["exp"]) - time.time()):
+    # Single-use: reject a token already presented within its validity window. Extend the guard
+    # by the verifier's clock-skew allowance (30s past exp) so it covers the whole window in which
+    # the token would still be accepted.
+    if check_replay(raw_token, float(claims["exp"]) - time.time() + 30):
         raise ProviderTokenError("token already used")
 
     return VerifiedIdentity(

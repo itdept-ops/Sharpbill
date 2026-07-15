@@ -94,20 +94,24 @@ class UserListOut(BaseModel):
 
 
 class RoleAssignRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
     role_id: int
 
 
 class StatusUpdateRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
     is_active: bool
 
 
 class PermissionGrantRequest(BaseModel):
     """The full set of permissions granted DIRECTLY to a user (replaces the existing grants)."""
 
-    permission_keys: list[str] = Field(default_factory=list)
+    model_config = ConfigDict(extra="forbid")
+    permission_keys: list[str] = Field(default_factory=list, max_length=100)
 
 
 class BulkActionRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
     ids: list[int] = Field(min_length=1, max_length=500)
     action: Literal["activate", "deactivate", "approve", "assign_role"]
     role_id: int | None = None
@@ -152,6 +156,8 @@ class UiPrefs(BaseModel):
 
 
 class ProfileUpdate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     display_name: str | None = Field(default=None, max_length=255)
     title: str | None = Field(default=None, max_length=120)
     department: str | None = Field(default=None, max_length=120)

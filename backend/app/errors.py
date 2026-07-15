@@ -26,13 +26,18 @@ class ApiError(HTTPException):
 def install_error_handlers(app: FastAPI) -> None:
     @app.exception_handler(RequestValidationError)
     async def _validation(request: Request, exc: RequestValidationError):
+        # Return field-level errors but strip `input` (the raw submitted value) and `url` so we
+        # never reflect the caller's payload or internal doc links back.
+        errors = [
+            {k: v for k, v in err.items() if k not in ("input", "url")} for err in exc.errors()
+        ]
         return JSONResponse(
             status_code=422,
             content={
                 "detail": {
                     "code": "VALIDATION_ERROR",
                     "message": "Invalid request",
-                    "errors": jsonable_encoder(exc.errors(), custom_encoder=_ENCODERS),
+                    "errors": jsonable_encoder(errors, custom_encoder=_ENCODERS),
                 }
             },
         )
