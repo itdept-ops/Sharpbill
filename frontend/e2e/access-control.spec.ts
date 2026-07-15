@@ -33,6 +33,26 @@ test("admin signs in and drives the console end to end", async ({ page }) => {
   await expect(page.getByRole("button", { name: "Save profile" })).toBeVisible();
 });
 
+test("admin edits a user's profile through the modal and the change persists", async ({ page }) => {
+  await devLogin(page, "e2e-admin@example.com", "admin");
+  await page.goto("/admin/users");
+
+  // Open the inline edit modal for the first directory row.
+  await page.getByRole("button", { name: "Edit" }).first().click();
+  await expect(page.getByText("// EDIT USER")).toBeVisible();
+
+  // Change the Title and save — a real PATCH round-trip.
+  const title = `QA-${Date.now()}`;
+  await page.getByLabel("Title").fill(title);
+  await page.getByRole("button", { name: "Save profile" }).click();
+  await expect(page.getByText("Profile saved.")).toBeVisible();
+
+  // Reload and re-open the same row: the new title is persisted server-side.
+  await page.reload();
+  await page.getByRole("button", { name: "Edit" }).first().click();
+  await expect(page.getByLabel("Title")).toHaveValue(title);
+});
+
 test("a plain user is denied the admin directory (RBAC enforced in the browser)", async ({
   page,
 }) => {
