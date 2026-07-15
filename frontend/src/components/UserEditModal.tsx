@@ -1,9 +1,9 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 import { api, ApiError } from "../api/client";
 import { useAuth } from "../auth/AuthContext";
 import { ProviderBadge, RoleBadge } from "./badges";
-import type { ProfileUpdate, Role, User } from "../types";
+import type { Permission, ProfileUpdate, Role, User } from "../types";
 
 const FIELDS: [keyof ProfileUpdate, string][] = [
   ["display_name", "Display name"],
@@ -79,6 +79,30 @@ export function UserEditModal({
       setBanner({ msg: e instanceof ApiError ? e.message : "Action failed" });
     }
   };
+
+  // Direct per-user permission grants (on top of the role). Needs users.manage + roles.manage.
+  const canManagePerms = canManage && !isSelf && !!me?.permissions.includes("roles.manage");
+  const [allPerms, setAllPerms] = useState<Permission[]>([]);
+  useEffect(() => {
+    if (canManagePerms)
+      api.get<Permission[]>("/api/permissions").then(setAllPerms).catch(() => setAllPerms([]));
+  }, [canManagePerms]);
+
+  const roleKeys = new Set(user.role_permissions);
+  const directKeys = new Set(user.direct_permissions);
+  const togglePerm = (key: string) => {
+    const next = new Set(directKeys);
+    if (next.has(key)) next.delete(key);
+    else next.add(key);
+    return action(
+      () => api.put<User>(`/api/users/${user.id}/permissions`, { permission_keys: [...next] }),
+      "Permissions updated.",
+    );
+  };
+  const permGroups = allPerms.reduce<Record<string, Permission[]>>((acc, p) => {
+    (acc[p.key.split(".")[0]] ??= []).push(p);
+    return acc;
+  }, {});
 
   const initials = (user.display_name || user.email).slice(0, 2).toUpperCase();
 
@@ -239,6 +263,41 @@ export function UserEditModal({
                     Kick session
                   </button>
                 )}
+              </div>
+            </div>
+          )}
+
+          {canManagePerms && (
+            <div className="edit-section">
+              <div className="edit-section-title">
+                Direct permissions <span className="muted small">· on top of the role</span>
+              </div>
+              <div className="perm-grant-groups">
+                {Object.entries(permGroups).map(([group, perms]) => (
+                  <div className="perm-grant-group" key={group}>
+                    <div className="perm-grant-head">{group}</div>
+                    {perms.map((p) => {
+                      const viaRole = roleKeys.has(p.key);
+                      const direct = directKeys.has(p.key);
+                      return (
+                        <label className="perm-grant" key={p.key} title={p.description ?? p.key}>
+                          <input
+                            type="checkbox"
+                            checked={viaRole || direct}
+                            disabled={viaRole}
+                            onChange={() => togglePerm(p.key)}
+                          />
+                          <span className="perm-grant-key">{p.key}</span>
+                          {viaRole ? (
+                            <span className="perm-src">via role</span>
+                          ) : direct ? (
+                            <span className="perm-src direct">direct</span>
+                          ) : null}
+                        </label>
+                      );
+                    })}
+                  </div>
+                ))}
               </div>
             </div>
           )}

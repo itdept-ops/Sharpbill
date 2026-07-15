@@ -25,7 +25,9 @@ class UserOut(BaseModel):
     bio: str | None
     role: str
     role_id: int
-    permissions: list[str]
+    permissions: list[str]  # effective = role ∪ direct grants
+    role_permissions: list[str]  # inherited from the role
+    direct_permissions: list[str]  # granted directly to this user
     is_active: bool
     is_approved: bool
     status: str  # active | pending | disabled
@@ -59,6 +61,8 @@ class UserOut(BaseModel):
             role=user.role_name,
             role_id=user.role_id,
             permissions=sorted(user.permission_keys),
+            role_permissions=sorted(user.role.permission_keys),
+            direct_permissions=sorted(user.direct_permission_keys),
             is_active=user.is_active,
             is_approved=user.is_approved,
             status=user.status,
@@ -89,6 +93,12 @@ class RoleAssignRequest(BaseModel):
 
 class StatusUpdateRequest(BaseModel):
     is_active: bool
+
+
+class PermissionGrantRequest(BaseModel):
+    """The full set of permissions granted DIRECTLY to a user (replaces the existing grants)."""
+
+    permission_keys: list[str] = Field(default_factory=list)
 
 
 class BulkActionRequest(BaseModel):

@@ -5,7 +5,9 @@ from sqlalchemy.dialects.mysql import TINYINT
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models.base import Base
+from app.models.permission import Permission
 from app.models.role import Role
+from app.models.user_permission import user_permissions
 
 _TABLE_ARGS = {
     "mysql_engine": "InnoDB",
@@ -52,14 +54,23 @@ class User(Base):
     identities: Mapped[list["UserIdentity"]] = relationship(  # noqa: F821
         back_populates="user", cascade="all, delete-orphan", lazy="selectin"
     )
+    # Permissions granted directly to this user, on top of their role (RBAC + per-user grants).
+    granted_permissions: Mapped[list[Permission]] = relationship(
+        secondary=user_permissions, lazy="selectin", order_by=Permission.key
+    )
 
     @property
     def role_name(self) -> str:
         return self.role.name
 
     @property
+    def direct_permission_keys(self) -> set[str]:
+        return {p.key for p in self.granted_permissions}
+
+    @property
     def permission_keys(self) -> set[str]:
-        return self.role.permission_keys
+        # Effective access = the role's permissions plus any granted directly to the user.
+        return self.role.permission_keys | self.direct_permission_keys
 
     @property
     def auth_providers(self) -> list[str]:

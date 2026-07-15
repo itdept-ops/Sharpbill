@@ -10,12 +10,13 @@ from app.auth.deps import get_current_user, require_permission
 from app.auth.sessions import revoke_all_for_user, revoke_session
 from app.db import get_db
 from app.errors import ApiError
-from app.models import Role, User, UserSession
+from app.models import Permission, Role, User, UserSession
 from app.permissions import ADMIN_ROLE, PRESENCE_KICK, USERS_MANAGE, USERS_READ
 from app.presence import is_online, online_cutoff
 from app.schemas.auth import SessionOut
 from app.schemas.user import (
     BulkActionRequest,
+    PermissionGrantRequest,
     ProfileUpdate,
     RoleAssignRequest,
     StatusUpdateRequest,
@@ -263,6 +264,36 @@ def update_role(
     if user.role_name == ADMIN_ROLE and role.name != ADMIN_ROLE and _active_admin_count(db) <= 1:
         raise ApiError(403, "LAST_ADMIN", "Cannot demote the last remaining admin")
     user.role = role
+    db.commit()
+    return UserOut.from_user(user, online=is_online(user.last_seen_at))
+
+
+@router.put("/{user_id}/permissions", response_model=UserOut)
+def set_user_permissions(
+    user_id: int,
+    body: PermissionGrantRequest,
+    db: Session = Depends(get_db),
+    actor: User = Depends(require_permission(USERS_MANAGE)),
+) -> UserOut:
+    """Replace the permissions granted DIRECTLY to a user (on top of their role)."""
+    if user_id == actor.id:
+        raise ApiError(400, "CANNOT_MODIFY_SELF", "You cannot change your own permissions")
+    user = _get_target(db, user_id)
+
+    keys = {k.strip().lower() for k in body.permission_keys if k.strip()}
+    perms = list(db.scalars(select(Permission).where(Permission.key.in_(keys)))) if keys else []
+    unknown = keys - {p.key for p in perms}
+    if unknown:
+        raise ApiError(
+            400, "UNKNOWN_PERMISSION", f"Unknown permission(s): {', '.join(sorted(unknown))}"
+        )
+    # No privilege amplification: you can only grant permissions you already hold (admins hold all).
+    if not _is_admin(actor) and not keys <= actor.permission_keys:
+        raise ApiError(
+            403, "INSUFFICIENT_PRIVILEGE", "You cannot grant a permission you do not hold"
+        )
+
+    user.granted_permissions = perms
     db.commit()
     return UserOut.from_user(user, online=is_online(user.last_seen_at))
 

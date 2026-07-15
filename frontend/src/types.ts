@@ -19,7 +19,9 @@ export interface User {
   bio: string | null;
   role: string;
   role_id: number;
-  permissions: string[];
+  permissions: string[]; // effective = role ∪ direct grants
+  role_permissions: string[]; // inherited from the role
+  direct_permissions: string[]; // granted directly to this user
   is_active: boolean;
   is_approved: boolean;
   status: UserStatus;

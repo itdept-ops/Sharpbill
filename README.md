@@ -43,12 +43,15 @@ email address. A user who changes their provider email can't hijack or merge int
 The verified id is stored and surfaced in the admin UI. A gated **dev-login** (local only, off by
 default) lets you click into the app before OAuth keys exist.
 
-### Roles & permissions (RBAC) you can edit at runtime
-Every user has exactly one role; roles hold permissions; **admins create new permissions and roles**
-and assign them through a grouped permission-matrix builder. Access is read fresh from the database
-on **every request**. Built-in permissions: `users.read`, `users.manage`, `roles.manage`,
-`presence.view`, `presence.kick`, `settings.manage`, `logs.view`. System roles are protected and
-privilege-amplification is blocked (you can only grant what you already hold).
+### Roles & permissions (RBAC + per-user grants) you can edit at runtime
+Every user has one role; roles hold permissions; **admins create new permissions and roles** and
+assign them through a grouped permission-matrix builder. On top of the role, admins can **grant
+individual permissions directly to a user** — so a user's **effective access = their role's
+permissions ∪ their direct grants** (the industry-standard RBAC-plus-direct-grants model used by
+AWS/GCP IAM, GitHub, and Okta). Access is read fresh from the database on **every request**. Built-in
+permissions: `users.read`, `users.manage`, `roles.manage`, `presence.view`, `presence.kick`,
+`settings.manage`, `logs.view`. System roles are protected, and privilege-amplification is blocked
+everywhere — you can only grant (via a role *or* a direct grant) a permission you already hold.
 
 ### Deep, permission-gated user management
 A paginated, filterable directory (search · role · status · online) showing role, department,
@@ -235,6 +238,7 @@ Reset the DB: `docker compose down -v && docker compose up -d && docker compose 
 | GET | `/api/roles` · `/api/permissions` | `roles.manage` | list |
 | POST | `/api/roles` · `/api/permissions` | `roles.manage` | create |
 | PATCH · DELETE | `/api/roles/{id}` | `roles.manage` | edit / delete (custom) |
+| PUT | `/api/users/{id}/permissions` | `users.manage` | set a user's direct permission grants |
 | GET | `/api/presence/online` | `presence.view` | who's online |
 | POST | `/api/presence/heartbeat` | session | presence ping (WebSocket polling fallback) |
 | WS | `/api/ws/presence` | session | real-time presence stream |

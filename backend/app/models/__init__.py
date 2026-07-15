@@ -6,6 +6,7 @@ from app.models.role_permission import role_permissions
 from app.models.site_settings import SiteSettings
 from app.models.user import User
 from app.models.user_identity import UserIdentity
+from app.models.user_permission import user_permissions
 from app.models.user_session import UserSession
 
 __all__ = [
@@ -17,5 +18,6 @@ __all__ = [
     "SiteSettings",
     "User",
     "UserIdentity",
+    "user_permissions",
     "UserSession",
 ]

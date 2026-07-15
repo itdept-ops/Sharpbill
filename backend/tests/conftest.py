@@ -80,6 +80,7 @@ def _clean_tables():
         )
         conn.execute(text("DELETE FROM request_logs"))
         conn.execute(text("DELETE FROM user_sessions"))
+        conn.execute(text("DELETE FROM user_permissions"))
         conn.execute(text("DELETE FROM user_identities"))
         conn.execute(text("DELETE FROM users"))
         conn.execute(text("DELETE FROM roles WHERE is_system = 0"))

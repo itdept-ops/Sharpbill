@@ -1389,6 +1389,47 @@ td select.field-input {
   opacity: 0.55;
   cursor: not-allowed;
 }
+/* ---- per-user permission grants ---- */
+.perm-grant-groups {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 12px;
+}
+.perm-grant-head {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: var(--track-label);
+  color: var(--teal);
+  margin-bottom: 4px;
+}
+.perm-grant {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  padding: 2px 0;
+  cursor: pointer;
+}
+.perm-grant input:disabled {
+  cursor: not-allowed;
+}
+.perm-grant-key {
+  color: var(--ink-dim);
+}
+.perm-src {
+  font-size: 9px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+  border: 1px solid var(--border);
+  border-radius: 2px;
+  padding: 0 4px;
+}
+.perm-src.direct {
+  color: var(--green);
+  border-color: var(--green-dim);
+}
 .modal-panel .panel-body {
   display: flex;
   flex-direction: column;
