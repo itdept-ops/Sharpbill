@@ -158,6 +158,15 @@ def update_role(
     # the base 'user' role's permission set and mass-escalate everyone.
     if role.is_system and not _is_admin(actor):
         raise ApiError(403, "PROTECTED_ROLE", "System roles can only be edited by an admin")
+    # A non-admin may not rewrite a (custom) role that grants permissions they don't hold —
+    # otherwise a roles.manage delegate could strip/repurpose a role above their own privilege
+    # and mass-revoke it from every holder.
+    if not _is_admin(actor) and not role.permission_keys <= actor.permission_keys:
+        raise ApiError(
+            403,
+            "INSUFFICIENT_PRIVILEGE",
+            "You cannot modify a role that grants permissions you do not hold",
+        )
 
     if body.name is not None and body.name != role.name:
         if role.is_system:
@@ -180,13 +189,20 @@ def update_role(
 def delete_role(
     role_id: int,
     db: Session = Depends(get_db),
-    _: User = Depends(require_permission(ROLES_MANAGE)),
+    actor: User = Depends(require_permission(ROLES_MANAGE)),
 ) -> Response:
     role = db.get(Role, role_id)
     if role is None:
         raise ApiError(404, "NOT_FOUND", "Role not found")
     if role.is_system:
         raise ApiError(403, "PROTECTED_ROLE", "System roles cannot be deleted")
+    # A non-admin may not delete a role granting permissions they don't hold (above their level).
+    if not _is_admin(actor) and not role.permission_keys <= actor.permission_keys:
+        raise ApiError(
+            403,
+            "INSUFFICIENT_PRIVILEGE",
+            "You cannot delete a role that grants permissions you do not hold",
+        )
     in_use = db.scalar(select(func.count()).select_from(User).where(User.role_id == role.id)) or 0
     if in_use:
         raise ApiError(

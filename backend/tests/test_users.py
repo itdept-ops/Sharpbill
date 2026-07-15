@@ -213,7 +213,12 @@ def test_delegate_cannot_assign_admin_role_puppet(client):
     assert resp.json()["detail"]["code"] == "INSUFFICIENT_PRIVILEGE"
 
 
-def test_cannot_deactivate_last_admin(client):
+def test_delegate_cannot_deactivate_admin(client):
+    """A non-admin users.manage delegate cannot deactivate an admin (seniority guard, FND-002).
+
+    Previously this only failed because the admin happened to be the *last* one; now acting on
+    any admin as a non-admin is refused outright.
+    """
     admin = _login(client, "admin@example.com", role="admin")
     client.post(
         "/api/roles", json={"name": "UserMgr2", "permission_keys": ["users.read", "users.manage"]}
@@ -222,6 +227,26 @@ def test_cannot_deactivate_last_admin(client):
     delegate.post("/api/auth/dev", json={"email": "dg@example.com", "role": "UserMgr2"})
 
     resp = delegate.patch(f"/api/users/{admin['id']}/status", json={"is_active": False})
+    assert resp.status_code == 403
+    assert resp.json()["detail"]["code"] == "INSUFFICIENT_PRIVILEGE"
+
+
+def test_last_admin_guard_blocks_removing_final_admin(client):
+    """The last-admin guard still fires for an admin actor when one active admin remains."""
+    _login(client, "admin@example.com", role="admin")
+    second = (
+        TestClient(app)
+        .post("/api/auth/dev", json={"email": "second@example.com", "role": "admin"})
+        .json()
+    )
+    # Deactivate the second admin (two admins exist, so this is allowed) -> one active admin left.
+    assert (
+        client.patch(f"/api/users/{second['id']}/status", json={"is_active": False}).status_code
+        == 200
+    )
+    user_role = _role_id(client, "user")
+    # Demoting the remaining admin-role account would leave zero admins -> LAST_ADMIN.
+    resp = client.patch(f"/api/users/{second['id']}/role", json={"role_id": user_role})
     assert resp.status_code == 403
     assert resp.json()["detail"]["code"] == "LAST_ADMIN"
 

@@ -44,16 +44,37 @@ def _is_admin(user: User) -> bool:
     return user.role_name == ADMIN_ROLE
 
 
-def _active_admin_count(db: Session) -> int:
-    return (
-        db.scalar(
-            select(func.count())
-            .select_from(User)
-            .join(Role, User.role_id == Role.id)
-            .where(Role.name == ADMIN_ROLE, User.is_active.is_(True), User.is_approved.is_(True))
+def _assert_not_admin_target(actor: User, target: User) -> None:
+    """A non-admin may not perform destructive actions on a full-admin account.
+
+    Stops a mid-tier delegate (users.manage / presence.kick) from disabling, demoting, or
+    force-logging-out administrators who outrank them. Admins may act on anyone (still subject
+    to the self-modification and last-admin guards). Scoped to the top-level admin role rather
+    than a full permission-subset comparison so ordinary member management (a users.manage
+    delegate acting on plain users) is unaffected.
+    """
+    if not _is_admin(actor) and target.role_name == ADMIN_ROLE:
+        raise ApiError(
+            403,
+            "INSUFFICIENT_PRIVILEGE",
+            "Only an admin can deactivate, demote, or kick an administrator",
         )
-        or 0
-    )
+
+
+def _active_admin_count(db: Session) -> int:
+    """Count active, approved admins, locking those rows FOR UPDATE.
+
+    The row lock turns every last-admin guard into a true check-and-act: concurrent
+    demote/deactivate requests serialize on the admin rows instead of both reading a stale
+    snapshot count and racing the active-admin population to zero (TOCTOU / write-skew).
+    """
+    rows = db.scalars(
+        select(User.id)
+        .join(Role, User.role_id == Role.id)
+        .where(Role.name == ADMIN_ROLE, User.is_active.is_(True), User.is_approved.is_(True))
+        .with_for_update()
+    ).all()
+    return len(rows)
 
 
 def _filtered(
@@ -186,6 +207,7 @@ def bulk_action(
             if uid == actor.id:
                 raise ApiError(400, "CANNOT_MODIFY_SELF", "Cannot act on yourself")
             user = _get_target(db, uid)
+            _assert_not_admin_target(actor, user)
             if body.action == "activate":
                 user.is_active = True
             elif body.action == "deactivate":
@@ -264,6 +286,7 @@ def update_role(
     if user_id == actor.id:
         raise ApiError(400, "CANNOT_MODIFY_SELF", "You cannot change your own role")
     user = _get_target(db, user_id)
+    _assert_not_admin_target(actor, user)
     role = db.get(Role, body.role_id)
     if role is None:
         raise ApiError(400, "UNKNOWN_ROLE", "No such role")
@@ -320,6 +343,7 @@ def update_status(
     if user_id == actor.id:
         raise ApiError(400, "CANNOT_MODIFY_SELF", "You cannot deactivate yourself")
     user = _get_target(db, user_id)
+    _assert_not_admin_target(actor, user)
     if not body.is_active:
         if user.role_name == ADMIN_ROLE and _active_admin_count(db) <= 1:
             raise ApiError(403, "LAST_ADMIN", "Cannot deactivate the last remaining admin")
@@ -348,6 +372,7 @@ def kick_user(
     if user_id == actor.id:
         raise ApiError(400, "CANNOT_MODIFY_SELF", "You cannot kick your own session")
     user = _get_target(db, user_id)
+    _assert_not_admin_target(actor, user)
     user.session_valid_after = datetime.now(UTC).replace(tzinfo=None)
     db.commit()
     revoke_all_for_user(db, user.id)  # sign the user out of every device
