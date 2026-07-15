@@ -13,11 +13,22 @@ from app.routers import settings as settings_router
 
 logging.basicConfig(level=settings.log_level)
 
+# Interactive docs + the OpenAPI schema leak the full route/permission map, so expose them only
+# in a local environment; a hosted instance serves neither.
+_docs_enabled = settings.app_env == "local"
+
 app = FastAPI(
     title="Kingfisher CRM API",
-    docs_url="/api/docs",
-    openapi_url="/api/openapi.json",
+    docs_url="/api/docs" if _docs_enabled else None,
+    openapi_url="/api/openapi.json" if _docs_enabled else None,
 )
+
+# If a trusted reverse proxy is configured, let it (and only it) supply the real client IP via
+# X-Forwarded-For, so per-IP rate-limiting and the audit log don't collapse to the proxy's IP.
+if settings.trusted_proxy_ip_list:
+    from uvicorn.middleware.proxy_headers import ProxyHeadersMiddleware
+
+    app.add_middleware(ProxyHeadersMiddleware, trusted_hosts=settings.trusted_proxy_ip_list)
 
 install_error_handlers(app)
 

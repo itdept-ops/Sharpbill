@@ -30,6 +30,11 @@ class Settings(BaseSettings):
 
     log_level: str = "INFO"
 
+    # When the app sits behind a trusted reverse proxy, list its peer IP(s) here so the real
+    # client IP is taken from X-Forwarded-For (for rate-limiting + the audit log) ONLY when the
+    # immediate peer is that proxy. Empty = trust nobody's XFF; use the raw socket peer.
+    trusted_proxy_ips: str = ""
+
     # Dev-only login bypass. Only honored when app_env == "local" (see is_dev_auth_enabled).
     dev_auth_enabled: bool = False
 
@@ -61,6 +66,10 @@ class Settings(BaseSettings):
     @property
     def azure_admin_object_id_set(self) -> set[str]:
         return {o.strip() for o in self.azure_admin_object_ids.split(",") if o.strip()}
+
+    @property
+    def trusted_proxy_ip_list(self) -> list[str]:
+        return [ip.strip() for ip in self.trusted_proxy_ips.split(",") if ip.strip()]
 
     @property
     def session_ttl_seconds(self) -> int:
