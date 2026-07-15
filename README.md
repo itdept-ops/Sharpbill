@@ -53,10 +53,12 @@ profile fields, role reassignment, activate/deactivate, approve, and kick — wi
 shown only if you hold the matching permission**. Plus **bulk actions** and **CSV export** (with
 spreadsheet-formula-injection neutralised).
 
-### Real-time presence + a session kill-switch
-Who's online updates live over a **WebSocket** (with an HTTP polling fallback). Any authorised admin
-can **kick** a user — the session is revoked on that user's very next request via a per-user token
-epoch. Deactivation and logout are durable revocations too, so old cookies can't be resurrected.
+### Active sessions + real-time presence + a kill-switch
+Every sign-in creates a **per-device session** (keyed on the token's `jti`). Users see their own
+active devices and **revoke any one** of them; admins see and revoke a user's sessions; **kick**
+signs a user out **everywhere** at once. Revocation takes effect on the very next request (and drops
+the device from the live presence roster). Who's online updates over a **WebSocket** (with an HTTP
+polling fallback). Deactivation and logout are durable too, so old cookies can't be resurrected.
 
 ### Admin controls, GPS, and an audit log
 Admins set the sign-up mode (**open / approval / closed**), toggle each provider, choose the default
@@ -154,6 +156,8 @@ Hardened across several adversarial-review passes (each one caught and fixed rea
 - **Last-admin protection.** The final active admin can't be demoted or deactivated.
 - **Durable revocation.** Kick and deactivation stamp a per-user token epoch, so old session
   cookies are rejected on the next request (and reactivation can't resurrect them).
+- **Per-device sessions.** Each cookie is bound to a server-side session row (`jti`); revoking one
+  signs out one device, kick revokes them all — a stateless JWT with server-tracked revocation.
 - **Location privacy.** Opt-in GPS is stripped from **every** API path — list, detail, *and the kick
   response* — for anyone who isn't the user themselves or a `users.manage` holder.
 - **CSV-injection safe.** Exported cells beginning with `= + - @` are neutralised.
@@ -210,6 +214,8 @@ Reset the DB: `docker compose down -v && docker compose up -d && docker compose 
 | POST | `/api/auth/logout` | — | clear cookie (durable revoke) |
 | GET | `/api/auth/me` | session | current user |
 | POST | `/api/auth/location` | session | store optional last-known GPS |
+| GET · DELETE | `/api/auth/sessions[/{id}]` | session | list / revoke your own device sessions |
+| GET · DELETE | `/api/users/{id}/sessions[/{sid}]` | `users.read` / `presence.kick` | a user's sessions / revoke one |
 | GET | `/api/dashboard` | session | headline stats (incl. online count) |
 | GET | `/api/dashboard/analytics` | `users.read` | chart data (roles, providers, signups, status) |
 | GET | `/api/users` | `users.read` | directory + filters (`search`, `role_id`, `status`, `online`, `limit`, `offset`) |

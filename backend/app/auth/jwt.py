@@ -8,11 +8,12 @@ from app.config import settings
 COOKIE_NAME = "session"
 
 
-def create_session_token(user_id: int) -> str:
+def create_session_token(user_id: int, jti: str) -> str:
     now = datetime.now(UTC)
     return jwt.encode(
         {
             "sub": str(user_id),
+            "jti": jti,  # binds the cookie to a specific server-side session row (per device)
             "iat": now,
             "exp": now + timedelta(seconds=settings.session_ttl_seconds),
         },
@@ -22,12 +23,12 @@ def create_session_token(user_id: int) -> str:
 
 
 def decode_session_token(token: str) -> dict:
-    """Return the decoded payload (sub, iat, exp). Raises jwt.InvalidTokenError on failure."""
+    """Return the decoded payload (sub, jti, iat, exp). Raises jwt.InvalidTokenError on failure."""
     return jwt.decode(
         token,
         settings.session_jwt_secret,
         algorithms=["HS256"],
-        options={"require": ["exp", "iat", "sub"]},
+        options={"require": ["exp", "iat", "sub", "jti"]},
     )
 
 

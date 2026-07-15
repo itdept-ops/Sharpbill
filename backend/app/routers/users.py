@@ -7,11 +7,13 @@ from sqlalchemy import Select, func, or_, select
 from sqlalchemy.orm import Session
 
 from app.auth.deps import get_current_user, require_permission
+from app.auth.sessions import revoke_all_for_user, revoke_session
 from app.db import get_db
 from app.errors import ApiError
-from app.models import Role, User
+from app.models import Role, User, UserSession
 from app.permissions import ADMIN_ROLE, PRESENCE_KICK, USERS_MANAGE, USERS_READ
 from app.presence import is_online, online_cutoff
+from app.schemas.auth import SessionOut
 from app.schemas.user import (
     BulkActionRequest,
     ProfileUpdate,
@@ -305,9 +307,42 @@ def kick_user(
     user = _get_target(db, user_id)
     user.session_valid_after = datetime.now(UTC).replace(tzinfo=None)
     db.commit()
+    revoke_all_for_user(db, user.id)  # sign the user out of every device
     # presence.kick is distinct from users.manage, so gate the target's GPS the same way the
     # directory does — a kicker without users.manage must not learn the target's coordinates.
     include_location = user.id == actor.id or USERS_MANAGE in actor.permission_keys
     return UserOut.from_user(
         user, online=is_online(user.last_seen_at), include_location=include_location
     )
+
+
+@router.get("/{user_id}/sessions", response_model=list[SessionOut])
+def list_user_sessions(
+    user_id: int, db: Session = Depends(get_db), _: User = Depends(require_permission(USERS_READ))
+) -> list[SessionOut]:
+    """A user's active sessions (one per signed-in device)."""
+    _get_target(db, user_id)
+    rows = db.scalars(
+        select(UserSession)
+        .where(UserSession.user_id == user_id, UserSession.revoked_at.is_(None))
+        .order_by(UserSession.created_at.desc())
+    )
+    return [SessionOut.from_row(s, current=False) for s in rows]
+
+
+@router.delete("/{user_id}/sessions/{session_id}", status_code=204)
+def revoke_user_session(
+    user_id: int,
+    session_id: int,
+    response: Response,
+    db: Session = Depends(get_db),
+    _: User = Depends(require_permission(PRESENCE_KICK)),
+) -> Response:
+    """Sign out one of a user's devices."""
+    session = db.get(UserSession, session_id)
+    if session is None or session.user_id != user_id:
+        raise ApiError(404, "NOT_FOUND", "Session not found")
+    if session.revoked_at is None:
+        revoke_session(session, db)
+    response.status_code = 204
+    return response

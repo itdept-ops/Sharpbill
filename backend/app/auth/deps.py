@@ -6,9 +6,10 @@ from fastapi import Depends, Request
 from sqlalchemy.orm import Session
 
 from app.auth.jwt import COOKIE_NAME, decode_session_token
+from app.auth.sessions import active_session
 from app.db import get_db
 from app.errors import ApiError
-from app.models import User
+from app.models import User, UserSession
 
 # How stale last_seen may be before we bump it (throttles presence writes).
 _PRESENCE_REFRESH_SECONDS = 15
@@ -18,13 +19,17 @@ def _utcnow_naive() -> datetime:
     return datetime.now(UTC).replace(tzinfo=None)
 
 
-def _touch_last_seen(db: Session, user: User) -> None:
+def _touch(db: Session, user: User, session: UserSession) -> None:
     now = _utcnow_naive()
-    if (
-        user.last_seen_at is None
-        or (now - user.last_seen_at).total_seconds() > _PRESENCE_REFRESH_SECONDS
-    ):
+    stale = lambda ts: ts is None or (now - ts).total_seconds() > _PRESENCE_REFRESH_SECONDS  # noqa: E731
+    changed = False
+    if stale(user.last_seen_at):
         user.last_seen_at = now
+        changed = True
+    if stale(session.last_seen_at):
+        session.last_seen_at = now
+        changed = True
+    if changed:
         db.commit()
 
 
@@ -41,7 +46,7 @@ def get_current_user(request: Request, db: Session = Depends(get_db)) -> User:
     if user is None or not user.is_active or not user.is_approved:
         raise ApiError(401, "INVALID_SESSION", "Session invalid or expired")
 
-    # Session kill-switch (kick): reject tokens minted at or before the cutoff second.
+    # Global kill-switch (kick/deactivate): reject tokens minted at or before the cutoff second.
     # JWT `iat` is whole-second; comparing against the floored cutoff avoids a same-second
     # race (a token from the kick's second is revoked; re-login the next second succeeds).
     if user.session_valid_after is not None:
@@ -50,7 +55,12 @@ def get_current_user(request: Request, db: Session = Depends(get_db)) -> User:
         if issued_at <= cutoff:
             raise ApiError(401, "SESSION_REVOKED", "Your session was ended by an administrator")
 
-    _touch_last_seen(db, user)
+    # Per-device revocation: the token's session row must still exist and be un-revoked.
+    session = active_session(db, payload["jti"])
+    if session is None:
+        raise ApiError(401, "SESSION_REVOKED", "This session was signed out")
+
+    _touch(db, user, session)
     return user
 
 

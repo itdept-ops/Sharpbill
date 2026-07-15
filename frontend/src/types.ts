@@ -105,6 +105,15 @@ export interface SiteSettings {
   updated_at: string;
 }
 
+export interface SessionInfo {
+  id: number;
+  user_agent: string | null;
+  ip: string | null;
+  created_at: string;
+  last_seen_at: string | null;
+  current: boolean;
+}
+
 export interface RequestLog {
   id: number;
   method: string;

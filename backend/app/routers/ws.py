@@ -6,6 +6,7 @@ import jwt as pyjwt
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 
 from app.auth.jwt import COOKIE_NAME, decode_session_token
+from app.auth.sessions import active_session
 from app.db import SessionLocal
 from app.models import User
 from app.permissions import PRESENCE_VIEW
@@ -79,6 +80,8 @@ def _authenticate(db, token: str | None) -> User | None:
         cutoff = int(user.session_valid_after.replace(tzinfo=UTC).timestamp())
         if int(payload.get("iat", 0)) <= cutoff:
             return None
+    if active_session(db, payload.get("jti", "")) is None:  # per-device revocation
+        return None
     return user
 
 

@@ -971,6 +971,33 @@ td select.field-input {
   font-size: 12px;
 }
 
+/* ---- active sessions ---- */
+.session-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.session-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-left: 2px solid var(--border);
+  border-radius: 2px;
+}
+.session-device {
+  font-weight: 600;
+  color: var(--ink);
+}
+.session-current {
+  margin-left: 8px;
+  font-size: 10px;
+  letter-spacing: var(--track-label);
+  color: var(--green);
+}
+
 /* ---- bulk action bar ---- */
 .bulkbar {
   display: flex;
