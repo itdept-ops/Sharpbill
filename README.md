@@ -11,7 +11,11 @@ identity, a real database-backed **roles + permissions** system, a **live presen
 > **Scope:** built to be *run*, not just browsed. AWS deployment is intentionally **not** wired up —
 > everything here runs locally on Docker. `deploy/` holds production reference files only.
 
-![Landing](docs/img/landing.png)
+> 🤖 **Built solo with a fleet of adversarial AI agents** — a real multi-agent SDLC that caught
+> genuine privilege-escalation bugs in this very RBAC. The story, with the actual bugs, is in
+> **[CASE_STUDY.md](CASE_STUDY.md)**.
+
+![Kingfisher console — a tour of the access-control console](docs/img/demo.gif)
 
 ---
 
