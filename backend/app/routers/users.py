@@ -5,7 +5,7 @@ from datetime import UTC, datetime
 from fastapi import APIRouter, Depends, Query, Response
 from sqlalchemy import Select, func, or_, select
 from sqlalchemy.exc import SQLAlchemyError
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, selectinload
 
 from app.auth.deps import get_current_user, require_permission
 from app.auth.sessions import revoke_all_for_user, revoke_session
@@ -120,7 +120,10 @@ def list_users(
 ) -> UserListOut:
     stmt = _filtered(search, role_id, status, online)
     total = db.scalar(select(func.count()).select_from(stmt.subquery())) or 0
-    users = list(db.scalars(stmt.limit(limit).offset(offset)))
+    # Eager-load identities here (the one multi-user serialization) so lazy loading doesn't N+1.
+    users = list(
+        db.scalars(stmt.options(selectinload(User.identities)).limit(limit).offset(offset))
+    )
     # Precise GPS is only shown to managers (users.manage) and to a user viewing themselves.
     can_loc = USERS_MANAGE in current.permission_keys
     return UserListOut(

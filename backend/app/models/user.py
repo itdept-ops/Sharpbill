@@ -35,7 +35,7 @@ class User(Base):
     is_active: Mapped[bool] = mapped_column(TINYINT(1), server_default=text("1"))
     is_approved: Mapped[bool] = mapped_column(TINYINT(1), server_default=text("1"))
     last_login_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=False))
-    last_seen_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=False))
+    last_seen_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=False), index=True)
     session_valid_after: Mapped[datetime | None] = mapped_column(DateTime(timezone=False))
     # Optional last-known location (only if the user opts in on login).
     last_latitude: Mapped[float | None] = mapped_column(Double)
@@ -56,8 +56,11 @@ class User(Base):
     )
 
     role: Mapped[Role] = relationship(lazy="selectin")
+    # Lazy (not selectin): identities are only needed when a User is serialized to UserOut, not on
+    # the per-request auth path (get_current_user loads the user for permission checks and never
+    # reads identities). Call sites that serialize many users eager-load it explicitly.
     identities: Mapped[list["UserIdentity"]] = relationship(  # noqa: F821
-        back_populates="user", cascade="all, delete-orphan", lazy="selectin"
+        back_populates="user", cascade="all, delete-orphan", lazy="select"
     )
     # Permissions granted directly to this user, on top of their role (RBAC + per-user grants).
     granted_permissions: Mapped[list[Permission]] = relationship(
