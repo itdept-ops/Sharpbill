@@ -1,0 +1,468 @@
+<title>Kingfisher CRM — Enterprise Standards Audit (2026-07-15)</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+  :root{
+    --bg:#f7f8fa; --panel:#fff; --panel2:#f0f2f5; --ink:#14171c; --muted:#5b6675;
+    --line:#e2e6ec; --accent:#0b7285; --accent2:#155e75;
+    --crit:#b3261e; --high:#c2410c; --med:#b7791f; --low:#3b6b4a; --ok:#2f855a;
+    --chip-crit:#fdecea; --chip-high:#fff1e6; --chip-med:#fdf6e3; --chip-low:#eaf5ee;
+    --code:#eef1f5;
+  }
+  @media (prefers-color-scheme: dark){
+    :root{
+      --bg:#0c0f13; --panel:#12161c; --panel2:#161b22; --ink:#e6edf3; --muted:#9aa7b4;
+      --line:#252c36; --accent:#4dd0c4; --accent2:#7fd1c4;
+      --crit:#ff6b5e; --high:#ff9d5c; --med:#e8c15a; --low:#77c98f; --ok:#5fd18a;
+      --chip-crit:#2a1512; --chip-high:#2a1a10; --chip-med:#241f10; --chip-low:#12211a;
+      --code:#0e1319;
+    }
+  }
+  :root[data-theme="light"]{
+    --bg:#f7f8fa; --panel:#fff; --panel2:#f0f2f5; --ink:#14171c; --muted:#5b6675;
+    --line:#e2e6ec; --accent:#0b7285; --crit:#b3261e; --high:#c2410c; --med:#b7791f; --low:#3b6b4a; --ok:#2f855a;
+    --chip-crit:#fdecea; --chip-high:#fff1e6; --chip-med:#fdf6e3; --chip-low:#eaf5ee; --code:#eef1f5;
+  }
+  :root[data-theme="dark"]{
+    --bg:#0c0f13; --panel:#12161c; --panel2:#161b22; --ink:#e6edf3; --muted:#9aa7b4;
+    --line:#252c36; --accent:#4dd0c4; --crit:#ff6b5e; --high:#ff9d5c; --med:#e8c15a; --low:#77c98f; --ok:#5fd18a;
+    --chip-crit:#2a1512; --chip-high:#2a1a10; --chip-med:#241f10; --chip-low:#12211a; --code:#0e1319;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);
+    font:15px/1.55 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif}
+  .wrap{max-width:1080px;margin:0 auto;padding:32px 20px 80px}
+  h1{font-size:26px;margin:0 0 4px;letter-spacing:-.01em}
+  h2{font-size:19px;margin:38px 0 12px;padding-bottom:6px;border-bottom:1px solid var(--line)}
+  h3{font-size:15px;margin:22px 0 8px}
+  .sub{color:var(--muted);font-size:13px;margin:0 0 4px}
+  .grade-hero{display:flex;gap:18px;align-items:center;flex-wrap:wrap;margin:20px 0;
+    background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:18px 22px}
+  .grade-badge{font-size:44px;font-weight:800;line-height:1;padding:6px 18px;border-radius:12px;
+    background:var(--panel2);color:var(--med);border:1px solid var(--line)}
+  .grade-hero p{margin:0;font-size:14px}
+  .callout{background:var(--panel);border:1px solid var(--line);border-left:4px solid var(--accent);
+    border-radius:8px;padding:14px 18px;margin:14px 0}
+  .callout ol{margin:6px 0 0;padding-left:20px}
+  .callout li{margin:5px 0}
+  table{width:100%;border-collapse:collapse;font-size:13.5px;margin:10px 0}
+  .scroll{overflow-x:auto}
+  th,td{text-align:left;padding:8px 10px;border-bottom:1px solid var(--line);vertical-align:top}
+  th{color:var(--muted);font-weight:600;font-size:12px;text-transform:uppercase;letter-spacing:.03em}
+  .sev{font-weight:700;white-space:nowrap;font-size:12px;padding:2px 8px;border-radius:20px;display:inline-block}
+  .sev.critical{color:var(--crit);background:var(--chip-crit)}
+  .sev.high{color:var(--high);background:var(--chip-high)}
+  .sev.medium{color:var(--med);background:var(--chip-med)}
+  .sev.low{color:var(--low);background:var(--chip-low)}
+  .g{font-weight:800;font-size:15px}
+  .g.A{color:var(--ok)} .g.B{color:var(--low)} .g.C{color:var(--med)} .g.D{color:var(--high)} .g.F{color:var(--crit)}
+  code,.mono{font-family:ui-monospace,SFMono-Regular,"Cascadia Code",Consolas,monospace;font-size:12.5px}
+  .file{color:var(--accent);white-space:nowrap}
+  .find{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:16px 18px;margin:12px 0}
+  .find h4{margin:0 0 8px;font-size:15px;display:flex;gap:10px;align-items:baseline;flex-wrap:wrap}
+  .find .id{font-family:ui-monospace,monospace;color:var(--muted);font-size:12px}
+  .find dl{margin:8px 0 0;display:grid;grid-template-columns:112px 1fr;gap:4px 14px;font-size:13.5px}
+  .find dt{color:var(--muted);font-size:12px;text-transform:uppercase;letter-spacing:.03em;padding-top:2px}
+  .find dd{margin:0}
+  .tag{font-size:11px;color:var(--muted);border:1px solid var(--line);border-radius:5px;padding:1px 6px}
+  .pill{display:inline-block;font-size:11px;padding:1px 7px;border-radius:20px;background:var(--panel2);border:1px solid var(--line);color:var(--muted)}
+  .kv{background:var(--code);border-radius:6px;padding:2px 6px}
+  .meta-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin:10px 0}
+  .meta-grid div{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:10px 12px}
+  .meta-grid b{display:block;font-size:22px}
+  .meta-grid span{font-size:12px;color:var(--muted)}
+  a{color:var(--accent)}
+  .muted{color:var(--muted)}
+  .note{font-size:12.5px;color:var(--muted)}
+  hr{border:0;border-top:1px solid var(--line);margin:26px 0}
+</style>
+
+<div class="wrap">
+
+<h1>Kingfisher CRM — Enterprise Standards Audit</h1>
+<p class="sub">Access-control console · FastAPI + React + MySQL (local Docker) · Review date <b>2026-07-15</b> · Review-only, no source modified</p>
+<p class="sub">Scope: entire repo <span class="mono">C:\dev\kingfisher-crm</span> excluding <span class="mono">deploy/</span> and all AWS deployment concerns (per instruction). Branch as-checked-out (10 migrations, uncommitted UI-prefs work present).</p>
+
+<div class="grade-hero">
+  <div class="grade-badge">B−</div>
+  <div style="flex:1;min-width:260px">
+    <p><b>Overall: a genuinely well-engineered codebase with strong security fundamentals.</b> Every quality gate is green, the auth/RBAC core is careful and hard to fault, and there are <b>no Critical findings and nothing currently exploitable by an anonymous attacker</b>. The audit's value is in the margins: dependency hygiene, a handful of RBAC/reliability edge cases, and operational hardening. The B− reflects real, fixable gaps — not fragility.</p>
+  </div>
+</div>
+
+<h2>Executive summary</h2>
+<div class="callout">
+<ol>
+<li><b>One production dependency ships a known High CVE.</b> <span class="mono">react-router-dom 6.30.1</span> carries an open-redirect / XSS advisory (GHSA-2w69-qvjg-hvjx, CVSS 8.0); the fix is a <b>non-breaking</b> bump to 6.30.4. CI has no dependency-audit gate, which is why it (and vulnerable backend packages) went unnoticed. <span class="pill">FND-001</span></li>
+<li><b>The RBAC "who can act on whom" boundary is incomplete.</b> A non-admin delegate holding <span class="mono">users.manage</span> or <span class="mono">presence.kick</span> can deactivate, demote, and force-logout <em>every</em> admin except the single last one — and the last-admin guard itself is a non-locking check-then-act that two concurrent requests can race to zero admins. <span class="pill">FND-002</span> <span class="pill">FND-003</span></li>
+<li><b>Two config states can lock the whole org out</b>, and neither is guarded: disabling both OAuth providers, or having <span class="mono">signup_mode="closed"</span> block the <span class="mono">ADMIN_EMAILS</span> bootstrap. Recovery would require direct DB surgery. <span class="pill">FND-006</span> <span class="pill">FND-007</span></li>
+<li><b>The in-memory security state doesn't survive the shipped runtime.</b> Rate-limiting, the token-replay guard, and the presence hub are per-process, yet the prod image runs <span class="mono">--workers 2</span>; worse, in the compose topology every API request arrives from the web-proxy container, so per-IP limiting and the audit log's source IP collapse to one value. <span class="pill">FND-009</span> <span class="pill">FND-023</span></li>
+<li><b>Operational + observability hardening is thin:</b> unbounded per-request audit writes with no retention, no security response headers on the SPA, root containers, public API docs, and a WebSocket path that runs sync DB queries on the event loop and has no tests. Individually minor; together they're what turns a routine incident into a bad one. <span class="pill">FND-013</span> <span class="pill">FND-016</span> <span class="pill">FND-021</span></li>
+</ol>
+</div>
+
+<h2>Domain scorecard</h2>
+<div class="scroll">
+<table>
+<thead><tr><th>Domain</th><th>Grade</th><th>One-line rationale</th></tr></thead>
+<tbody>
+<tr><td>Security &amp; privacy</td><td><span class="g B">B−</span></td><td>Excellent auth core (server-side token verification, immutable-subject keying, alg pinning, durable revocation); loses ground on the admin-hierarchy gap, IP collapse, public docs, and session-PII exposure.</td></tr>
+<tr><td>Correctness &amp; reliability</td><td><span class="g C">C+</span></td><td>Last-admin TOCTOU, event-loop-blocking WebSocket, a bulk-action 500 path, and a no-op <span class="mono">online=false</span> filter sit on otherwise-sound logic.</td></tr>
+<tr><td>Architecture &amp; maintainability</td><td><span class="g A">A−</span></td><td>Clean layering, small focused modules, consistent error envelope, sensible seams. Very little to fault.</td></tr>
+<tr><td>Testing &amp; QA</td><td><span class="g B">B−</span></td><td>Strong backend HTTP-stack coverage on real migrations; but the WS subsystem, JWT-negative cases, and config guards are untested, and e2e is smoke-only.</td></tr>
+<tr><td>Performance &amp; scalability</td><td><span class="g C">C+</span></td><td>Two DB writes on the common request path, an unbounded audit table, no <span class="mono">last_seen_at</span> index, and unbounded CSV/analytics endpoints.</td></tr>
+<tr><td>Data &amp; persistence</td><td><span class="g B">B</span></td><td>Disciplined Alembic migrations with real downgrades and FK cascades; dinged by a 0002-downgrade truncation risk, no retention policy, and dual-clock timestamps.</td></tr>
+<tr><td>Operations &amp; deployability</td><td><span class="g C">C+</span></td><td>Root containers, no SPA security headers, no prod-image or dependency-audit CI, per-worker in-memory state. 12-factor config/secrets split is otherwise good.</td></tr>
+<tr><td>Frontend, UX &amp; accessibility</td><td><span class="g B">B−</span></td><td>Solid TS, code-split routes, <span class="mono">:focus-visible</span> and reduced-motion respected; but the edit modal isn't an accessible dialog, contrast/labels have gaps, and sign-in can fail silently.</td></tr>
+<tr><td>Dependencies &amp; supply chain</td><td><span class="g C">C+</span></td><td>A prod High CVE, backend advisories on the crypto/auth boundary, no lockfile/hashes, and no CI audit gate.</td></tr>
+<tr><td>Documentation &amp; DX</td><td><span class="g B">B</span></td><td>Unusually good READMEs and inline rationale; several concrete drifts (login page, migration count, admin-emails semantics, test count).</td></tr>
+</tbody>
+</table>
+</div>
+
+<h2>Findings register</h2>
+<p class="note">Ranked by real risk, not category count. Every finding was read at source (<span class="mono">file:line</span>). 15 findings carry an independently-verified <b>CONFIRMED</b> verdict from the adversarial refuter pass; the remainder were adjudicated by the reviewer against a full independent read of the codebase after the multi-agent verification pass was cut short by a session limit (see Methodology → Coverage). Severities reflect that the app currently runs <b>locally on Docker with no public exposure</b>; several findings are labelled as latent-on-exposure.</p>
+
+<h3>High</h3>
+
+<div class="find">
+<h4><span class="id">FND-001</span> <span class="sev high">HIGH</span> Known-vulnerable production dependency: <span class="mono">react-router-dom 6.30.1</span></h4>
+<dl>
+<dt>Domain</dt><dd>Dependencies &amp; supply chain · <span class="tag">OWASP A06:2021 Vulnerable Components</span></dd>
+<dt>Evidence</dt><dd><span class="file">frontend/package.json:17</span> pins <span class="mono">react-router-dom 6.30.1</span>. <span class="mono">npm audit</span> reports it (and its <span class="mono">react-router</span> / <span class="mono">@remix-run/router</span> deps) as <b>High</b>: open-redirect / XSS (GHSA-2w69-qvjg-hvjx, CVSS 8.0) plus GHSA-9jcx-v3wj-wh4m and GHSA-2j2x-hqr9-3h42. The app uses router redirects (<span class="file">frontend/src/pages/LoginPage.tsx:14</span>, <span class="mono">&lt;Navigate to={from}&gt;</span>).</dd>
+<dt>Why it matters</dt><dd>A shipped production dependency with a live High advisory and a public exploit class. Direct in-app reachability is limited (the redirect target comes from internal route state, not attacker-controlled URL params), but that is defense-in-depth, not a reason to run a known-vulnerable version when the fix is free.</dd>
+<dt>Fix direction</dt><dd>Bump to <span class="mono">react-router-dom 6.30.4</span> (non-breaking, semver-minor) and add an <span class="mono">npm audit --audit-level=high</span> gate to CI. See <span class="mono">fix-packs/FND-001</span>.</dd>
+<dt>Verdict</dt><dd><span class="pill">tool-backed (npm audit)</span></dd>
+</dl>
+</div>
+
+<h3>Medium</h3>
+
+<div class="find">
+<h4><span class="id">FND-002</span> <span class="sev medium">MEDIUM</span> A non-admin delegate can disable, demote, and kick every admin but the last</h4>
+<dl>
+<dt>Domain</dt><dd>Security: Authorization / RBAC · <span class="tag">OWASP A01:2021 Broken Access Control</span> <span class="pill">CONFIRMED</span></dd>
+<dt>Evidence</dt><dd><span class="file">backend/app/routers/users.py:313</span> (update_status), <span class="file">:257</span> (update_role), <span class="file">:161</span> (bulk_action), <span class="file">:342</span> (kick_user). None checks target seniority — only self (<span class="mono">user_id==actor.id</span>) and <span class="mono">_active_admin_count()&lt;=1</span>. The seeded non-admin <span class="mono">Manager</span> role holds <span class="mono">presence.kick</span> (<span class="file">seed_demo.py:56</span>), so <span class="mono">kick_user</span> — which has <em>no</em> admin protection and no last-admin floor at all — is reachable against admins by an ordinary Manager.</dd>
+<dt>Why it matters</dt><dd>Separation-of-duties inversion: a mid-tier operator can lock out or sign out the entire admin team down to the single surviving admin. It is not self-escalation, but it is the precondition that (with FND-003) drives active admins to zero.</dd>
+<dt>Fix direction</dt><dd>Add a target-seniority guard to update_status / update_role / bulk_action / kick_user: a non-admin actor may not act on a target whose effective permissions aren't a subset of the actor's (and never on an <span class="mono">admin</span>-role target). Keep the existing count guard as a backstop.</dd>
+</dl>
+</div>
+
+<div class="find">
+<h4><span class="id">FND-003</span> <span class="sev medium">MEDIUM</span> Last-admin protection is a non-locking check-then-act (TOCTOU)</h4>
+<dl>
+<dt>Domain</dt><dd>Correctness / RBAC · <span class="tag">CWE-367 TOCTOU</span> <span class="pill">CONFIRMED</span></dd>
+<dt>Evidence</dt><dd><span class="file">backend/app/routers/users.py:47</span> <span class="mono">_active_admin_count</span> is a plain <span class="mono">SELECT COUNT(*)</span> with no <span class="mono">FOR UPDATE</span>. Each guard reads the count then mutates a <em>different</em> row (update_status :324→:326, update_role :276→:278, bulk :192→:195). Sync endpoints run in the threadpool on separate connections at InnoDB REPEATABLE READ, so two concurrent deactivations of two distinct admins both observe count==2, both pass <span class="mono">&lt;=1</span>, both commit → 0 admins. Per-item safety inside a single <span class="mono">/bulk</span> call (re-count each iteration) does not extend across concurrent requests.</dd>
+<dt>Why it matters</dt><dd>The only defense against a permanent, self-inflicted admin lockout can be defeated by two well-timed requests; recovery needs direct DB access. Latent at local scale, bites under any concurrency.</dd>
+<dt>Fix direction</dt><dd>Make count-and-mutate atomic: <span class="mono">SELECT … FOR UPDATE</span> the admin rows in the same transaction, or a single conditional <span class="mono">UPDATE … WHERE (SELECT COUNT admins)&gt;1</span> checking rowcount. A partial unique index / trigger asserting ≥1 active admin is a defense-in-depth backstop.</dd>
+</dl>
+</div>
+
+<div class="find">
+<h4><span class="id">FND-004</span> <span class="sev medium">MEDIUM</span> A <span class="mono">roles.manage</span> delegate can rewrite or delete custom roles more privileged than themselves</h4>
+<dl>
+<dt>Domain</dt><dd>Security: Privilege / RBAC · <span class="tag">OWASP A01</span></dd>
+<dt>Evidence</dt><dd><span class="file">backend/app/routers/roles.py:140</span> (update_role) / <span class="file">:175</span> (delete_role). <span class="mono">_guard_grantable</span> only checks the <em>new</em> permission set is a subset of the actor's — it does not consider the role's <em>current</em> privilege. A non-admin <span class="mono">roles.manage</span> holder can strip a high-privilege custom role down to fewer/empty permissions (mass-revoking from every holder) or delete any unused custom role, regardless of how privileged it is.</dd>
+<dt>Why it matters</dt><dd>Destructive, org-wide access change by an actor who doesn't hold those permissions — a separation-of-duties gap on the RBAC admin surface.</dd>
+<dt>Fix direction</dt><dd>Require the actor to hold (be a superset of) the role's <em>existing</em> permission set before allowing edit/delete of a non-system role, in addition to the grant-subset check on the new set.</dd>
+</dl>
+</div>
+
+<div class="find">
+<h4><span class="id">FND-005</span> <span class="sev medium">MEDIUM</span> Nobody — not even an admin — can attach a runtime-created custom permission to a role</h4>
+<dl>
+<dt>Domain</dt><dd>Correctness / RBAC (functional defect)</dd>
+<dt>Evidence</dt><dd><span class="file">backend/app/routers/roles.py:62</span> <span class="mono">_guard_grantable</span> computes <span class="mono">extra = keys − actor.permission_keys</span> and 403s if non-empty, with <b>no admin bypass</b> (unlike <span class="file">users.py:303</span> which has <span class="mono">if not _is_admin(actor)</span>). An admin's <span class="mono">permission_keys</span> is only their role's built-ins ∪ direct grants; a freshly-created custom permission is attached to no role, so it is <em>not</em> in any admin's set — and attaching it via create_role/update_role 403s. The docstring's assumption ("a full admin holds every permission") is false for custom permissions.</dd>
+<dt>Why it matters</dt><dd>Breaks the product's advertised core workflow ("admins create new permissions and roles and assign them"). A custom permission can be created but never wired to a role through the API.</dd>
+<dt>Fix direction</dt><dd>Add the same <span class="mono">if not _is_admin(actor)</span> bypass to <span class="mono">_guard_grantable</span> that <span class="mono">set_user_permissions</span> already uses, and add a test that an admin can create-then-attach a custom permission.</dd>
+</dl>
+</div>
+
+<div class="find">
+<h4><span class="id">FND-006</span> <span class="sev medium">MEDIUM</span> <span class="mono">signup_mode="closed"</span> blocks the <span class="mono">ADMIN_EMAILS</span> bootstrap → recovery lockout</h4>
+<dl>
+<dt>Domain</dt><dd>Correctness: business logic <span class="pill">CONFIRMED</span></dd>
+<dt>Evidence</dt><dd><span class="file">backend/app/auth/service.py:113</span> raises <span class="mono">SIGNUP_CLOSED</span> before the admin-bootstrap block (<span class="mono">:116</span>). A first-login identity listed in <span class="mono">ADMIN_EMAILS</span> is rejected when signup is closed, even though it is a trusted, provider-verified identity meant to seed/recover administration.</dd>
+<dt>Why it matters</dt><dd>Inverts the trusted-identity semantics: the one path meant to guarantee an admin can always get in is the one closed mode blocks. Combined with FND-007/FND-003 it forms a family of lockout footguns.</dd>
+<dt>Fix direction</dt><dd>Evaluate <span class="mono">_admin_bootstrap(ident)</span> before the closed-mode gate, so a configured admin email provisions regardless of signup mode.</dd>
+</dl>
+</div>
+
+<div class="find">
+<h4><span class="id">FND-007</span> <span class="sev medium">MEDIUM</span> Both OAuth providers can be disabled, locking everyone out of authentication</h4>
+<dl>
+<dt>Domain</dt><dd>Correctness: business logic</dd>
+<dt>Evidence</dt><dd><span class="file">backend/app/routers/settings.py:35</span> (update_settings) accepts <span class="mono">allow_google=false</span> and <span class="mono">allow_microsoft=false</span> together with no invariant. With both off, every non-dev login path 403s at <span class="file">service.py:70</span> — including admins (dev login is local-only).</dd>
+<dt>Why it matters</dt><dd>A single settings save can make the app unauthenticatable; recovery requires DB access or a local dev-login environment.</dd>
+<dt>Fix direction</dt><dd>Reject a settings update that would leave zero enabled providers (validate the resulting state, not just the delta).</dd>
+</dl>
+</div>
+
+<div class="find">
+<h4><span class="id">FND-008</span> <span class="sev medium">MEDIUM</span> Microsoft admin bootstrap trusts an unverified, mutable email/UPN claim</h4>
+<dl>
+<dt>Domain</dt><dd>Security: Authentication · <span class="tag">OWASP A07:2021</span></dd>
+<dt>Evidence</dt><dd><span class="file">backend/app/auth/microsoft.py:47</span> derives <span class="mono">email</span> from <span class="mono">email</span> or <span class="mono">preferred_username</span> with no verification flag (Google enforces <span class="mono">email_verified</span>; Microsoft has no equivalent here). <span class="file">service.py:46</span> then bootstraps admin if that email is in <span class="mono">ADMIN_EMAILS</span> and the tenant matches. <span class="mono">preferred_username</span>/UPN is tenant-mutable.</dd>
+<dt>Why it matters</dt><dd>Admin provisioning keys on a claim the identity provider does not assert as verified. Exploitability is gated by control of a matching UPN inside your admin tenant (a high bar), but it's a trust-boundary weakness on the most privileged path.</dd>
+<dt>Fix direction</dt><dd>Bootstrap admin on the immutable <span class="mono">oid</span> (allowlist of object-ids) rather than an email claim, or require an explicit verified-email signal.</dd>
+</dl>
+</div>
+
+<div class="find">
+<h4><span class="id">FND-009</span> <span class="sev medium">MEDIUM</span> Per-IP rate-limit &amp; audit source-IP collapse to the proxy container IP</h4>
+<dl>
+<dt>Domain</dt><dd>Security: abuse resistance / observability <span class="pill">CONFIRMED</span></dd>
+<dt>Evidence</dt><dd><span class="file">backend/app/main.py:73</span> keys buckets on <span class="mono">request.client.host</span> (socket peer), and <span class="file">request_logging.py:29</span> deliberately ignores <span class="mono">X-Forwarded-For</span>. In the compose topology the browser hits the Vite/web container which proxies <span class="mono">/api</span> to <span class="mono">api:8000</span> (<span class="file">vite.config.ts:32</span>), so every API request's socket peer is the <em>web container's</em> IP. All users share one rate-limit bucket and one logged IP.</dd>
+<dt>Why it matters</dt><dd>The strict login limiter and the audit trail's source IP — both advertised protections — are effectively neutralized in the shipped local topology (one user's flood throttles everyone; the log can't attribute source).</dd>
+<dt>Fix direction</dt><dd>Terminate client traffic at a trusted proxy and enable Starlette's <span class="mono">ProxyHeadersMiddleware</span> with an explicit trusted-hosts list so <span class="mono">request.client.host</span> reflects the real client; document the requirement. (Keep XFF distrust for untrusted ingress.)</dd>
+</dl>
+</div>
+
+<div class="find">
+<h4><span class="id">FND-010</span> <span class="sev medium">MEDIUM</span> Interactive API docs &amp; full OpenAPI schema are public to anonymous users</h4>
+<dl>
+<dt>Domain</dt><dd>Error handling / info disclosure · <span class="tag">OWASP A05:2021 Misconfiguration</span></dd>
+<dt>Evidence</dt><dd><span class="file">backend/app/main.py:16</span> sets <span class="mono">docs_url="/api/docs"</span> and <span class="mono">openapi_url="/api/openapi.json"</span> with no auth; <span class="file">request_logging.py:12</span> also excludes them from the audit log.</dd>
+<dt>Why it matters</dt><dd>For an access-control console, the full route/permission map is handed to any anonymous visitor and isn't recorded. No data leak, but it widens reconnaissance and contradicts the app's own tight posture.</dd>
+<dt>Fix direction</dt><dd>Gate docs/openapi behind auth (or disable in non-local), or at minimum behind a permission; remove them from the audit-skip list if kept.</dd>
+</dl>
+</div>
+
+<div class="find">
+<h4><span class="id">FND-011</span> <span class="sev medium">MEDIUM</span> Session IPs &amp; user-agents exposed to any <span class="mono">users.read</span> holder</h4>
+<dl>
+<dt>Domain</dt><dd>Security: session &amp; privacy <span class="pill">CONFIRMED</span></dd>
+<dt>Evidence</dt><dd><span class="file">backend/app/routers/users.py:362</span> <span class="mono">list_user_sessions</span> is gated on <span class="mono">users.read</span> and returns every row's <span class="mono">ip</span> + <span class="mono">user_agent</span> (<span class="file">schemas/auth.py:33</span> SessionOut). The app deliberately gates GPS behind the stricter <span class="mono">users.manage</span>/self, but a coarser location signal (IP) + device fingerprint is exposed to the broader <span class="mono">users.read</span> audience.</dd>
+<dt>Why it matters</dt><dd>Inconsistent privacy model — the same directory role that is denied precise GPS is handed per-device IPs and UA strings for every user.</dd>
+<dt>Fix direction</dt><dd>Gate other users' session IP/UA behind <span class="mono">users.manage</span> (or self), matching the GPS rule; or mask the IP for <span class="mono">users.read</span>-only viewers.</dd>
+</dl>
+</div>
+
+<div class="find">
+<h4><span class="id">FND-012</span> <span class="sev medium">MEDIUM</span> GPS-derived location &amp; timezone bypass the <span class="mono">include_location</span> privacy control</h4>
+<dl>
+<dt>Domain</dt><dd>Security: session &amp; privacy <span class="pill">CONFIRMED</span></dd>
+<dt>Evidence</dt><dd><span class="file">backend/app/routers/auth.py:136</span> writes the raw GPS into <span class="mono">last_latitude/longitude</span> <em>and</em> reverse-geocodes it into <span class="mono">user.location</span> / <span class="mono">user.timezone</span> (<span class="file">:144-147</span>). <span class="mono">UserOut.from_user</span> strips lat/long when <span class="mono">include_location=False</span> (<span class="file">schemas/user.py:82</span>) but <span class="mono">location</span>/<span class="mono">timezone</span> are always serialized — and included in CSV export.</dd>
+<dt>Why it matters</dt><dd>The city/region derived from opt-in GPS leaks to every <span class="mono">users.read</span> viewer and the CSV even though the precise coordinates are correctly gated — a partial defeat of the app's own location-privacy model. (Note: users can also self-edit these fields, so they aren't purely GPS-derived; the leak is still real when GPS populated them.)</dd>
+<dt>Fix direction</dt><dd>Either treat GPS-derived <span class="mono">location</span>/<span class="mono">timezone</span> as location-sensitive (gate them with the same <span class="mono">include_location</span> rule) or store the derived label separately from the user-editable field.</dd>
+</dl>
+</div>
+
+<div class="find">
+<h4><span class="id">FND-013</span> <span class="sev medium">MEDIUM</span> Synchronous per-request audit INSERT + redundant JWT decode, into an unbounded table</h4>
+<dl>
+<dt>Domain</dt><dd>Performance &amp; scalability <span class="pill">CONFIRMED</span></dd>
+<dt>Evidence</dt><dd><span class="file">backend/app/main.py:51</span> runs <span class="mono">record_request</span> on nearly every response; <span class="file">request_logging.py:47</span> opens a fresh session, re-decodes the JWT (already decoded in <span class="mono">get_current_user</span>), and commits an INSERT. Combined with <span class="mono">_touch</span>'s presence write (<span class="file">deps.py:63</span>) that's up to two DB writes per request. <span class="mono">request_logs</span> has no retention/pruning and its indexes don't cover the log-viewer's actual filters (<span class="file">logs.py:24</span>).</dd>
+<dt>Why it matters</dt><dd>Write amplification on the hot path and an append-only table that grows without bound — a latent operational time-bomb and a steady per-request cost.</dd>
+<dt>Fix direction</dt><dd>Batch/async the audit write (queue + background flush), reuse the already-decoded principal, add a retention job (or partition), and index <span class="mono">request_logs</span> for its real query shape.</dd>
+</dl>
+</div>
+
+<div class="find">
+<h4><span class="id">FND-014</span> <span class="sev medium">MEDIUM</span> Unbounded CSV export &amp; uncapped analytics endpoint</h4>
+<dl>
+<dt>Domain</dt><dd>Performance / DoS <span class="pill">CONFIRMED (CSV)</span></dd>
+<dt>Evidence</dt><dd><span class="file">backend/app/routers/users.py:113</span> <span class="mono">export_users_csv</span> materializes the entire filtered user set into memory with no limit/offset (unlike the paginated list). <span class="file">dashboard.py:36</span> <span class="mono">/dashboard/analytics</span> runs four aggregate scans and is only protected by the loose 600/min global bucket.</dd>
+<dt>Why it matters</dt><dd>One <span class="mono">users.read</span> holder can force a full-table load or hammer the aggregate queries, saturating the single DB — no per-endpoint cost control.</dd>
+<dt>Fix direction</dt><dd>Stream the CSV (server-side cursor / chunked rows) with a hard row ceiling; add a tighter per-user throttle or short cache to the analytics endpoint.</dd>
+</dl>
+</div>
+
+<div class="find">
+<h4><span class="id">FND-015</span> <span class="sev medium">MEDIUM</span> No index on <span class="mono">users.last_seen_at</span> — online-count full-scans every dashboard load</h4>
+<dl>
+<dt>Domain</dt><dd>Performance &amp; scalability</dd>
+<dt>Evidence</dt><dd><span class="file">backend/app/models/user.py:38</span> declares <span class="mono">last_seen_at</span> with no index; <span class="file">dashboard.py:29</span> and <span class="file">:81</span>, plus <span class="file">users.py:80</span> (online filter) and <span class="file">presence.py:19</span>, all filter/COUNT on <span class="mono">last_seen_at &gt;= cutoff</span>.</dd>
+<dt>Why it matters</dt><dd>Every dashboard/presence read scans the users table; cost grows linearly with the directory and the dashboard is the landing page.</dd>
+<dt>Fix direction</dt><dd>Add an index on <span class="mono">last_seen_at</span> (and consider a composite with <span class="mono">is_active</span>) via a migration.</dd>
+</dl>
+</div>
+
+<div class="find">
+<h4><span class="id">FND-016</span> <span class="sev medium">MEDIUM</span> WebSocket presence handler runs sync DB queries on the event loop and doesn't throttle frames</h4>
+<dl>
+<dt>Domain</dt><dd>Correctness &amp; reliability <span class="pill">CONFIRMED</span></dd>
+<dt>Evidence</dt><dd><span class="file">backend/app/routers/ws.py:110</span> — <span class="mono">presence_ws</span> is <span class="mono">async</span> but calls synchronous <span class="mono">SessionLocal</span> / <span class="mono">db.get</span> / <span class="mono">active_session</span> directly (connect <span class="file">:112</span>, and every ≤30s re-auth <span class="file">:136</span>) with no <span class="mono">run_in_threadpool</span>. Each query blocks the worker's single event loop; <span class="file">:133</span> reads frames with no rate limit, so a client can also spam frames to force re-auth churn.</dd>
+<dt>Why it matters</dt><dd>Top reliability risk: a slow query or a chatty/malicious client stalls <em>all</em> concurrent HTTP + WS work on that worker. Latent at local scale, acute under load or with 2 workers.</dd>
+<dt>Fix direction</dt><dd>Offload the DB work with <span class="mono">run_in_threadpool</span> (or an async driver), and rate-limit inbound frames / cap re-auth frequency.</dd>
+</dl>
+</div>
+
+<div class="find">
+<h4><span class="id">FND-017</span> <span class="sev medium">MEDIUM</span> <span class="mono">bulk_action</span> commit-time DB errors escape the handler as a 500 with silent partial application</h4>
+<dl>
+<dt>Domain</dt><dd>Correctness &amp; reliability</dd>
+<dt>Evidence</dt><dd><span class="file">backend/app/routers/users.py:184-213</span> loops committing per item inside <span class="mono">try/except ApiError</span> only. A <span class="mono">db.commit()</span> that raises <span class="mono">OperationalError</span> (deadlock / lock-wait) or <span class="mono">IntegrityError</span> is not caught, aborting the batch with a 500 after some items already committed — and the response never reports which.</dd>
+<dt>Why it matters</dt><dd>Non-atomic bulk operation with an unreported partial state on infrastructure errors; the operator can't tell what applied.</dd>
+<dt>Fix direction</dt><dd>Catch <span class="mono">SQLAlchemyError</span> per item (rollback + record a failed result) alongside <span class="mono">ApiError</span>, so the batch always returns a complete per-id outcome.</dd>
+</dl>
+</div>
+
+<div class="find">
+<h4><span class="id">FND-018</span> <span class="sev medium">MEDIUM</span> WebSocket presence has no connection cap and leaks dead connections</h4>
+<dl>
+<dt>Domain</dt><dd>WebSocket &amp; presence integrity</dd>
+<dt>Evidence</dt><dd><span class="file">backend/app/routers/ws.py:39</span> — <span class="mono">PresenceHub</span> appends every connection to an unbounded list with no per-user or global cap; it also bypasses the rate-limit/audit middleware (WS upgrades aren't <span class="mono">/api</span>-limited). Half-open connections are only pruned on a failed <span class="mono">send</span> during broadcast (<span class="file">:59</span>), so idle dead sockets linger.</dd>
+<dt>Why it matters</dt><dd>An authenticated client can open many connections to grow memory/roster unbounded; no backpressure.</dd>
+<dt>Fix direction</dt><dd>Cap connections per user and globally; add a periodic ping/idle-reaper; count WS upgrades against a limiter.</dd>
+</dl>
+</div>
+
+<div class="find">
+<h4><span class="id">FND-019</span> <span class="sev medium">MEDIUM</span> Migration 0002 downgrade can truncate/fail on long custom role names</h4>
+<dl>
+<dt>Domain</dt><dd>Data &amp; persistence · <span class="tag">migration reversibility</span></dd>
+<dt>Evidence</dt><dd><span class="file">backend/alembic/versions/0002_rbac_presence_kick.py</span> converts the <span class="mono">users.role</span> String(20) column into the RBAC role FK on upgrade; the downgrade writes role <em>names</em> back into a <span class="mono">String(20)</span>. Role names allow up to 50 chars (<span class="file">models/role.py:23</span>), so a longer custom role name truncates or errors on downgrade.</dd>
+<dt>Why it matters</dt><dd>A reversible-migration guarantee that silently corrupts data for a realistic input; only bites on downgrade, but that's exactly when you least want surprises.</dd>
+<dt>Fix direction</dt><dd>Downgrade should map unknown/over-length role names to a safe default (e.g. <span class="mono">"user"</span>) or widen the restored column; document that custom roles don't round-trip.</dd>
+</dl>
+</div>
+
+<div class="find">
+<h4><span class="id">FND-020</span> <span class="sev medium">MEDIUM</span> Vulnerable backend packages on the auth/crypto boundary; no lockfile or hashes</h4>
+<dl>
+<dt>Domain</dt><dd>Dependencies &amp; supply chain · <span class="tag">OWASP A06</span> <span class="pill">tool-backed (pip-audit)</span></dd>
+<dt>Evidence</dt><dd><span class="mono">pip-audit</span> on <span class="file">backend/requirements.txt</span>: <span class="mono">PyJWT 2.10.1</span> (signs the session JWT) → PYSEC-2026-120/175-179 (fix 2.13.0); <span class="mono">cryptography 44.0.2</span> → PYSEC-2026-35/2141 + GHSA-537c-gmf6-5ccf; <span class="mono">requests 2.32.3</span> → PYSEC-2026-1872/2275; <span class="mono">starlette 0.46.2</span> (FastAPI core) → 7 advisories. Direct deps are version-pinned but there is no lockfile / hash pinning, so the transitive closure (incl. Starlette) floats.</dd>
+<dt>Why it matters</dt><dd>Known advisories sit on the token-verification trust boundary; without a lockfile builds aren't reproducible and transitive drift is invisible.</dd>
+<dt>Fix direction</dt><dd>Patch to fixed versions, adopt a hash-pinned lock (<span class="mono">pip-compile</span> / <span class="mono">uv</span>), and add <span class="mono">pip-audit</span> to CI. See <span class="mono">fix-packs/FND-020</span>.</dd>
+</dl>
+</div>
+
+<div class="find">
+<h4><span class="id">FND-021</span> <span class="sev medium">MEDIUM</span> SPA served with no security response headers</h4>
+<dl>
+<dt>Domain</dt><dd>Frontend / Ops · <span class="tag">OWASP A05</span></dd>
+<dt>Evidence</dt><dd><span class="file">frontend/nginx.conf:1-9</span> serves the built SPA with only <span class="mono">try_files</span> — no CSP, <span class="mono">X-Frame-Options</span>, <span class="mono">X-Content-Type-Options</span>, <span class="mono">Referrer-Policy</span>, or <span class="mono">Permissions-Policy</span>. The app also loads an external Google GSI script (<span class="file">frontend/index.html:34</span>) with no CSP to constrain it.</dd>
+<dt>Why it matters</dt><dd>No clickjacking, MIME-sniffing, or script-origin defenses on the served app. (Prod edge TLS is Caddy, out of scope, but the nginx image is in scope and ships headerless.)</dd>
+<dt>Fix direction</dt><dd>Add a hardened header block to <span class="mono">nginx.conf</span> (frame-deny, nosniff, referrer-policy, a CSP allowing self + <span class="mono">accounts.google.com</span>).</dd>
+</dl>
+</div>
+
+<div class="find">
+<h4><span class="id">FND-022</span> <span class="sev medium">MEDIUM</span> CI builds no prod image and has no dependency-audit gate</h4>
+<dl>
+<dt>Domain</dt><dd>Operations &amp; deployability · <span class="tag">supply chain</span></dd>
+<dt>Evidence</dt><dd><span class="file">.github/workflows/ci.yml</span> runs lint/tests/<span class="mono">vite build</span> and an e2e compose (dev stages) but never builds either Dockerfile's <span class="mono">prod</span> stage, and runs neither <span class="mono">npm audit</span> nor <span class="mono">pip-audit</span>. This is why FND-001/FND-020 persisted unflagged.</dd>
+<dt>Why it matters</dt><dd>The artifact that ships (prod image) is never built in CI, and known-vulnerable dependencies aren't caught.</dd>
+<dt>Fix direction</dt><dd>Add a <span class="mono">docker build --target prod</span> step for both images and an <span class="mono">npm audit</span>/<span class="mono">pip-audit</span> gate (fail on High).</dd>
+</dl>
+</div>
+
+<div class="find">
+<h4><span class="id">FND-023</span> <span class="sev medium">MEDIUM</span> Prod containers run as root; per-worker in-memory security state</h4>
+<dl>
+<dt>Domain</dt><dd>Operations &amp; deployability · <span class="tag">CIS Docker</span></dd>
+<dt>Evidence</dt><dd><span class="file">backend/Dockerfile</span> / <span class="file">frontend/Dockerfile</span> have no <span class="mono">USER</span> directive (all stages run as root). The backend prod stage hardcodes <span class="mono">--workers 2</span> (<span class="file">backend/Dockerfile:24</span>), but the rate-limiter (<span class="file">ratelimit.py</span>), replay guard (<span class="file">replay.py</span>), and presence hub (<span class="file">ws.py:26</span>) are per-process — so limits double, replay isn't shared, and the presence roster splits across workers.</dd>
+<dt>Why it matters</dt><dd>Root containers widen blast radius; and the shipped 2-worker config silently weakens three security/consistency mechanisms that are documented as if global.</dd>
+<dt>Fix direction</dt><dd>Add a non-root <span class="mono">USER</span> to both images; move rate-limit/replay/presence to shared state (Redis) or run a single worker until then, and document the constraint.</dd>
+</dl>
+</div>
+
+<div class="find">
+<h4><span class="id">FND-024</span> <span class="sev medium">MEDIUM</span> Edit-user modal is not an accessible dialog</h4>
+<dl>
+<dt>Domain</dt><dd>Accessibility · <span class="tag">WCAG 2.2 — 2.4.3 Focus Order, 2.1.2 No Keyboard Trap, 4.1.2 Name/Role/Value</span></dd>
+<dt>Evidence</dt><dd><span class="file">frontend/src/components/UserEditModal.tsx:110</span> renders a plain <span class="mono">&lt;div class="modal"&gt;</span> — no <span class="mono">role="dialog"</span>/<span class="mono">aria-modal</span>, no focus trap, no Escape-to-close, no focus-on-open or focus-restore-on-close. Click-outside closes it but keyboard/SR users get no dialog semantics or focus management.</dd>
+<dt>Why it matters</dt><dd>The primary admin editing surface is not operable by keyboard/screen-reader users to AA.</dd>
+<dt>Fix direction</dt><dd>Add dialog role + <span class="mono">aria-modal</span>, trap focus within the panel, move focus in on open and restore on close, and wire Escape to <span class="mono">onClose</span>.</dd>
+</dl>
+</div>
+
+<div class="find">
+<h4><span class="id">FND-025</span> <span class="sev medium">MEDIUM</span> WebSocket presence subsystem has zero automated tests</h4>
+<dl>
+<dt>Domain</dt><dd>Testing &amp; QA</dd>
+<dt>Evidence</dt><dd>No test exercises <span class="file">backend/app/routers/ws.py</span> (the suite covers HTTP routes; there is no <span class="mono">test_ws*</span>). <span class="mono">_authenticate</span> re-implements the full auth pipeline (decode → active/approved → epoch → session row) and the broadcast gates roster visibility on <span class="mono">can_view</span> — all unguarded by tests.</dd>
+<dt>Why it matters</dt><dd>A re-implemented auth + authz path (the easiest place for the two to drift) has no regression net; FND-016/-018/-027 all live here.</dd>
+<dt>Fix direction</dt><dd>Add WS tests: unauthenticated close (1008), revoked-mid-session severance, and roster hidden from a non-<span class="mono">presence.view</span> connection.</dd>
+</dl>
+</div>
+
+<div class="find">
+<h4><span class="id">FND-026</span> <span class="sev medium">MEDIUM</span> No negative tests for JWT validation or the security config guards</h4>
+<dl>
+<dt>Domain</dt><dd>Testing &amp; QA</dd>
+<dt>Evidence</dt><dd>No test asserts <span class="file">auth/jwt.py:27</span> rejects a wrong-alg / missing-claim / expired / tampered token, and the pure validators in <span class="file">config.py:33</span> (secret strength), <span class="file">:40</span> (prod secure-cookie), <span class="file">:63</span> (dev-auth gate) have no unit tests despite being trivially testable.</dd>
+<dt>Why it matters</dt><dd>The crypto and the environment-gating guards are exactly the code whose silent regression would be catastrophic — and a green suite wouldn't catch it.</dd>
+<dt>Fix direction</dt><dd>Add negative JWT tests and unit tests for each config validator (including that dev-auth stays off outside <span class="mono">local</span>).</dd>
+</dl>
+</div>
+
+<div class="find">
+<h4><span class="id">FND-027</span> <span class="sev medium">MEDIUM</span> Silent sign-in failure &amp; no WebSocket reconnect</h4>
+<dl>
+<dt>Domain</dt><dd>Frontend robustness · <span class="tag">WCAG 3.3</span></dd>
+<dt>Evidence</dt><dd><span class="file">frontend/src/pages/LoginPage.tsx:62</span> — if the external Google GSI script never loads, the retry loop simply gives up after 50 tries with no visible state; the user sees a blank sign-in area. <span class="file">frontend/src/presence/PresenceContext.tsx:86</span> — the presence WebSocket never reconnects after a drop, permanently degrading to 20s HTTP polling with no signal.</dd>
+<dt>Why it matters</dt><dd>The first is an onboarding dead-end with no error; the second is a silent, permanent capability degradation.</dd>
+<dt>Fix direction</dt><dd>Show an explicit error + retry when GSI fails to load; add bounded exponential-backoff reconnect to the presence socket.</dd>
+</dl>
+</div>
+
+<h3>Low</h3>
+<p class="note">Grouped where systemic. Each remains individually actionable; see the roadmap for batching.</p>
+
+<div class="scroll">
+<table>
+<thead><tr><th>ID</th><th>Finding</th><th>Location</th><th>Domain / note</th></tr></thead>
+<tbody>
+<tr><td>FND-028</td><td><b>Docs drift (batch).</b> README describes a Microsoft button + a dev-login form with a role picker on the login page — the page is Google-only and e2e signs in via a raw <span class="mono">fetch</span>; README says "migrations 0001–0006" (there are 10); README says only the "first" <span class="mono">ADMIN_EMAILS</span> entry becomes admin (all listed emails are promoted, <span class="file">service.py:46</span>); CASE_STUDY says "86 tests" (95).</td><td class="file">README.md:207, :140, :212; CASE_STUDY.md:69; LoginPage.tsx</td><td>Documentation &amp; DX</td></tr>
+<tr><td>FND-029</td><td><b>Correctness minutiae (batch).</b> <span class="mono">online=false</span> directory/CSV filter is a silent no-op (<span class="mono">if online:</span>, <span class="pill">CONFIRMED</span>); unapproved just-provisioned users are stamped <span class="mono">last_seen_at=now</span> and counted "online" for ~90s (<span class="pill">CONFIRMED</span>); <span class="mono">seed_demo</span> never sets <span class="mono">last_seen_at</span>, so the flagship "online" metric reads 0 after seeding; DB <span class="mono">CURRENT_TIMESTAMP</span> vs app UTC-naive with the session tz unpinned (dual-clock skew).</td><td class="file">users.py:79; service.py:130; seed_demo.py:94; db.py:14</td><td>Correctness</td></tr>
+<tr><td>FND-030</td><td><b>Session lifecycle.</b> Deactivation sets the kill-epoch but doesn't revoke session rows, leaving phantom "active" sessions in the sessions API (<span class="pill">CONFIRMED</span>); disabling a provider / tightening the allowlist is enforced only at login and never revokes existing sessions (the toggle isn't the real-time kill switch it appears to be).</td><td class="file">users.py:326; service.py:70</td><td>Security: session</td></tr>
+<tr><td>FND-031</td><td><b>Crypto niceties.</b> Replay guard stops protecting at <span class="mono">exp</span> while the verifier still accepts the token for <span class="mono">leeway</span> (30s) more; Google federation certs are re-fetched per login (no cache) unlike the cached Microsoft JWKS; no OIDC nonce binding + process-local replay guard; HS256 secret validated for length only, not entropy.</td><td class="file">google.py:39, :20; replay.py:18; config.py:35</td><td>Security: authn (defense-in-depth)</td></tr>
+<tr><td>FND-032</td><td><b>Schema hygiene.</b> Mutating schemas omit <span class="mono">extra="forbid"</span> so misspelled fields are silently ignored (not mass-assignment — Pydantic drops them — but a lost guardrail); <span class="mono">permission_keys</span> lists have no length bound (unlike <span class="mono">BulkActionRequest.ids</span>); the immutable OAuth <span class="mono">sub</span>/<span class="mono">oid</span> is disclosed to any <span class="mono">users.read</span> holder.</td><td class="file">schemas/user.py:152, :105, :73</td><td>Input validation</td></tr>
+<tr><td>FND-033</td><td><b>Rate-limit minutiae.</b> The in-memory <span class="mono">_windows</span> table is never pruned/capped (latent memory growth); the fixed window allows ~2× the configured rate across a boundary and has no lockout/backoff.</td><td class="file">ratelimit.py:23, :20</td><td>Abuse resistance</td></tr>
+<tr><td>FND-034</td><td><b>WebSocket minor.</b> No Origin/Host check on the upgrade (cross-site WS hijack prevented only by SameSite=Lax); a kicked/deactivated user stays connected up to 30s post-revocation (<span class="pill">CONFIRMED</span>); the online <em>count</em> is broadcast to connections lacking <span class="mono">presence.view</span> though the REST endpoint gates it.</td><td class="file">ws.py:113, :133, :55</td><td>WebSocket integrity</td></tr>
+<tr><td>FND-035</td><td><b>WebSocket roster divergence.</b> The live WS roster is connection-based and diverges from the <span class="mono">last_seen</span>-based online model, so viewers can under-report who's actually online.</td><td class="file">ws.py:33</td><td>Correctness</td></tr>
+<tr><td>FND-036</td><td><b>Accessibility minor.</b> Custom accent color has no contrast floor (a user can pick sub-AA accent text/buttons); <span class="mono">--muted</span> falls below AA on the panel-2 surface (table/section headers); select-all/row checkboxes and the modal dismiss button lack accessible names; no focus management on client-side route change and the color-input focus ring is effectively invisible.</td><td class="file">AppearancePanel.tsx:207; index.css:16; AdminUsersPage.tsx:238; AppShell.tsx:104</td><td>WCAG 1.4.3 / 1.3.1 / 2.4.3</td></tr>
+<tr><td>FND-037</td><td><b>Error handling.</b> The 422 validation handler reflects the raw request body back to the caller and deviates from the uniform <span class="mono">{code,message}</span> envelope (adds an <span class="mono">errors</span> array); requests that raise an unhandled 500 are never persisted to the audit table (the exception propagates past the logging middleware).</td><td class="file">errors.py:35; main.py:53</td><td>Info disclosure / observability</td></tr>
+<tr><td>FND-038</td><td><b>Lost-update on concurrent admin edits.</b> Direct-permission (PUT-replace), role, and status writes have no optimistic-concurrency guard, so two concurrent admin edits silently drop one — including a lost revocation (fail-open direction).</td><td class="file">users.py:308, :278, :327</td><td>Concurrency</td></tr>
+<tr><td>FND-039</td><td><b>Eager-load waste.</b> <span class="mono">User.identities</span> is <span class="mono">selectin</span>-eager-loaded on every authenticated request (<span class="pill">CONFIRMED</span>) but not read on the auth path — an extra query per request for data the hot path discards.</td><td class="file">models/user.py:59</td><td>Performance</td></tr>
+<tr><td>FND-040</td><td><b>Ops minor.</b> Base images float (<span class="mono">nginx:alpine</span> has no version/digest); the <span class="mono">api</span> service has no compose healthcheck and <span class="mono">web</span> waits only for <span class="mono">service_started</span> (the DB-aware <span class="mono">/api/health</span> is unused by compose); the backend image fetches an unpinned external cert bundle at build time (non-hermetic/offline-breaking); <span class="mono">@azure/msal-browser</span> is left on a caret range while its peers are exact-pinned.</td><td class="file">frontend/Dockerfile:21; docker-compose.yml:23; backend/Dockerfile:8; package.json:14</td><td>Operations</td></tr>
+<tr><td>FND-041</td><td><b>Stale client permissions.</b> The client fetches the user + permissions once at load and never refreshes; nav and <span class="mono">RequirePermission</span> gate on stale data until reload (server still enforces per-request, so this is UX/defense-in-depth only).</td><td class="file">AuthContext.tsx:28</td><td>Frontend</td></tr>
+<tr><td>FND-042</td><td><b>e2e is smoke-only.</b> The two Playwright tests assert render/redirect; none drives a real mutation round-trip (edit → save → verify persistence) through the UI.</td><td class="file">e2e/access-control.spec.ts:31</td><td>Testing</td></tr>
+<tr><td>FND-043</td><td><b>Fail-open default.</b> <span class="mono">APP_ENV</span> defaults to <span class="mono">"local"</span> (<span class="pill">CONFIRMED</span>), the value that enables the dev-auth gate and relaxes the secure-cookie invariant; a missing/typo'd env silently selects the less-safe mode.</td><td class="file">config.py:10</td><td>Security: config</td></tr>
+</tbody>
+</table>
+</div>
+
+<h2>Methodology &amp; coverage</h2>
+
+<div class="meta-grid">
+<div><b>24</b><span>finder agents (3 rounds × dimensions/lenses)</span></div>
+<div><b>73</b><span>raw candidate findings</span></div>
+<div><b>15</b><span>independently CONFIRMED by refuter pass</span></div>
+<div><b>0</b><span>refuted / false positives</span></div>
+<div><b>43</b><span>findings after merge + calibration</span></div>
+<div><b>~2.6M</b><span>subagent tokens spent</span></div>
+</div>
+
+<h3>How it ran</h3>
+<p>A deterministic multi-agent workflow fanned out <b>24 finder agents</b> across three rounds (per-dimension → cross-cutting lenses → deep dives), steering later rounds away from already-surfaced ground. Candidates were deduplicated (73 raw → 73 unique; the dedup key was strict so near-duplicates were merged at synthesis instead) and entered a two-stage verification pipeline: an <b>adversarial refuter</b> (instructed to kill each finding by re-reading the code) followed by a <b>severity calibrator</b>. Every finding cites <span class="mono">file:line</span>; all objective claims are backed by tool output.</p>
+
+<h3>Tools executed (objective evidence)</h3>
+<div class="scroll">
+<table>
+<thead><tr><th>Tool</th><th>Result</th></tr></thead>
+<tbody>
+<tr><td><span class="mono">ruff check</span> / <span class="mono">ruff format --check</span></td><td>All checks passed; 73 files already formatted.</td></tr>
+<tr><td><span class="mono">pytest</span> (backend, real MySQL + Alembic)</td><td><b>95 passed</b>, 0 failed (1 httpx DeprecationWarning).</td></tr>
+<tr><td><span class="mono">tsc --noEmit</span> / <span class="mono">eslint</span></td><td>Clean.</td></tr>
+<tr><td><span class="mono">vitest</span> (frontend)</td><td><b>11 passed</b> (3 files).</td></tr>
+<tr><td><span class="mono">alembic heads</span></td><td>Single head <span class="mono">0010</span>; 10 migrations, upgrade clean.</td></tr>
+<tr><td><span class="mono">npm audit</span></td><td><b>8 vulns</b> (1 critical, 4 high, 3 moderate). Production: <span class="mono">react-router-dom</span> High (FND-001). Rest dev-only (vite/vitest/esbuild); the critical (vitest UI RCE) only triggers when the Vitest UI server runs.</td></tr>
+<tr><td><span class="mono">pip-audit</span> (requirements.txt)</td><td><b>26 advisories</b> across PyJWT, cryptography, requests, Starlette (FND-020). requirements-dev: pytest 8.3.5 → PYSEC-2026-1845.</td></tr>
+</tbody>
+</table>
+</div>
+
+<h3>Coverage statement — what was and wasn't done</h3>
+<ul>
+<li><b>Fully read at source:</b> the entire backend (<span class="mono">app/</span> incl. every router, auth module, model, schema; all 10 migrations; <span class="mono">env.py</span>; <span class="mono">seed_demo.py</span>; <span class="mono">conftest.py</span>), the key frontend surfaces (client, auth context, guards, App routes, the admin table, the edit modal, MatrixRain, login), and the full ops surface (compose, both Dockerfiles, nginx, CI, <span class="mono">.env.example</span>). The dynamic app was not manually driven; the live Docker stack was used only to run the automated tooling above.</li>
+<li><b>Verification was cut short.</b> The adversarial refuter + severity-calibration pass completed for <b>15 of the ~50 candidates that reached it</b> before the agent session hit a usage limit; the remaining refuters and the completeness-critic agent failed with that limit. Those 15 carry a <span class="pill">CONFIRMED</span> tag; every other finding was instead adjudicated by the reviewer against a complete independent read of the same code (the reviewer had already read the whole repo during recon). No finding was accepted on a finder's word alone, but the un-tagged findings did not receive a second <em>independent</em> agent's refutation — treat their severities as reviewer-calibrated rather than panel-verified.</li>
+<li><b>The automated completeness-critic did not run</b> (session limit). Reviewer-identified residual gaps: (a) no dynamic/manual exercise of the running app or the WebSocket under load; (b) the two large admin pages (<span class="mono">AdminRolesPage</span>, <span class="mono">SettingsPage</span>) and several components (<span class="mono">Charts</span>, <span class="mono">UserProfile</span>, <span class="mono">SessionsPanel</span>, <span class="mono">AppearancePanel</span>) were read only in part; (c) no load/perf measurement was taken — performance findings are structural, not benchmarked; (d) migrations 0003–0005, 0008, 0009 downgrades were spot-checked, not each line-verified.</li>
+<li><b>Excluded by instruction (not reviewed):</b> the <span class="mono">deploy/</span> directory (Caddyfile, prod compose) and all AWS deployment concerns. The local <span class="mono">docker-compose.yml</span>, Dockerfiles, nginx, and CI <em>were</em> in scope. One finding (FND-040) touches an RDS cert-bundle fetch only as a hermetic-build concern, without assessing the AWS path.</li>
+<li><b>No prior review</b> was supplied, so there is no delta section.</li>
+</ul>
+
+<p class="note" style="margin-top:26px">Generated by a multi-agent audit workflow + reviewer synthesis on 2026-07-15. Review-only: no project source was modified. Companion deliverables: <span class="mono">remediation-roadmap.md</span> and <span class="mono">fix-packs/</span>.</p>
+
+</div>
