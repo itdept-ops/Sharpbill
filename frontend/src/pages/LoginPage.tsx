@@ -16,6 +16,8 @@ export function LoginPage() {
   const [config, setConfig] = useState<AuthConfig | null>(null);
   const [configFailed, setConfigFailed] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [gsiFailed, setGsiFailed] = useState(false);
+  const [gsiAttempt, setGsiAttempt] = useState(0);
   const googleBtnRef = useRef<HTMLDivElement>(null);
 
   const loadConfig = () => {
@@ -39,6 +41,7 @@ export function LoginPage() {
 
   useEffect(() => {
     if (!config?.google) return;
+    setGsiFailed(false);
     let tries = 0;
     const timer = setInterval(() => {
       if (window.google && googleBtnRef.current) {
@@ -61,10 +64,11 @@ export function LoginPage() {
         });
       } else if (++tries > 50) {
         clearInterval(timer);
+        setGsiFailed(true); // the external Google script never loaded — surface it, don't fail silently
       }
     }, 100);
     return () => clearInterval(timer);
-  }, [config]);
+  }, [config, gsiAttempt]);
 
   if (user) return <Navigate to={from} replace />;
 
@@ -93,7 +97,23 @@ export function LoginPage() {
 
           {error && <div className="auth-error">ERR: {error}</div>}
 
-          {config?.google && <div className="google-slot" ref={googleBtnRef} />}
+          {config?.google && !gsiFailed && <div className="google-slot" ref={googleBtnRef} />}
+
+          {config?.google && gsiFailed && (
+            <div className="auth-error" style={{ display: "flex", alignItems: "center", gap: 10 }}>
+              <span>ERR: Google sign-in couldn't load. Check your connection or blockers.</span>
+              <span className="spacer" />
+              <button
+                className="btn btn-ghost btn-sm"
+                onClick={() => {
+                  setGsiFailed(false);
+                  setGsiAttempt((a) => a + 1);
+                }}
+              >
+                Retry
+              </button>
+            </div>
+          )}
 
           {config && !config.google && !configFailed && (
             <p className="muted" style={{ fontSize: 12 }}>

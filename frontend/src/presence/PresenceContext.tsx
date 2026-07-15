@@ -31,7 +31,18 @@ export function PresenceProvider({ children }: { children: ReactNode }) {
     let ws: WebSocket | null = null;
     let pollTimer: ReturnType<typeof setInterval> | null = null;
     let pingTimer: ReturnType<typeof setInterval> | null = null;
+    let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+    let reconnectDelay = 1000; // bounded exponential backoff, reset on a successful open
     let disposed = false;
+
+    const scheduleReconnect = () => {
+      if (disposed || reconnectTimer) return;
+      reconnectTimer = setTimeout(() => {
+        reconnectTimer = null;
+        reconnectDelay = Math.min(reconnectDelay * 2, 30000);
+        connect();
+      }, reconnectDelay);
+    };
 
     const stopPolling = () => {
       if (pollTimer) {
@@ -69,6 +80,7 @@ export function PresenceProvider({ children }: { children: ReactNode }) {
       }
       ws.onopen = () => {
         stopPolling();
+        reconnectDelay = 1000; // healthy connection — reset backoff
         pingTimer = setInterval(() => {
           if (ws && ws.readyState === WebSocket.OPEN) ws.send("ping");
         }, PING_MS);
@@ -90,7 +102,8 @@ export function PresenceProvider({ children }: { children: ReactNode }) {
         }
         if (!disposed) {
           setState((s) => ({ ...s, live: false }));
-          startPolling();
+          startPolling(); // keep data flowing via polling...
+          scheduleReconnect(); // ...while trying to re-establish the live socket
         }
       };
       ws.onerror = () => {
@@ -107,6 +120,7 @@ export function PresenceProvider({ children }: { children: ReactNode }) {
       disposed = true;
       stopPolling();
       if (pingTimer) clearInterval(pingTimer);
+      if (reconnectTimer) clearTimeout(reconnectTimer);
       try {
         ws?.close();
       } catch {

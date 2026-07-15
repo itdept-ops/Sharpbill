@@ -51,6 +51,25 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     applyUiPrefs(user?.ui_prefs ?? null);
   }, [user?.ui_prefs]);
 
+  // Keep the session fresh: re-fetch the user on window focus and every few minutes, so a
+  // permission change (role edit, direct grant, deactivation) is reflected without a manual
+  // reload. A 401 here trips the shared unauthorized handler, which signs the user out.
+  useEffect(() => {
+    if (!user) return;
+    const refresh = () => {
+      api
+        .get<User>("/api/auth/me")
+        .then(setUser)
+        .catch(() => {});
+    };
+    window.addEventListener("focus", refresh);
+    const timer = setInterval(refresh, 5 * 60 * 1000);
+    return () => {
+      window.removeEventListener("focus", refresh);
+      clearInterval(timer);
+    };
+  }, [user?.id]);
+
   const logout = async () => {
     await api.post("/api/auth/logout");
     setUser(null);
