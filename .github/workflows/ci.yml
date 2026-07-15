@@ -64,3 +64,51 @@ jobs:
         working-directory: frontend
       - run: npm run build
         working-directory: frontend
+
+  e2e:
+    # End-to-end: boot the real stack (Vite + FastAPI + MySQL) with Docker Compose and drive it in a
+    # browser via the local-only dev-login, proving sign-in + per-request RBAC work together.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Prepare .env for the stack
+        run: |
+          cp .env.example .env
+          {
+            echo "SESSION_JWT_SECRET=$(python3 -c 'import secrets; print(secrets.token_hex(32))')"
+            echo "DEV_AUTH_ENABLED=true"
+          } >> .env
+
+      - name: Build & start the stack
+        run: docker compose up -d --build
+
+      - name: Wait for API and web
+        run: |
+          for i in $(seq 1 60); do curl -sf http://localhost:8000/api/health >/dev/null && break; sleep 3; done
+          curl -sf http://localhost:8000/api/health
+          for i in $(seq 1 40); do curl -sf http://localhost:5173 >/dev/null && break; sleep 3; done
+          curl -sf http://localhost:5173 >/dev/null
+
+      - name: Apply migrations + seed demo data
+        run: |
+          docker compose exec -T api alembic upgrade head
+          docker compose exec -T api python -m app.scripts.seed_demo
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci
+        working-directory: frontend
+      - name: Install Playwright browser
+        run: npx playwright install --with-deps chromium
+        working-directory: frontend
+      - name: Run E2E
+        run: npx playwright test
+        working-directory: frontend
+
+      - name: Stack logs (on failure)
+        if: failure()
+        run: docker compose logs --tail 200

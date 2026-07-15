@@ -5,6 +5,8 @@ import { defineConfig } from "vite";
 export default defineConfig({
   plugins: [react()],
   test: {
+    // Vitest owns the unit tests under src/**/*.test; Playwright e2e/*.spec.ts is run separately.
+    include: ["src/**/*.test.{ts,tsx}"],
     environment: "jsdom",
     setupFiles: "./src/test/setup.ts",
     globals: false,

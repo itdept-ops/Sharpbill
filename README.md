@@ -235,11 +235,19 @@ Reset the DB: `docker compose down -v && docker compose up -d && docker compose 
 ## Testing & CI
 
 - **Backend** — `pytest` runs the full HTTP stack against a dedicated `*_test` MySQL database, with
-  schema built by the real Alembic migrations (never `create_all`). Coverage spans auth, RBAC guards,
-  presence/kick, bulk actions, CSV-injection, location privacy, pagination, and the audit log.
-- **CI** (`.github/workflows/ci.yml`, Node 24) — a single `test` job: `ruff check` + `ruff format
-  --check`, an Alembic **single-head + upgrade** smoke test, `pytest`, then the frontend
-  `tsc --noEmit` + `eslint` + `vite build`. No deploy job (AWS is deferred).
+  schema built by the real Alembic migrations (never `create_all`). Coverage spans auth, token
+  replay, RBAC guards, presence/kick, bulk actions, CSV-injection, location privacy, pagination,
+  rate limiting, and the audit log.
+- **Frontend** — `vitest` + Testing Library over the code that gates access in the browser (the API
+  client's error/401 handling, `RequirePermission`, badges).
+- **E2E** — a Playwright job boots the **real stack** (Vite + FastAPI + MySQL via Docker Compose) and
+  drives it in a browser over the local-only dev-login: admin signs in → dashboard → open a user in
+  the inline edit modal; and a plain user is redirected away from the admin directory (RBAC proven
+  end-to-end).
+- **CI** (`.github/workflows/ci.yml`, Node 24) — a `test` job (`ruff check` + `ruff format --check`,
+  Alembic **single-head + upgrade** smoke test, `pytest`, then frontend `tsc` + `eslint` + `vitest`
+  + `vite build`) and an `e2e` job (compose up → migrate → seed → Playwright). No deploy job (AWS is
+  deferred).
 
 ---
 
