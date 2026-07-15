@@ -401,6 +401,34 @@ def test_location_visible_to_self_and_managers_only(client):
     assert viewer.get(f"/api/users/{ou['id']}").json()["last_latitude"] is None
 
 
+def test_derived_location_hidden_from_read_only_viewer(client):
+    """FND-012: GPS-derived location + timezone follow the same privacy gate as raw coordinates."""
+    owner = TestClient(app)
+    ou = owner.post("/api/auth/dev", json={"email": "loc2@example.com", "role": "user"}).json()
+    owner.post("/api/auth/location", json={"latitude": 37.7749, "longitude": -122.4194})
+
+    # Self sees their own derived location + timezone.
+    self_view = owner.get(f"/api/users/{ou['id']}").json()
+    assert self_view["location"] and self_view["timezone"]
+
+    # A manager (users.manage) sees them too.
+    _login(client, "admin@example.com", role="admin")
+    admin_row = next(
+        u for u in client.get("/api/users").json()["items"] if u["email"] == "loc2@example.com"
+    )
+    assert admin_row["location"] and admin_row["timezone"]
+
+    # A users.read-only viewer does NOT.
+    client.post("/api/roles", json={"name": "ReadOnly2", "permission_keys": ["users.read"]})
+    viewer = TestClient(app)
+    viewer.post("/api/auth/dev", json={"email": "ro2@example.com", "role": "ReadOnly2"})
+    v_row = next(
+        u for u in viewer.get("/api/users").json()["items"] if u["email"] == "loc2@example.com"
+    )
+    assert v_row["location"] is None
+    assert v_row["timezone"] is None
+
+
 def test_kick_response_hides_location_from_non_manager(client):
     """presence.kick alone must not leak the target's GPS in the kick response."""
     owner = TestClient(app)

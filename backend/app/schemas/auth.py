@@ -39,11 +39,13 @@ class SessionOut(BaseModel):
     current: bool  # is this the session making the request?
 
     @classmethod
-    def from_row(cls, s: UserSession, *, current: bool) -> "SessionOut":
+    def from_row(cls, s: UserSession, *, current: bool, include_ip: bool = True) -> "SessionOut":
+        # The IP is location-adjacent PII: callers pass include_ip=False to mask it for viewers
+        # who may only see their own sessions' source (mirrors the GPS include_location gating).
         return cls(
             id=s.id,
             user_agent=s.user_agent,
-            ip=s.ip,
+            ip=s.ip if include_ip else None,
             created_at=s.created_at,
             last_seen_at=s.last_seen_at,
             current=current,

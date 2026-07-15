@@ -134,13 +134,15 @@ def list_users(
 @router.get("/export.csv")
 def export_users_csv(
     db: Session = Depends(get_db),
-    _: User = Depends(require_permission(USERS_READ)),
+    current: User = Depends(require_permission(USERS_READ)),
     search: str | None = Query(None, max_length=100),
     role_id: int | None = Query(None),
     status: str | None = Query(None, pattern="^(active|pending|disabled)$"),
     online: bool | None = Query(None),
 ) -> Response:
     users = list(db.scalars(_filtered(search, role_id, status, online)))
+    # Location can be GPS-derived, so only a manager exports it (matches the API gating).
+    can_loc = USERS_MANAGE in current.permission_keys
     buf = io.StringIO()
     w = csv.writer(buf)
     w.writerow(
@@ -167,7 +169,7 @@ def export_users_csv(
                 _csv_safe(u.status),
                 _csv_safe(u.title or ""),
                 _csv_safe(u.department or ""),
-                _csv_safe(u.location or ""),
+                _csv_safe(u.location or "") if can_loc else "",
                 u.created_at.isoformat() if u.created_at else "",
                 u.last_login_at.isoformat() if u.last_login_at else "",
             ]
@@ -227,6 +229,8 @@ def bulk_action(
                     raise ApiError(403, "LAST_ADMIN", "Cannot demote the last remaining admin")
                 user.role = role
             db.commit()
+            if body.action == "deactivate":
+                revoke_all_for_user(db, uid)  # sign the disabled user out of every device
             results.append({"id": uid, "ok": True})
         except ApiError as e:
             db.rollback()
@@ -350,6 +354,10 @@ def update_status(
         user.session_valid_after = datetime.now(UTC).replace(tzinfo=None)
     user.is_active = body.is_active
     db.commit()
+    if not body.is_active:
+        # Mark the per-device session rows revoked too (the epoch already blocks token use, but
+        # this keeps the sessions API from listing phantom "active" devices for a disabled user).
+        revoke_all_for_user(db, user.id)
     return UserOut.from_user(user, online=is_online(user.last_seen_at))
 
 
@@ -386,16 +394,21 @@ def kick_user(
 
 @router.get("/{user_id}/sessions", response_model=list[SessionOut])
 def list_user_sessions(
-    user_id: int, db: Session = Depends(get_db), _: User = Depends(require_permission(USERS_READ))
+    user_id: int,
+    db: Session = Depends(get_db),
+    current: User = Depends(require_permission(USERS_READ)),
 ) -> list[SessionOut]:
     """A user's active sessions (one per signed-in device)."""
     _get_target(db, user_id)
+    # Session IP is location-adjacent PII: only a manager (users.manage) or the user themselves
+    # sees it — a users.read-only viewer gets it masked, matching the GPS-gating model.
+    include_ip = user_id == current.id or USERS_MANAGE in current.permission_keys
     rows = db.scalars(
         select(UserSession)
         .where(UserSession.user_id == user_id, UserSession.revoked_at.is_(None))
         .order_by(UserSession.created_at.desc())
     )
-    return [SessionOut.from_row(s, current=False) for s in rows]
+    return [SessionOut.from_row(s, current=False, include_ip=include_ip) for s in rows]
 
 
 @router.delete("/{user_id}/sessions/{session_id}", status_code=204)

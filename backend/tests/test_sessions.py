@@ -63,6 +63,35 @@ def test_logout_only_signs_out_the_current_device(client):
     assert device2.get("/api/auth/me").status_code == 200  # other device stays signed in
 
 
+def test_session_ip_masked_for_read_only_viewer(client):
+    """FND-011: session IP is shown to managers/self but masked for a users.read-only viewer."""
+    target = TestClient(app)
+    tu = target.post("/api/auth/dev", json={"email": "iptarget@example.com", "role": "user"}).json()
+
+    _login(client, "admin@example.com", role="admin")
+    client.post("/api/roles", json={"name": "ReadOnly", "permission_keys": ["users.read"]})
+    viewer = TestClient(app)
+    viewer.post("/api/auth/dev", json={"email": "ro-view@example.com", "role": "ReadOnly"})
+
+    # A manager (admin holds users.manage) sees the source IP.
+    assert client.get(f"/api/users/{tu['id']}/sessions").json()[0]["ip"] is not None
+    # A users.read-only viewer gets it masked.
+    assert viewer.get(f"/api/users/{tu['id']}/sessions").json()[0]["ip"] is None
+
+
+def test_deactivation_revokes_session_rows(client):
+    """FND-030: deactivating a user marks their session rows revoked (no phantom devices)."""
+    target = TestClient(app)
+    tu = target.post("/api/auth/dev", json={"email": "deac@example.com", "role": "user"}).json()
+
+    _login(client, "admin@example.com", role="admin")
+    assert len(client.get(f"/api/users/{tu['id']}/sessions").json()) == 1
+
+    client.patch(f"/api/users/{tu['id']}/status", json={"is_active": False})
+    # The active-session list is now empty — rows are revoked, not merely epoch-blocked.
+    assert client.get(f"/api/users/{tu['id']}/sessions").json() == []
+
+
 def test_kick_revokes_all_of_a_users_sessions(client):
     target = TestClient(app)
     tu = target.post(

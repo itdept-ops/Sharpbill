@@ -57,8 +57,10 @@ class UserOut(BaseModel):
             title=user.title,
             department=user.department,
             phone=user.phone,
-            location=user.location,
-            timezone=user.timezone,
+            # location + timezone can be derived from opt-in GPS, so they follow the same
+            # privacy gate as the raw coordinates: hidden unless self or a users.manage holder.
+            location=user.location if include_location else None,
+            timezone=user.timezone if include_location else None,
             bio=user.bio,
             accent_color=user.accent_color,
             ui_prefs=user.ui_prefs,
