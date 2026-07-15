@@ -52,6 +52,14 @@ def update_settings(
                 "INSUFFICIENT_PRIVILEGE",
                 "You cannot set a default role with permissions you do not hold",
             )
+    # Never allow the resulting state to disable every sign-in provider — that would lock out
+    # every user, admins included (dev login is local-only). Validate the merged result.
+    new_google = data.get("allow_google", s.allow_google)
+    new_microsoft = data.get("allow_microsoft", s.allow_microsoft)
+    if not (new_google or new_microsoft):
+        raise ApiError(
+            400, "NO_PROVIDER_ENABLED", "At least one sign-in provider must stay enabled"
+        )
     for field, value in data.items():
         if value is not None:
             setattr(s, field, value)

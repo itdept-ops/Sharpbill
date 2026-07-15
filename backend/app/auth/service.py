@@ -110,10 +110,13 @@ def find_or_create_user(db: Session, ident: VerifiedIdentity) -> User:
         return user
 
     # --- first login: provision ---
-    if site.signup_mode == "closed":
+    # A configured admin email (already provider-verified) bootstraps regardless of signup
+    # mode, so "closed" can never lock administration out — it is the recovery/seed path.
+    # Everyone else obeys the closed gate.
+    is_admin_boot = _admin_bootstrap(ident)
+    if site.signup_mode == "closed" and not is_admin_boot:
         raise ApiError(403, "SIGNUP_CLOSED", "Sign-ups are currently closed")
 
-    is_admin_boot = _admin_bootstrap(ident)
     if is_admin_boot:
         role = _role_by_name(db, ADMIN_ROLE)
     else:

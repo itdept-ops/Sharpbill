@@ -166,3 +166,20 @@ def test_permission_keys_are_case_normalized(client):
     r = client.post("/api/roles", json={"name": "CaseTest", "permission_keys": ["USERS.READ"]})
     assert r.status_code == 201
     assert "users.read" in [p["key"] for p in r.json()["permissions"]]
+
+
+def test_admin_can_attach_custom_permission_to_role(client):
+    """An admin can create a runtime permission and then wire it to a role (FND-005).
+
+    Regression: _guard_grantable used to reject this because a fresh custom permission is on
+    no role, so it is in nobody's effective set — including the admin's.
+    """
+    _login(client, "admin@example.com", role="admin")
+    assert client.post("/api/permissions", json={"key": "reports.export"}).status_code == 201
+    r = client.post("/api/roles", json={"name": "Reporter", "permission_keys": ["reports.export"]})
+    assert r.status_code == 201, r.text
+    assert "reports.export" in [p["key"] for p in r.json()["permissions"]]
+    # And an admin can attach it to an existing custom role via PATCH too.
+    rid = client.post("/api/roles", json={"name": "Reporter2", "permission_keys": []}).json()["id"]
+    patched = client.patch(f"/api/roles/{rid}", json={"permission_keys": ["reports.export"]})
+    assert patched.status_code == 200, patched.text

@@ -129,6 +129,52 @@ def test_settings_manage_delegate_cannot_default_to_admin(client):
     assert resp.json()["detail"]["code"] == "INSUFFICIENT_PRIVILEGE"
 
 
+def test_admin_email_bootstraps_even_when_signup_closed(db, monkeypatch):
+    """A configured ADMIN_EMAILS identity provisions as admin even in closed mode (FND-006).
+
+    Closed sign-ups must never lock administration out — the admin-email path is the recovery seam.
+    """
+    from app.config import settings as app_settings
+    from app.routers import auth as auth_router
+
+    s = db.get(SiteSettings, 1)
+    s.signup_mode = "closed"
+    db.commit()
+    monkeypatch.setattr(app_settings, "admin_emails", "boss@example.com")
+    monkeypatch.setattr(
+        auth_router,
+        "verify_google_id_token",
+        lambda _t: VerifiedIdentity(
+            provider="google", subject="boot-1", email="boss@example.com", display_name="Boss"
+        ),
+    )
+    boss = TestClient(app)
+    r = boss.post("/api/auth/google", json={"id_token": "x"})
+    assert r.status_code == 200, r.text
+    assert r.json()["role"] == "admin"
+
+    # A non-admin identity is still blocked by closed mode.
+    monkeypatch.setattr(
+        auth_router,
+        "verify_google_id_token",
+        lambda _t: VerifiedIdentity(
+            provider="google", subject="rando-1", email="rando@example.com", display_name="Rando"
+        ),
+    )
+    assert TestClient(app).post("/api/auth/google", json={"id_token": "x"}).status_code == 403
+
+
+def test_cannot_disable_all_providers(client):
+    """Disabling both sign-in providers is rejected — it would lock everyone out (FND-007)."""
+    _admin(client)
+    # Disabling one provider is fine (the other stays enabled).
+    assert client.put("/api/admin/settings", json={"allow_google": False}).status_code == 200
+    # Disabling the second too (leaving zero enabled) is rejected.
+    resp = client.put("/api/admin/settings", json={"allow_microsoft": False})
+    assert resp.status_code == 400
+    assert resp.json()["detail"]["code"] == "NO_PROVIDER_ENABLED"
+
+
 def test_analytics(client):
     _admin(client)
     TestClient(app).post("/api/auth/dev", json={"email": "a2@example.com", "role": "user"})

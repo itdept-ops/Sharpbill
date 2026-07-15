@@ -62,9 +62,13 @@ def _resolve_permissions(db: Session, keys: list[str]) -> list[Permission]:
 def _guard_grantable(actor: User, keys: list[str]) -> None:
     """Privilege-amplification guard: you may only attach permissions you yourself hold.
 
-    (A full admin holds every permission, so this is a no-op for them. It stops a delegate
-    with roles.manage from minting a role that carries permissions they lack and climbing.)
+    A full admin may attach anything — including a just-created custom permission that is not
+    yet on any role (and so is in nobody's effective set). Without this bypass an admin could
+    create a permission but never wire it to a role. For non-admins it stops a delegate with
+    roles.manage from minting a role that carries permissions they lack and climbing.
     """
+    if _is_admin(actor):
+        return
     extra = set(_normalize(keys)) - actor.permission_keys
     if extra:
         raise ApiError(
