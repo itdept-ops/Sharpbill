@@ -5,6 +5,7 @@ import jwt
 from jwt import PyJWKClient
 
 from app.auth import ProviderTokenError, VerifiedIdentity
+from app.auth.nonce import consume_nonce
 from app.auth.replay import check_replay
 from app.config import settings
 
@@ -47,6 +48,11 @@ def verify_microsoft_id_token(raw_token: str) -> VerifiedIdentity:
     email = (claims.get("email") or claims.get("preferred_username") or "").lower()
     if "@" not in email:
         raise ProviderTokenError("no usable email claim")
+
+    # Nonce binding: the token must carry a `nonce` this app issued, consumed exactly once
+    # (single-use, DB-backed) — binds the token to our login request and defeats replay/injection.
+    if not consume_nonce(claims.get("nonce", "")):
+        raise ProviderTokenError("missing or invalid nonce")
 
     # Single-use: reject a token already presented within its validity window. Extend the guard
     # by the verifier's leeway (30s past exp) so it covers the whole window the token is accepted.

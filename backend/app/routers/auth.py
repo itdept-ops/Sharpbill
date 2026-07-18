@@ -9,6 +9,7 @@ from app.auth.deps import get_current_user
 from app.auth.google import verify_google_id_token
 from app.auth.jwt import COOKIE_NAME, clear_session_cookie, decode_session_token, set_session_cookie
 from app.auth.microsoft import verify_microsoft_id_token
+from app.auth.nonce import issue_nonce
 from app.auth.service import find_or_create_user
 from app.auth.sessions import revoke_session, start_session
 from app.config import settings
@@ -44,6 +45,13 @@ def auth_config(db: Session = Depends(get_db)) -> AuthConfig:
         dev=settings.is_dev_auth_enabled,
         calm=bool(site.calm_mode) if site else False,
     )
+
+
+@router.get("/nonce")
+def auth_nonce() -> dict:
+    """Issue a single-use nonce for a provider sign-in. The SPA passes it into the OIDC request;
+    the provider echoes it in the id_token, and the verifier consumes it exactly once."""
+    return {"nonce": issue_nonce()}
 
 
 @router.post("/google", response_model=UserOut)

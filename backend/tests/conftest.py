@@ -80,6 +80,7 @@ def _clean_tables():
                 "calm_mode=0, default_role_id=(SELECT id FROM roles WHERE name='user') WHERE id=1"
             )
         )
+        conn.execute(text("DELETE FROM login_nonces"))
         conn.execute(text("DELETE FROM request_logs"))
         conn.execute(text("DELETE FROM user_sessions"))
         conn.execute(text("DELETE FROM user_permissions"))

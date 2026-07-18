@@ -26,6 +26,7 @@ _SKIP_PREFIXES = (
     "/api/presence",
     "/api/auth/config",
     "/api/auth/me",
+    "/api/auth/nonce",
 )
 
 

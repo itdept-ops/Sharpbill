@@ -42,32 +42,53 @@ export function LoginPage() {
   useEffect(() => {
     if (!config?.google) return;
     setGsiFailed(false);
-    let tries = 0;
-    const timer = setInterval(() => {
-      if (window.google && googleBtnRef.current) {
-        clearInterval(timer);
-        window.google.accounts.id.initialize({
-          client_id: import.meta.env.VITE_GOOGLE_CLIENT_ID,
-          callback: async (resp) => {
-            setError(null);
-            try {
-              onSuccess(await api.post<User>("/api/auth/google", { id_token: resp.credential }));
-            } catch (e) {
-              setError(e instanceof ApiError ? e.message : "Sign-in failed");
-            }
-          },
-        });
-        window.google.accounts.id.renderButton(googleBtnRef.current, {
-          theme: "filled_black",
-          size: "large",
-          width: 320,
-        });
-      } else if (++tries > 50) {
-        clearInterval(timer);
-        setGsiFailed(true); // the external Google script never loaded — surface it, don't fail silently
+    let cancelled = false;
+    let timer: ReturnType<typeof setInterval> | undefined;
+
+    (async () => {
+      // A server-issued single-use nonce, echoed into the id_token, binds this sign-in to our
+      // login request (defeats id_token replay/injection). Fetch it before initializing GIS.
+      let nonce: string;
+      try {
+        nonce = (await api.get<{ nonce: string }>("/api/auth/nonce")).nonce;
+      } catch {
+        if (!cancelled) setGsiFailed(true);
+        return;
       }
-    }, 100);
-    return () => clearInterval(timer);
+      if (cancelled) return;
+
+      let tries = 0;
+      timer = setInterval(() => {
+        if (window.google && googleBtnRef.current) {
+          clearInterval(timer);
+          window.google.accounts.id.initialize({
+            client_id: import.meta.env.VITE_GOOGLE_CLIENT_ID,
+            nonce,
+            callback: async (resp) => {
+              setError(null);
+              try {
+                onSuccess(await api.post<User>("/api/auth/google", { id_token: resp.credential }));
+              } catch (e) {
+                setError(e instanceof ApiError ? e.message : "Sign-in failed");
+              }
+            },
+          });
+          window.google.accounts.id.renderButton(googleBtnRef.current, {
+            theme: "filled_black",
+            size: "large",
+            width: 320,
+          });
+        } else if (++tries > 50) {
+          clearInterval(timer);
+          setGsiFailed(true); // the external Google script never loaded — surface it, don't fail silently
+        }
+      }, 100);
+    })();
+
+    return () => {
+      cancelled = true;
+      if (timer) clearInterval(timer);
+    };
   }, [config, gsiAttempt]);
 
   if (user) return <Navigate to={from} replace />;

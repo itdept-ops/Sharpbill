@@ -5,6 +5,7 @@ from google.auth.exceptions import GoogleAuthError
 from google.oauth2 import id_token as google_id_token
 
 from app.auth import ProviderTokenError, VerifiedIdentity
+from app.auth.nonce import consume_nonce
 from app.auth.replay import check_replay
 from app.config import settings
 
@@ -34,6 +35,12 @@ def verify_google_id_token(raw_token: str) -> VerifiedIdentity:
         raise ProviderTokenError("google email not verified")
     if not claims.get("sub") or not claims.get("email"):
         raise ProviderTokenError("missing sub/email")
+
+    # Nonce binding: the token must carry a `nonce` this app issued for a pending sign-in, and it
+    # is consumed exactly once (single-use, DB-backed). This binds the token to our login request
+    # and defeats id_token replay/injection even across workers/instances.
+    if not consume_nonce(claims.get("nonce", "")):
+        raise ProviderTokenError("missing or invalid nonce")
 
     # Single-use: reject a token already presented within its validity window. Extend the guard
     # by the verifier's clock-skew allowance (30s past exp) so it covers the whole window in which
