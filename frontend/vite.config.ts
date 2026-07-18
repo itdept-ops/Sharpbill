@@ -26,6 +26,9 @@ export default defineConfig({
     host: true, // bind 0.0.0.0 so the container port is reachable
     port: 5173,
     strictPort: true,
+    // When the container's 5173 is published on a different host port, the browser reaches the
+    // app there — point the HMR websocket at that published port so live reload still works.
+    hmr: { clientPort: Number(process.env.WEB_HOST_PORT) || 5173 },
     watch: {
       usePolling: process.env.CHOKIDAR_USEPOLLING === "true",
     },
