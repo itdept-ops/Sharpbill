@@ -1,4 +1,5 @@
-FROM node:24-alpine AS base
+# Build inputs are digest-pinned so a tag cannot silently change the toolchain used for a release.
+FROM node:24-alpine@sha256:a0b9bf06e4e6193cf7a0f58816cc935ff8c2a908f81e6f1a95432d679c54fbfd AS base
 WORKDIR /app
 COPY package.json package-lock.json ./
 RUN npm ci
