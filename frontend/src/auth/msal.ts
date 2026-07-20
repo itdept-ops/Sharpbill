@@ -18,12 +18,13 @@ function getMsal(): PublicClientApplication {
   return instance;
 }
 
-export async function microsoftLogin(): Promise<string> {
+export async function microsoftLogin(nonce: string): Promise<string> {
   const msal = getMsal();
   await ready;
   const result = await msal.loginPopup({
     scopes: ["openid", "profile", "email"],
     prompt: "select_account",
+    nonce,
   });
   return result.idToken; // the Microsoft ID token
 }

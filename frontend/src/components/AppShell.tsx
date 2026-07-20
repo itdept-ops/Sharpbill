@@ -1,3 +1,4 @@
+import { useEffect, useRef, useState } from "react";
 import { Link, NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 
 import { useAuth } from "../auth/AuthContext";
@@ -11,13 +12,66 @@ function breadcrumb(pathname: string): string {
   return parts.length ? parts.join(" / ") : "dashboard";
 }
 
+function ConsoleNavigation({
+  can,
+  onNavigate,
+}: {
+  can: (permission: string) => boolean;
+  onNavigate?: () => void;
+}) {
+  return (
+    <>
+      <div className="rail-brand">
+        <span className="logo-glyph" aria-hidden="true">◈</span> KINGFISHER
+      </div>
+      <div className="rail-section">Operations</div>
+      <NavLink to="/dashboard" className="rail-item" onClick={onNavigate}>▸ Dashboard</NavLink>
+      <NavLink to="/profile" className="rail-item" onClick={onNavigate}>▸ My Profile</NavLink>
+      {(can("users.read") || can("roles.manage") || can("settings.manage") || can("logs.view")) && (
+        <div className="rail-section">Admin</div>
+      )}
+      {can("users.read") && (
+        <NavLink to="/admin/users" className="rail-item" onClick={onNavigate}>▸ Users</NavLink>
+      )}
+      {can("roles.manage") && (
+        <NavLink to="/admin/roles" className="rail-item" onClick={onNavigate}>▸ Roles &amp; Access</NavLink>
+      )}
+      {can("settings.manage") && (
+        <NavLink to="/admin/settings" className="rail-item" onClick={onNavigate}>▸ Site Settings</NavLink>
+      )}
+      {can("logs.view") && (
+        <NavLink to="/admin/logs" className="rail-item" onClick={onNavigate}>▸ Request Log</NavLink>
+      )}
+      <div className="rail-spacer" />
+      <div className="rail-section">Info</div>
+      <NavLink to="/technology" className="rail-item" onClick={onNavigate}>▸ Technology</NavLink>
+      <NavLink to="/about" className="rail-item" onClick={onNavigate}>▸ About</NavLink>
+    </>
+  );
+}
+
 function ShellInner() {
   const { user, logout } = useAuth();
   const presence = usePresence();
   const location = useLocation();
   const navigate = useNavigate();
+  const [menuOpen, setMenuOpen] = useState(false);
+  const menuButtonRef = useRef<HTMLButtonElement>(null);
 
   const can = (p: string) => !!user?.permissions.includes(p);
+
+  useEffect(() => setMenuOpen(false), [location.pathname]);
+  useEffect(() => {
+    if (!menuOpen) return;
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setMenuOpen(false);
+        menuButtonRef.current?.focus();
+      }
+    };
+    document.addEventListener("keydown", closeOnEscape);
+    return () => document.removeEventListener("keydown", closeOnEscape);
+  }, [menuOpen]);
 
   const handleLogout = async () => {
     await logout();
@@ -30,51 +84,22 @@ function ShellInner() {
   return (
     <div className="shell">
       {rainOpacity > 0 && <MatrixRain opacity={rainOpacity} />}
-      <aside className="rail">
-        <div className="rail-brand">
-          <span className="logo-glyph">◈</span> KINGFISHER
-        </div>
-        <div className="rail-section">Operations</div>
-        <NavLink to="/dashboard" className="rail-item">
-          ▸ Dashboard
-        </NavLink>
-        <NavLink to="/profile" className="rail-item">
-          ▸ My Profile
-        </NavLink>
-        {(can("users.read") || can("roles.manage") || can("settings.manage") || can("logs.view")) && (
-          <div className="rail-section">Admin</div>
-        )}
-        {can("users.read") && (
-          <NavLink to="/admin/users" className="rail-item">
-            ▸ Users
-          </NavLink>
-        )}
-        {can("roles.manage") && (
-          <NavLink to="/admin/roles" className="rail-item">
-            ▸ Roles &amp; Access
-          </NavLink>
-        )}
-        {can("settings.manage") && (
-          <NavLink to="/admin/settings" className="rail-item">
-            ▸ Site Settings
-          </NavLink>
-        )}
-        {can("logs.view") && (
-          <NavLink to="/admin/logs" className="rail-item">
-            ▸ Request Log
-          </NavLink>
-        )}
-        <div className="rail-spacer" />
-        <div className="rail-section">Info</div>
-        <NavLink to="/technology" className="rail-item">
-          ▸ Technology
-        </NavLink>
-        <NavLink to="/about" className="rail-item">
-          ▸ About
-        </NavLink>
-      </aside>
+      <nav className="rail" aria-label="Primary navigation">
+        <ConsoleNavigation can={can} />
+      </nav>
 
       <header className="topbar">
+        <button
+          ref={menuButtonRef}
+          className="mobile-menu-button"
+          type="button"
+          aria-label={menuOpen ? "Close navigation" : "Open navigation"}
+          aria-controls="mobile-navigation"
+          aria-expanded={menuOpen}
+          onClick={() => setMenuOpen((open) => !open)}
+        >
+          {menuOpen ? "✕" : "☰"}
+        </button>
         <span className="breadcrumb">
           KF://<span className="path"> {breadcrumb(location.pathname)}</span>
         </span>
@@ -97,6 +122,15 @@ function ShellInner() {
           Log out
         </button>
       </header>
+
+      <nav
+        id="mobile-navigation"
+        className={`mobile-nav ${menuOpen ? "open" : ""}`}
+        aria-label="Mobile navigation"
+        aria-hidden={!menuOpen}
+      >
+        <ConsoleNavigation can={can} onNavigate={() => setMenuOpen(false)} />
+      </nav>
 
       <div className="status-line" aria-hidden="true" />
 

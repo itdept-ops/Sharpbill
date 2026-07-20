@@ -4,6 +4,7 @@ import { BrowserRouter } from "react-router-dom";
 
 import App from "./App";
 import { AuthProvider } from "./auth/AuthContext";
+import { AppErrorBoundary } from "./components/AppErrorBoundary";
 import "./index.css";
 
 // Calm mode is applied globally from server settings once auth config loads (see AuthContext).
@@ -12,7 +13,9 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
     <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
       <AuthProvider>
-        <App />
+        <AppErrorBoundary>
+          <App />
+        </AppErrorBoundary>
       </AuthProvider>
     </BrowserRouter>
   </React.StrictMode>,

@@ -166,9 +166,9 @@ export function SecurityPage() {
         </div>
 
         <div className="walk-note">
-          <b>Not wired yet (needs live OAuth keys):</b> the provider <i>nonce</i> binding — the one
-          remaining hardening that depends on the real client flow. Everything above runs today.
-          The request path itself is on the{" "}
+          <b>Provider nonce binding is active:</b> each Google or Microsoft sign-in starts with a
+          server-issued, single-use nonce that the provider echoes in its signed token. The request
+          path itself is on the{" "}
           <Link to="/technology">Technology page</Link>.
         </div>
 

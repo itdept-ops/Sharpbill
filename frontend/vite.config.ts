@@ -15,9 +15,15 @@ export default defineConfig({
   build: {
     rollupOptions: {
       output: {
-        manualChunks: {
-          react: ["react", "react-dom", "react-router-dom"],
-          msal: ["@azure/msal-browser"],
+        manualChunks(id) {
+          if (id.includes("node_modules/@azure/msal")) return "msal";
+          if (
+            id.includes("node_modules/react/") ||
+            id.includes("node_modules/react-dom/") ||
+            id.includes("node_modules/react-router")
+          ) {
+            return "react";
+          }
         },
       },
     },

@@ -24,6 +24,7 @@ const AuthContext = createContext<AuthContextValue | null>(null);
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
+  const authenticatedUserId = user?.id;
 
   useEffect(() => {
     // A mid-session 401 clears auth state; ProtectedRoute then redirects to /login.
@@ -55,7 +56,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // permission change (role edit, direct grant, deactivation) is reflected without a manual
   // reload. A 401 here trips the shared unauthorized handler, which signs the user out.
   useEffect(() => {
-    if (!user) return;
+    if (!authenticatedUserId) return;
     const refresh = () => {
       api
         .get<User>("/api/auth/me")
@@ -68,7 +69,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       window.removeEventListener("focus", refresh);
       clearInterval(timer);
     };
-  }, [user?.id]);
+  }, [authenticatedUserId]);
 
   const logout = async () => {
     await api.post("/api/auth/logout");

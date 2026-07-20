@@ -134,7 +134,7 @@ export function UserProfile({ user: initial }: { user: User }) {
           <div className={`banner ${banner.ok ? "ok" : ""}`} role="alert">
             {banner.ok ? "" : "ERR: "}{banner.msg}
             <span className="spacer" />
-            <button onClick={() => setBanner(null)}>✕</button>
+            <button aria-label="Dismiss notification" onClick={() => setBanner(null)}>✕</button>
           </div>
         )}
 
@@ -161,8 +161,9 @@ export function UserProfile({ user: initial }: { user: User }) {
               <div className="form-grid">
                 {FIELDS.map(([k, label]) => (
                   <div className="field" key={k}>
-                    <label className="field-label">{label}</label>
+                    <label className="field-label" htmlFor={`profile-${k}`}>{label}</label>
                     <input
+                      id={`profile-${k}`}
                       className="field-input"
                       value={(draft[k] as string) ?? ""}
                       onChange={(e) => setDraft({ ...draft, [k]: e.target.value })}
@@ -170,8 +171,9 @@ export function UserProfile({ user: initial }: { user: User }) {
                   </div>
                 ))}
                 <div className="field full">
-                  <label className="field-label">Bio</label>
+                  <label className="field-label" htmlFor="profile-bio">Bio</label>
                   <textarea
+                    id="profile-bio"
                     className="field-input"
                     rows={3}
                     value={draft.bio ?? ""}
@@ -196,6 +198,7 @@ export function UserProfile({ user: initial }: { user: User }) {
                   <span className="v">
                     <select
                       className="field-input"
+                      aria-label="Role"
                       value={user.role_id}
                       onChange={(e) =>
                         adminAction(
@@ -215,6 +218,7 @@ export function UserProfile({ user: initial }: { user: User }) {
                   <label className="switch">
                     <input
                       type="checkbox"
+                      aria-label="Active account"
                       checked={user.is_active}
                       onChange={(e) =>
                         adminAction(

@@ -15,14 +15,46 @@ export function setUnauthorizedHandler(fn: (() => void) | null): void {
 
 interface RequestOpts {
   suppressAuthRedirect?: boolean;
+  signal?: AbortSignal;
+  timeoutMs?: number;
+}
+
+const DEFAULT_TIMEOUT_MS = 20_000;
+
+function requestSignal(opts: RequestOpts): {
+  signal: AbortSignal;
+  cleanup: () => void;
+} {
+  const controller = new AbortController();
+  const timeout = window.setTimeout(
+    () => controller.abort(new DOMException("Request timed out", "TimeoutError")),
+    opts.timeoutMs ?? DEFAULT_TIMEOUT_MS,
+  );
+  const abortFromCaller = () => controller.abort(opts.signal?.reason);
+  if (opts.signal?.aborted) abortFromCaller();
+  else opts.signal?.addEventListener("abort", abortFromCaller, { once: true });
+  return {
+    signal: controller.signal,
+    cleanup: () => {
+      window.clearTimeout(timeout);
+      opts.signal?.removeEventListener("abort", abortFromCaller);
+    },
+  };
 }
 
 async function request<T>(path: string, init: RequestInit = {}, opts: RequestOpts = {}): Promise<T> {
-  const res = await fetch(path, {
-    credentials: "same-origin",
-    headers: { "Content-Type": "application/json", ...(init.headers ?? {}) },
-    ...init,
-  });
+  const { signal, cleanup } = requestSignal(opts);
+  let res: Response;
+  try {
+    res = await fetch(path, {
+      ...init,
+      credentials: "same-origin",
+      headers: { "Content-Type": "application/json", ...(init.headers ?? {}) },
+      signal,
+    });
+  } finally {
+    cleanup();
+  }
 
   if (res.status === 401 && !opts.suppressAuthRedirect) {
     onUnauthorized?.();
@@ -51,8 +83,14 @@ async function request<T>(path: string, init: RequestInit = {}, opts: RequestOpt
 
 // Fetch a binary response (e.g. a CSV download) while reusing the shared 401 redirect and
 // {detail:{code,message}} error handling that JSON requests get.
-async function requestBlob(path: string): Promise<Blob> {
-  const res = await fetch(path, { credentials: "same-origin" });
+async function requestBlob(path: string, opts: RequestOpts = {}): Promise<Blob> {
+  const { signal, cleanup } = requestSignal(opts);
+  let res: Response;
+  try {
+    res = await fetch(path, { credentials: "same-origin", signal });
+  } finally {
+    cleanup();
+  }
   if (res.status === 401) onUnauthorized?.();
   if (!res.ok) {
     let code = "ERROR";
@@ -73,7 +111,7 @@ async function requestBlob(path: string): Promise<Blob> {
 
 export const api = {
   get: <T>(path: string, opts?: RequestOpts) => request<T>(path, {}, opts),
-  getBlob: (path: string) => requestBlob(path),
+  getBlob: (path: string, opts?: RequestOpts) => requestBlob(path, opts),
   post: <T>(path: string, body?: unknown, opts?: RequestOpts) =>
     request<T>(path, { method: "POST", body: body ? JSON.stringify(body) : undefined }, opts),
   patch: <T>(path: string, body: unknown, opts?: RequestOpts) =>

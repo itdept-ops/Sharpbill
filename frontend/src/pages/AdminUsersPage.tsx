@@ -64,24 +64,34 @@ export function AdminUsersPage() {
     setPage(0);
   }, [search, roleId, status, onlineOnly]);
 
-  const load = useCallback(() => {
+  const load = useCallback((signal?: AbortSignal) => {
     setLoading(true);
     const q = query();
     q.set("limit", String(PAGE_SIZE));
     q.set("offset", String(page * PAGE_SIZE));
     api
-      .get<UserList>(`/api/users?${q.toString()}`)
+      .get<UserList>(`/api/users?${q.toString()}`, { signal })
       .then((r) => {
         setUsers(r.items);
         setTotal(r.total);
       })
-      .catch((e) => setBanner({ msg: e instanceof ApiError ? e.message : "Failed to load" }))
-      .finally(() => setLoading(false));
+      .catch((e) => {
+        if (!(e instanceof DOMException && e.name === "AbortError")) {
+          setBanner({ msg: e instanceof ApiError ? e.message : "Failed to load" });
+        }
+      })
+      .finally(() => {
+        if (!signal?.aborted) setLoading(false);
+      });
   }, [query, page]);
 
   useEffect(() => {
-    const t = setTimeout(load, 200);
-    return () => clearTimeout(t);
+    const controller = new AbortController();
+    const timer = setTimeout(() => load(controller.signal), 200);
+    return () => {
+      clearTimeout(timer);
+      controller.abort();
+    };
   }, [load]);
 
   useEffect(() => {

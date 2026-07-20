@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import { api, ApiError } from "../api/client";
 import { Panel } from "../components/Panel";
 import type { Permission, Role } from "../types";
+import { useAccessibleDialog } from "../util/useAccessibleDialog";
 
 interface RoleDraft {
   mode: "create" | "edit";
@@ -19,6 +20,9 @@ export function AdminRolesPage() {
   const [banner, setBanner] = useState<{ msg: string; ok?: boolean } | null>(null);
   const [roleDraft, setRoleDraft] = useState<RoleDraft | null>(null);
   const [permDraft, setPermDraft] = useState<{ key: string; description: string } | null>(null);
+  const [busyRoles, setBusyRoles] = useState<Set<number>>(new Set());
+  const [savingRole, setSavingRole] = useState(false);
+  const [savingPermission, setSavingPermission] = useState(false);
 
   const loadAll = () => {
     api.get<Role[]>("/api/roles").then(setRoles).catch((e) => fail(e, "load roles"));
@@ -30,20 +34,29 @@ export function AdminRolesPage() {
     setBanner({ msg: e instanceof ApiError ? e.message : `Failed to ${what}` });
 
   const toggleInline = async (role: Role, key: string, on: boolean) => {
+    if (busyRoles.has(role.id)) return;
     const keys = on
       ? [...role.permissions.map((p) => p.key), key]
       : role.permissions.map((p) => p.key).filter((k) => k !== key);
     setBanner(null);
+    setBusyRoles((current) => new Set(current).add(role.id));
     try {
       const updated = await api.patch<Role>(`/api/roles/${role.id}`, { permission_keys: keys });
       setRoles((rs) => rs.map((r) => (r.id === updated.id ? updated : r)));
     } catch (e) {
       fail(e, "update role");
+    } finally {
+      setBusyRoles((current) => {
+        const next = new Set(current);
+        next.delete(role.id);
+        return next;
+      });
     }
   };
 
   const saveRole = async () => {
-    if (!roleDraft) return;
+    if (!roleDraft || savingRole) return;
+    setSavingRole(true);
     setBanner(null);
     try {
       if (roleDraft.mode === "create") {
@@ -64,6 +77,8 @@ export function AdminRolesPage() {
       setBanner({ msg: "Role saved.", ok: true });
     } catch (e) {
       fail(e, "save role");
+    } finally {
+      setSavingRole(false);
     }
   };
 
@@ -79,7 +94,8 @@ export function AdminRolesPage() {
   };
 
   const savePerm = async () => {
-    if (!permDraft) return;
+    if (!permDraft || savingPermission) return;
+    setSavingPermission(true);
     setBanner(null);
     try {
       await api.post<Permission>("/api/permissions", {
@@ -91,6 +107,8 @@ export function AdminRolesPage() {
       setBanner({ msg: "Permission created.", ok: true });
     } catch (e) {
       fail(e, "create permission");
+    } finally {
+      setSavingPermission(false);
     }
   };
 
@@ -107,7 +125,7 @@ export function AdminRolesPage() {
           {banner.ok ? "" : "ERR: "}
           {banner.msg}
           <span className="spacer" />
-          <button onClick={() => setBanner(null)}>✕</button>
+          <button aria-label="Dismiss notification" onClick={() => setBanner(null)}>✕</button>
         </div>
       )}
 
@@ -156,7 +174,7 @@ export function AdminRolesPage() {
                     <input
                       type="checkbox"
                       checked={has.has(p.key)}
-                      disabled={locked}
+                      disabled={locked || busyRoles.has(role.id)}
                       onChange={(e) => toggleInline(role, p.key, e.target.checked)}
                     />
                     <span>
@@ -202,45 +220,78 @@ export function AdminRolesPage() {
           onChange={setRoleDraft}
           onClose={() => setRoleDraft(null)}
           onSave={saveRole}
+          saving={savingRole}
         />
       )}
       {permDraft && (
-        <div className="modal" onClick={() => setPermDraft(null)}>
-          <section
-            className="panel panel--brackets modal-panel"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="panel-header">// NEW PERMISSION</div>
-            <div className="panel-body">
-              <div className="field">
-                <label className="field-label">&gt; key (area.action)</label>
-                <input
-                  className="field-input"
-                  placeholder="reports.export"
-                  value={permDraft.key}
-                  onChange={(e) => setPermDraft({ ...permDraft, key: e.target.value })}
-                />
-              </div>
-              <div className="field">
-                <label className="field-label">&gt; description</label>
-                <input
-                  className="field-input"
-                  value={permDraft.description}
-                  onChange={(e) => setPermDraft({ ...permDraft, description: e.target.value })}
-                />
-              </div>
-              <div className="role-card-actions">
-                <button className="btn btn-primary btn-sm" onClick={savePerm}>
-                  Create
-                </button>
-                <button className="btn btn-ghost btn-sm" onClick={() => setPermDraft(null)}>
-                  Cancel
-                </button>
-              </div>
-            </div>
-          </section>
-        </div>
+        <PermissionModal
+          draft={permDraft}
+          saving={savingPermission}
+          onChange={setPermDraft}
+          onClose={() => setPermDraft(null)}
+          onSave={savePerm}
+        />
       )}
+    </div>
+  );
+}
+
+function PermissionModal({
+  draft,
+  saving,
+  onChange,
+  onClose,
+  onSave,
+}: {
+  draft: { key: string; description: string };
+  saving: boolean;
+  onChange: (draft: { key: string; description: string }) => void;
+  onClose: () => void;
+  onSave: () => void;
+}) {
+  const panelRef = useAccessibleDialog(onClose);
+  return (
+    <div className="modal">
+      <button className="modal-dismiss" type="button" aria-label="Close dialog" onClick={onClose} />
+      <section
+        ref={panelRef}
+        className="panel panel--brackets modal-panel"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="permission-dialog-title"
+        tabIndex={-1}
+      >
+        <div className="panel-header" id="permission-dialog-title">// NEW PERMISSION</div>
+        <div className="panel-body">
+          <div className="field">
+            <label className="field-label" htmlFor="permission-key">&gt; key (area.action)</label>
+            <input
+              id="permission-key"
+              className="field-input"
+              placeholder="reports.export"
+              value={draft.key}
+              disabled={saving}
+              onChange={(event) => onChange({ ...draft, key: event.target.value })}
+            />
+          </div>
+          <div className="field">
+            <label className="field-label" htmlFor="permission-description">&gt; description</label>
+            <input
+              id="permission-description"
+              className="field-input"
+              value={draft.description}
+              disabled={saving}
+              onChange={(event) => onChange({ ...draft, description: event.target.value })}
+            />
+          </div>
+          <div className="role-card-actions">
+            <button className="btn btn-primary btn-sm" disabled={saving} onClick={onSave}>
+              {saving ? "Creating…" : "Create"}
+            </button>
+            <button className="btn btn-ghost btn-sm" disabled={saving} onClick={onClose}>Cancel</button>
+          </div>
+        </div>
+      </section>
     </div>
   );
 }
@@ -251,13 +302,16 @@ function RoleModal({
   onChange,
   onClose,
   onSave,
+  saving,
 }: {
   draft: RoleDraft;
   perms: Permission[];
   onChange: (d: RoleDraft) => void;
   onClose: () => void;
   onSave: () => void;
+  saving: boolean;
 }) {
+  const panelRef = useAccessibleDialog(onClose);
   const has = new Set(draft.keys);
   const toggle = (key: string, on: boolean) =>
     onChange({ ...draft, keys: on ? [...draft.keys, key] : draft.keys.filter((k) => k !== key) });
@@ -277,10 +331,18 @@ function RoleModal({
   };
 
   return (
-    <div className="modal" onClick={onClose}>
-      <section className="panel panel--brackets modal-panel" onClick={(e) => e.stopPropagation()}>
+    <div className="modal">
+      <button className="modal-dismiss" type="button" aria-label="Close dialog" onClick={onClose} />
+      <section
+        ref={panelRef}
+        className="panel panel--brackets modal-panel"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="role-dialog-title"
+        tabIndex={-1}
+      >
         <div className="panel-header">
-          <span>// {draft.mode === "create" ? "NEW ROLE" : `EDIT ${draft.name.toUpperCase()}`}</span>
+          <span id="role-dialog-title">// {draft.mode === "create" ? "NEW ROLE" : `EDIT ${draft.name.toUpperCase()}`}</span>
           <span className="muted" style={{ fontSize: 10 }}>
             {draft.keys.length} / {perms.length} perms
           </span>
@@ -288,20 +350,23 @@ function RoleModal({
         <div className="panel-body">
           <div className="form-row">
             <div className="field">
-              <label className="field-label">&gt; name</label>
+              <label className="field-label" htmlFor="role-name">&gt; name</label>
               <input
+                id="role-name"
                 className="field-input"
                 value={draft.name}
-                disabled={draft.isSystem}
+                disabled={draft.isSystem || saving}
                 onChange={(e) => onChange({ ...draft, name: e.target.value })}
               />
             </div>
           </div>
           <div className="field">
-            <label className="field-label">&gt; description</label>
+            <label className="field-label" htmlFor="role-description">&gt; description</label>
             <input
+              id="role-description"
               className="field-input"
               value={draft.description}
+              disabled={saving}
               onChange={(e) => onChange({ ...draft, description: e.target.value })}
             />
           </div>
@@ -313,7 +378,7 @@ function RoleModal({
                 <div className="perm-group" key={area}>
                   <div className="perm-group-head">
                     <span className="pg-area">{area}</span>
-                    <button className="link-btn" onClick={() => setGroup(list, !allOn)}>
+                    <button className="link-btn" disabled={saving} onClick={() => setGroup(list, !allOn)}>
                       {allOn ? "clear all" : "select all"}
                     </button>
                   </div>
@@ -322,6 +387,7 @@ function RoleModal({
                       <input
                         type="checkbox"
                         checked={has.has(p.key)}
+                        disabled={saving}
                         onChange={(e) => toggle(p.key, e.target.checked)}
                       />
                       <span>
@@ -335,10 +401,10 @@ function RoleModal({
             })}
           </div>
           <div className="role-card-actions">
-            <button className="btn btn-primary btn-sm" onClick={onSave}>
-              Save role
+            <button className="btn btn-primary btn-sm" disabled={saving} onClick={onSave}>
+              {saving ? "Saving…" : "Save role"}
             </button>
-            <button className="btn btn-ghost btn-sm" onClick={onClose}>
+            <button className="btn btn-ghost btn-sm" disabled={saving} onClick={onClose}>
               Cancel
             </button>
           </div>

@@ -20,24 +20,34 @@ export function LogsPage() {
   const [method, setMethod] = useState("");
   const [banner, setBanner] = useState<{ msg: string; ok?: boolean } | null>(null);
 
-  const load = useCallback(() => {
+  const load = useCallback((signal?: AbortSignal) => {
     setLoading(true);
     const q = new URLSearchParams({ limit: "200" });
     if (search.trim()) q.set("search", search.trim());
     if (method) q.set("method", method);
     api
-      .get<RequestLogList>(`/api/admin/logs?${q.toString()}`)
+      .get<RequestLogList>(`/api/admin/logs?${q.toString()}`, { signal })
       .then((r) => {
         setRows(r.items);
         setTotal(r.total);
       })
-      .catch((e) => setBanner({ msg: e instanceof ApiError ? e.message : "Failed to load" }))
-      .finally(() => setLoading(false));
+      .catch((e) => {
+        if (!(e instanceof DOMException && e.name === "AbortError")) {
+          setBanner({ msg: e instanceof ApiError ? e.message : "Failed to load" });
+        }
+      })
+      .finally(() => {
+        if (!signal?.aborted) setLoading(false);
+      });
   }, [search, method]);
 
   useEffect(() => {
-    const t = setTimeout(load, 200);
-    return () => clearTimeout(t);
+    const controller = new AbortController();
+    const timer = setTimeout(() => load(controller.signal), 200);
+    return () => {
+      clearTimeout(timer);
+      controller.abort();
+    };
   }, [load]);
 
   const filtered = search.trim() !== "" || method !== "";
@@ -80,7 +90,7 @@ export function LogsPage() {
           ))}
         </select>
         <span className="spacer" />
-        <button className="btn btn-ghost btn-sm" onClick={load}>
+        <button className="btn btn-ghost btn-sm" onClick={() => load()}>
           Refresh
         </button>
       </div>

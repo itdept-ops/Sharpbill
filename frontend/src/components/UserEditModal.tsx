@@ -1,9 +1,10 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 
 import { api, ApiError } from "../api/client";
 import { useAuth } from "../auth/AuthContext";
 import { ProviderBadge, RoleBadge } from "./badges";
 import type { Permission, ProfileUpdate, Role, User } from "../types";
+import { useAccessibleDialog } from "../util/useAccessibleDialog";
 
 const FIELDS: [keyof ProfileUpdate, string][] = [
   ["display_name", "Display name"],
@@ -31,43 +32,8 @@ export function UserEditModal({
   onChange: (u: User) => void;
 }) {
   const { user: me } = useAuth();
-  const panelRef = useRef<HTMLElement>(null);
+  const panelRef = useAccessibleDialog(onClose);
   const [user, setUser] = useState<User>(initial);
-
-  // Accessible-dialog behaviour: focus the panel on open, restore focus on close, close on
-  // Escape, and trap Tab within the dialog (WCAG 2.4.3 / 2.1.2 / 4.1.2).
-  useEffect(() => {
-    const prevFocus = document.activeElement as HTMLElement | null;
-    const panel = panelRef.current;
-    panel?.focus();
-
-    const onKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "Escape") {
-        e.stopPropagation();
-        onClose();
-        return;
-      }
-      if (e.key !== "Tab" || !panel) return;
-      const focusable = panel.querySelectorAll<HTMLElement>(
-        'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
-      );
-      if (focusable.length === 0) return;
-      const first = focusable[0];
-      const last = focusable[focusable.length - 1];
-      if (e.shiftKey && document.activeElement === first) {
-        e.preventDefault();
-        last.focus();
-      } else if (!e.shiftKey && document.activeElement === last) {
-        e.preventDefault();
-        first.focus();
-      }
-    };
-    document.addEventListener("keydown", onKeyDown, true);
-    return () => {
-      document.removeEventListener("keydown", onKeyDown, true);
-      prevFocus?.focus?.();
-    };
-  }, [onClose]);
   const [draft, setDraft] = useState<ProfileUpdate>({
     display_name: initial.display_name,
     title: initial.title,
@@ -119,6 +85,7 @@ export function UserEditModal({
   // Direct per-user permission grants (on top of the role). Needs users.manage + roles.manage.
   const canManagePerms = canManage && !isSelf && !!me?.permissions.includes("roles.manage");
   const [allPerms, setAllPerms] = useState<Permission[]>([]);
+  const [savingPermissions, setSavingPermissions] = useState(false);
   useEffect(() => {
     if (canManagePerms)
       api.get<Permission[]>("/api/permissions").then(setAllPerms).catch(() => setAllPerms([]));
@@ -126,14 +93,20 @@ export function UserEditModal({
 
   const roleKeys = new Set(user.role_permissions);
   const directKeys = new Set(user.direct_permissions);
-  const togglePerm = (key: string) => {
+  const togglePerm = async (key: string) => {
+    if (savingPermissions) return;
     const next = new Set(directKeys);
     if (next.has(key)) next.delete(key);
     else next.add(key);
-    return action(
-      () => api.put<User>(`/api/users/${user.id}/permissions`, { permission_keys: [...next] }),
-      "Permissions updated.",
-    );
+    setSavingPermissions(true);
+    try {
+      await action(
+        () => api.put<User>(`/api/users/${user.id}/permissions`, { permission_keys: [...next] }),
+        "Permissions updated.",
+      );
+    } finally {
+      setSavingPermissions(false);
+    }
   };
   const permGroups = allPerms.reduce<Record<string, Permission[]>>((acc, p) => {
     (acc[p.key.split(".")[0]] ??= []).push(p);
@@ -143,7 +116,8 @@ export function UserEditModal({
   const initials = (user.display_name || user.email).slice(0, 2).toUpperCase();
 
   return (
-    <div className="modal" onClick={onClose}>
+    <div className="modal">
+      <button className="modal-dismiss" type="button" aria-label="Close dialog" onClick={onClose} />
       <section
         ref={panelRef}
         className="panel panel--brackets modal-panel edit-modal"
@@ -151,7 +125,6 @@ export function UserEditModal({
         aria-modal="true"
         aria-labelledby="edit-user-title"
         tabIndex={-1}
-        onClick={(e) => e.stopPropagation()}
       >
         <div className="panel-header">
           <span id="edit-user-title">// EDIT USER</span>
@@ -241,6 +214,7 @@ export function UserEditModal({
                     <span className="v">
                       <select
                         className="field-input"
+                        aria-label="Role"
                         value={user.role_id}
                         onChange={(e) =>
                           action(
@@ -268,6 +242,7 @@ export function UserEditModal({
                       <label className="switch">
                         <input
                           type="checkbox"
+                          aria-label="Active account"
                           checked={user.is_active}
                           onChange={(e) =>
                             action(
@@ -327,7 +302,7 @@ export function UserEditModal({
                           <input
                             type="checkbox"
                             checked={viaRole || direct}
-                            disabled={viaRole}
+                            disabled={viaRole || savingPermissions}
                             onChange={() => togglePerm(p.key)}
                           />
                           <span className="perm-grant-key">{p.key}</span>

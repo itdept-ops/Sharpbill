@@ -5,12 +5,16 @@ import { RoleBadge, StatusPill } from "./badges";
 
 describe("badges", () => {
   it("RoleBadge flags the admin role with the admin class", () => {
+    // Domain `role` prop, not an ARIA role on a DOM element.
+    // eslint-disable-next-line jsx-a11y/aria-role
     const { container } = render(<RoleBadge role="admin" />);
     expect(screen.getByText("admin")).toBeInTheDocument();
     expect(container.firstChild).toHaveClass("role-badge", "admin");
   });
 
   it("RoleBadge renders a custom role without the admin class", () => {
+    // Domain `role` prop, not an ARIA role on a DOM element.
+    // eslint-disable-next-line jsx-a11y/aria-role
     const { container } = render(<RoleBadge role="Auditor" />);
     expect(container.firstChild).toHaveClass("role-badge");
     expect(container.firstChild).not.toHaveClass("admin");
