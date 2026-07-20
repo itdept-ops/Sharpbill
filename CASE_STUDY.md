@@ -1,6 +1,6 @@
 # How this was built — one operator, a fleet of adversarial agents
 
-Kingfisher is an access-control console: verified SSO keyed to a provider's immutable identity,
+KingFisher is an access-control console: verified SSO keyed to a provider's immutable identity,
 database-backed RBAC enforced on every request, live presence, per-device sessions, a one-click
 kill-switch, bounded access telemetry, and a durable security-event outbox. That's the *product*.
 External outbox delivery and immutable retention remain environment controls. This is the more

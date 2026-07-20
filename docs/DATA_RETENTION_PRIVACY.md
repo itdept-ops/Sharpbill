@@ -2,9 +2,9 @@
 
 - Status: Approved application policy
 - Effective date: 2026-07-20
-- Scope: One Kingfisher deployment and its database (one organization)
+- Scope: One KingFisher deployment and its database (one organization)
 - Owners: Product owner, privacy owner, security owner, and environment operator
-- Repository control status: Implemented and verified through Alembic `0020`; external backup and
+- Repository control status: Implemented and verified through Alembic `0021`; external backup and
   monitoring controls remain environment-owned
 
 This is the repository's data-minimization baseline. It is an engineering policy, not legal advice
@@ -15,7 +15,7 @@ Extending one requires a documented purpose, data owner, privacy/security approv
 
 | Data class | Default retention | Start event | End-of-life action |
 |---|---:|---|---|
-| Exact latitude, longitude, and accuracy | 24 hours | Last successful capture | Clear exact coordinates and capture timestamp; derived profile location/timezone may remain for the active account lifetime |
+| Exact latitude, longitude, and accuracy | 24 hours | Last successful capture | Store a capture-time deadline and clear exact coordinates, capture timestamp, and deadline at the earlier of that deadline or a later-shortened active policy; derived profile location/timezone may remain for the active account lifetime |
 | Pending, never-approved account | 30 days | Account creation | Anonymize the account and revoke access unless approved or held |
 | Session metadata, including IP and user agent | 30 days | Session expiry or revocation | Delete the session row in bounded batches |
 | Operational request logs, including IP | 90 days | Request timestamp | Delete the log row in bounded batches |
@@ -46,6 +46,13 @@ Migration `0020` adds append-only `legal_acceptances` evidence with exact bundle
 and canonical content digests, acceptance and expiry timestamps, bounded nullable request context,
 database invariants, and indexes for account lookup and bounded retention. A downgrade refuses to
 discard any retained evidence.
+
+Migration `0021` snapshots the bundle effective date, exact acceptance statement, and each
+document's agreement-or-acknowledgement action on every legal-evidence row. It also gives each
+precise-location capture its own deadline. The retention worker uses the earlier of that stored
+deadline or the current-policy cutoff, so a policy reduction applies to existing data while an
+increase cannot silently extend a previously disclosed capture. Upgrade refuses unknown legal
+artifacts or incoherent legacy location state instead of inventing evidence.
 
 ## Account anonymization
 
@@ -80,7 +87,7 @@ decision. Security events remain subject to their independent 400-day schedule.
 - Ordinary user, settings, log, and security-event permissions do not imply privacy-administration
   authority. Administrative privacy operations require the dedicated least-privilege
   `privacy.manage` permission, seeded only to the built-in admin role.
-- Exports are bounded and streamed. Kingfisher does not retain a generated server-side export file;
+- Exports are bounded and streamed. KingFisher does not retain a generated server-side export file;
   the recipient and environment owner are responsible for downloaded copies.
 
 ## Holds and exceptions

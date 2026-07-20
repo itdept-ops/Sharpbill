@@ -221,6 +221,10 @@ baseline from MySQL 8.0.46 to digest-pinned MySQL 8.4.10:
     `alembic current` reported the single packaged head, `alembic check` reported no model drift,
     every readiness dimension remained `ok`, the versioned legal manifest matched the rebuilt web
     bundle, the login and legal routes returned HTTP 200, and the new evidence table began empty.
+11. The additive `0021` migration then bound the exact acceptance statement, effective date, and
+    per-document action semantics to legal evidence and added non-extending per-capture precise-
+    location deadlines. Full ephemeral-MySQL migration tests passed before the live local volume
+    advanced; this remains runtime validation rather than a new restore-test boundary.
 
 Those names and artifacts are local to that workstation and must be inventoried before cleanup.
 This proves a local logical restore and application/schema validation only. It does **not** prove a
@@ -237,10 +241,10 @@ and implementation. See `docs/DATA_RETENTION_PRIVACY.md`.
 The engine-cutover phase intentionally records the `0012` to `0013` state reached before later
 remediation work. The subsequent local steps separately exercised migrations `0014` through the
 then-current `0017` head with restore-tested boundaries, followed by a cold verified snapshot and
-linear migration through the then-current head `0019`. The later additive `0020` head received
-runtime validation but no new restore-test boundary. Neither that validation nor later migration
-tests retroactively broadens this recovery rehearsal. Every target environment must still repeat
-its own
+linear migration through the then-current head `0019`. The later additive `0020` and `0021` heads
+received runtime validation but no new restore-test boundary. Neither that validation nor later
+migration tests retroactively broadens this recovery rehearsal. Every target environment must
+still repeat its own
 normal head/readiness gates; this local evidence must not be presented as a production restore or
 migration rehearsal.
 
@@ -405,7 +409,7 @@ privileged-account misuse, migration failure, and restore. Track follow-up work 
 - Dependency, secret, static-analysis, and deployable-image scans meet the approved policy.
 - The exact image digests and software bill of materials are retained.
 - Readiness reports the expected schema and synthetic login/navigation checks pass.
-- The deployed database reports the exact packaged single Alembic head (`0020` for this revision),
+- The deployed database reports the exact packaged single Alembic head (`0021` for this revision),
   and the identity, administration, and admission readiness dimensions are all `ok`.
 - Privacy lifecycle boundary/hold tests pass, no overdue unheld application record exceeds the
   approved schedule, and the local 2026-07-20 recovery artifacts are disposed by 2026-08-03 unless

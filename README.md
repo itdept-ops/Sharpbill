@@ -1,4 +1,4 @@
-# Kingfisher — Access Control Console
+# KingFisher — Access Control Console
 
 **An access-control console for local development and evaluation** — single sign-on that verifies
 the provider's *immutable* identity, a database-backed **roles + permissions** system, a **live
@@ -20,7 +20,7 @@ Docker Compose.
 > genuine privilege-escalation bugs in this very RBAC. The story, with the actual bugs, is in
 > **[CASE_STUDY.md](CASE_STUDY.md)**.
 
-![Kingfisher console — a tour of the access-control console](docs/img/demo.gif)
+![KingFisher console — a tour of the access-control console](docs/img/demo.gif)
 
 ---
 
@@ -179,7 +179,7 @@ per-request permission gate.
 - **Frontend** — **React 18 + TypeScript + Vite**, React Router v6, hand-written CSS
   (the "DATASTREAM" terminal theme). Vite proxies `/api` (incl. WebSocket upgrade) to the API.
 - **Database** — digest-pinned **MySQL 8.4.10 LTS** (`utf8mb4`), schema owned entirely by one
-  linear Alembic history (migrations `0001`…`0019`). The data model supports one organization per
+  linear Alembic history (migrations `0001`…`0021`). The data model supports one organization per
   isolated deployment; it is not a shared multi-tenant SaaS schema.
 - **Runtime** — **Docker Compose** (mysql + api + web with hot reload). CI runs on **Node 24**.
 
@@ -401,7 +401,7 @@ Never use that command against data that must be retained.
   replay, RBAC guards, presence/kick, bulk actions, CSV-injection, location privacy, pagination,
   rate limiting, bounded/scheduled retention, erasure/hold workflows, optimistic write preconditions,
   least-privilege exports, security-event outbox behavior, and migration invariants through the
-  packaged head `0019`.
+  packaged head `0021`.
 - **Frontend** — `vitest` + Testing Library over the code that gates access in the browser (the API
   client's error/401 handling, `RequirePermission`, badges).
 - **E2E** — a Playwright job boots the local stack (Vite + FastAPI + MySQL via Docker Compose) and
@@ -422,7 +422,7 @@ Never use that command against data that must be retained.
 ## Project layout
 
 ```
-backend/   FastAPI app, SQLAlchemy models, Alembic migrations (0001 schema … 0019), pytest suite
+backend/   FastAPI app, SQLAlchemy models, Alembic migrations (0001 schema … 0021), pytest suite
 frontend/  React + Vite SPA (DATASTREAM terminal theme)
 deploy/    production compose + Caddyfile (reference; not used locally)
 docs/img/  README screenshots
