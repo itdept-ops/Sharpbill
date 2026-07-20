@@ -6,6 +6,7 @@ import { MatrixRain } from "../components/MatrixRain";
 import {
   LEGAL_BUNDLE_VERSION,
   LEGAL_DOCUMENTS,
+  LEGAL_DRAFT_WARNING,
   LEGAL_EFFECTIVE_DATE,
   LEGAL_EFFECTIVE_DATE_ISO,
   type LegalDocumentKey,
@@ -16,7 +17,7 @@ export function LegalPage({ documentKey }: { documentKey: LegalDocumentKey }) {
 
   useEffect(() => {
     const previousTitle = window.document.title;
-    window.document.title = `${document.title} | Kingfisher`;
+    window.document.title = `${document.title} | KingFisher`;
     return () => {
       window.document.title = previousTitle;
     };
@@ -63,11 +64,7 @@ export function LegalPage({ documentKey }: { documentKey: LegalDocumentKey }) {
 
           <aside className="legal-draft" role="note" aria-label="Draft legal notice">
             <strong>DRAFT — PENDING LEGAL COUNSEL REVIEW</strong>
-            <span>
-              This product template is not legal advice or a final agreement. Before production
-              use, the deployment Operator must obtain qualified counsel review and complete all
-              organization-, jurisdiction-, contact-, and risk-specific terms.
-            </span>
+            <span>{LEGAL_DRAFT_WARNING}</span>
           </aside>
 
           <div className="legal-sections">

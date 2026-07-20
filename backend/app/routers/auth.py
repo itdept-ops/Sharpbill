@@ -1,6 +1,6 @@
 import json
 import logging
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from typing import Literal
 
 from fastapi import APIRouter, Depends, Request, Response
@@ -343,10 +343,14 @@ def update_location(
         raise ApiError(401, "INVALID_SESSION", "Session invalid or expired")
     assert current_user is not None
     user = current_user
+    captured_at = datetime.now(UTC).replace(tzinfo=None)
     user.last_latitude = body.latitude
     user.last_longitude = body.longitude
     user.last_location_accuracy = body.accuracy
-    user.last_location_at = datetime.now(UTC).replace(tzinfo=None)
+    user.last_location_at = captured_at
+    user.location_retention_until = captured_at + timedelta(
+        hours=settings.precise_location_retention_hours
+    )
 
     # Fill in location + timezone from the coordinates (offline reverse-geocode).
     place = place_for(body.latitude, body.longitude)

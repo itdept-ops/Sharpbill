@@ -15,6 +15,7 @@ from app.auth.sessions import (
 )
 from app.config import settings
 from app.db import SessionLocal
+from app.legal_acceptance import CURRENT_LEGAL_BUNDLE_VERSION
 from app.main import app
 from app.models import User, UserSession
 from app.privacy_lifecycle import anonymize_user
@@ -221,7 +222,7 @@ def test_session_issuance_rechecks_lifecycle_after_a_stale_login_read(client):
                 user["id"],
                 request,
                 legal_accepted=True,
-                legal_bundle_version="2026-07-20-v1",
+                legal_bundle_version=CURRENT_LEGAL_BUNDLE_VERSION,
             )
         assert caught.value.code == "ACCOUNT_ERASED"
         stale_session.rollback()

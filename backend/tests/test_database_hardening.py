@@ -126,12 +126,24 @@ def test_real_mysql_schema_contracts_are_materialized():
         "ck_users_last_latitude_valid",
         "ck_users_last_longitude_valid",
         "ck_users_last_location_accuracy_valid",
+        "ck_users_location_retention_valid",
         "ck_users_is_active_boolean",
         "ck_users_is_approved_boolean",
         "ck_users_deactivation_state_valid",
         "ck_users_erasure_schedule_valid",
         "ck_users_erasure_state_valid",
     } <= user_check_names
+    legal_check_names = {
+        constraint["name"] for constraint in inspector.get_check_constraints("legal_acceptances")
+    }
+    assert {
+        "ck_legal_acceptances_acceptance_label_valid",
+        "ck_legal_acceptances_terms_action_valid",
+        "ck_legal_acceptances_eula_action_valid",
+        "ck_legal_acceptances_acceptable_use_action_valid",
+        "ck_legal_acceptances_privacy_action_valid",
+        "ck_legal_acceptances_effective_date_not_after_acceptance",
+    } <= legal_check_names
     role_check_names = {
         constraint["name"] for constraint in inspector.get_check_constraints("roles")
     }
@@ -147,6 +159,7 @@ def test_real_mysql_schema_contracts_are_materialized():
     }
     assert "ix_users_created_at_id" in index_names["users"]
     assert "ix_users_last_location_at_id" in index_names["users"]
+    assert "ix_users_location_retention_until_id" in index_names["users"]
     assert "ix_users_deactivated_at_id" in index_names["users"]
     assert "ix_users_erasure_due_at_id" in index_names["users"]
     assert "ix_user_sessions_user_revoked_created" in index_names["user_sessions"]
@@ -251,7 +264,9 @@ def test_site_settings_checks_reject_invalid_direct_sql(statement):
 def test_user_location_checks_reject_invalid_direct_sql(column, value):
     statement = text(
         "INSERT INTO users (email, display_name, role_id, "
-        f"{column}) SELECT :email, 'Invalid location', id, :value "
+        f"{column}, last_location_at, location_retention_until) "
+        "SELECT :email, 'Invalid location', id, :value, CURRENT_TIMESTAMP(6), "
+        "DATE_ADD(CURRENT_TIMESTAMP(6), INTERVAL 24 HOUR) "
         "FROM roles WHERE name='user'"
     )
     with pytest.raises(DBAPIError):
@@ -260,6 +275,33 @@ def test_user_location_checks_reject_invalid_direct_sql(column, value):
                 statement,
                 {"email": f"invalid-{column}-{value}@example.com", "value": value},
             )
+
+
+@pytest.mark.parametrize(
+    "statement",
+    [
+        (
+            "INSERT INTO users (email, display_name, role_id, last_latitude) "
+            "SELECT 'missing-location-deadline@example.com', 'Invalid location', id, 1 "
+            "FROM roles WHERE name='user'"
+        ),
+        (
+            "INSERT INTO users (email, display_name, role_id, last_location_at) "
+            "SELECT 'orphan-location-time@example.com', 'Invalid location', id, "
+            "CURRENT_TIMESTAMP(6) FROM roles WHERE name='user'"
+        ),
+        (
+            "INSERT INTO users (email, display_name, role_id, last_latitude, last_location_at, "
+            "location_retention_until) SELECT 'backward-location-deadline@example.com', "
+            "'Invalid location', id, 1, CURRENT_TIMESTAMP(6), "
+            "DATE_SUB(CURRENT_TIMESTAMP(6), INTERVAL 1 HOUR) FROM roles WHERE name='user'"
+        ),
+    ],
+)
+def test_location_capture_deadline_state_rejects_invalid_direct_sql(statement):
+    with pytest.raises(DBAPIError):
+        with engine.begin() as connection:
+            connection.execute(text(statement))
 
 
 @pytest.mark.parametrize(
@@ -627,6 +669,7 @@ def test_0019_refuses_to_discard_privacy_lifecycle_evidence_and_round_trips():
 def test_0020_refuses_to_discard_legal_acceptance_evidence_and_round_trips():
     engine.dispose()
     try:
+        command.downgrade(_alembic_config(), "0020")
         with engine.begin() as connection:
             role_id = connection.scalar(text("SELECT id FROM roles WHERE name='user'"))
             user_id = connection.execute(
@@ -678,8 +721,191 @@ def test_0020_refuses_to_discard_legal_acceptance_evidence_and_round_trips():
             assert "legal_acceptances" not in inspect(connection).get_table_names()
         command.upgrade(_alembic_config(), "head")
         with engine.connect() as connection:
-            assert connection.scalar(text("SELECT version_num FROM alembic_version")) == "0020"
+            assert connection.scalar(text("SELECT version_num FROM alembic_version")) == "0021"
             assert "legal_acceptances" in inspect(connection).get_table_names()
+    finally:
+        command.upgrade(_alembic_config(), "head")
+        engine.dispose()
+
+
+def test_0021_safely_backfills_v1_legal_semantics_and_location_deadline():
+    engine.dispose()
+    try:
+        command.downgrade(_alembic_config(), "0020")
+        captured_at = datetime(2026, 7, 20, 10, 30)
+        with engine.begin() as connection:
+            role_id = connection.scalar(text("SELECT id FROM roles WHERE name='user'"))
+            user_id = connection.execute(
+                text(
+                    "INSERT INTO users (email, display_name, role_id, last_latitude, "
+                    "last_longitude, last_location_at) VALUES "
+                    "('v1-backfill@example.com', 'V1 backfill', :role_id, 47.6, -122.3, "
+                    ":captured_at)"
+                ),
+                {"role_id": role_id, "captured_at": captured_at},
+            ).lastrowid
+            connection.execute(
+                text(
+                    "INSERT INTO legal_acceptances "
+                    "(user_id, bundle_version, terms_version, eula_version, "
+                    "acceptable_use_version, privacy_version, terms_sha256, eula_sha256, "
+                    "acceptable_use_sha256, privacy_sha256, accepted_at, retention_until) "
+                    "VALUES (:user_id, :version, :version, :version, :version, :version, "
+                    ":terms_sha256, :eula_sha256, :aup_sha256, :privacy_sha256, "
+                    "'2026-07-20 12:00:00', '2033-07-18 12:00:00')"
+                ),
+                {
+                    "user_id": user_id,
+                    "version": "2026-07-20-v1",
+                    "terms_sha256": (
+                        "2c77250037d037141e79fd11f1a85cde1e9257d51cb325e7fdaefa6cf4f0ff2e"
+                    ),
+                    "eula_sha256": (
+                        "16bd045a449990e3f7325f0d67d81d4fee54f679ec53164835f0c19725e25638"
+                    ),
+                    "aup_sha256": (
+                        "d4391a0abe57885964606521039a4cca0151f8e11d95c628efc51b603eefdb0d"
+                    ),
+                    "privacy_sha256": (
+                        "fb96f77cc9846282c9555105994d0dc9b400c2a6eaf35e15b390b5a3c5db2d3d"
+                    ),
+                },
+            )
+
+        command.upgrade(_alembic_config(), "head")
+        with engine.connect() as connection:
+            evidence = connection.execute(
+                text(
+                    "SELECT bundle_effective_date, acceptance_label, terms_action, eula_action, "
+                    "acceptable_use_action, privacy_action FROM legal_acceptances LIMIT 1"
+                )
+            ).one()
+            assert str(evidence.bundle_effective_date) == "2026-07-20"
+            assert evidence.acceptance_label == (
+                "I agree to the Terms of Service, EULA, and Acceptable Use Policy, and "
+                "acknowledge the Privacy Notice."
+            )
+            assert evidence.terms_action == evidence.eula_action == "agreement"
+            assert evidence.acceptable_use_action == "agreement"
+            assert evidence.privacy_action == "acknowledgement"
+            deadline = connection.scalar(
+                text("SELECT location_retention_until FROM users WHERE id=:user_id"),
+                {"user_id": user_id},
+            )
+            assert deadline == captured_at + timedelta(hours=24)
+
+        with pytest.raises(RuntimeError, match="legal action/effective-date evidence"):
+            command.downgrade(_alembic_config(), "0020")
+        with engine.begin() as connection:
+            connection.execute(text("DELETE FROM legal_acceptances"))
+        with pytest.raises(RuntimeError, match="location retention deadlines"):
+            command.downgrade(_alembic_config(), "0020")
+        with engine.begin() as connection:
+            connection.execute(
+                text(
+                    "UPDATE users SET last_latitude=NULL, last_longitude=NULL, "
+                    "last_location_accuracy=NULL, last_location_at=NULL, "
+                    "location_retention_until=NULL WHERE id=:user_id"
+                ),
+                {"user_id": user_id},
+            )
+
+        command.downgrade(_alembic_config(), "0020")
+        with engine.connect() as connection:
+            assert connection.scalar(text("SELECT version_num FROM alembic_version")) == "0020"
+            legal_columns = {
+                item["name"] for item in inspect(connection).get_columns("legal_acceptances")
+            }
+            user_columns = {item["name"] for item in inspect(connection).get_columns("users")}
+            assert "bundle_effective_date" not in legal_columns
+            assert "acceptance_label" not in legal_columns
+            assert "location_retention_until" not in user_columns
+        command.upgrade(_alembic_config(), "head")
+    finally:
+        command.upgrade(_alembic_config(), "head")
+        engine.dispose()
+
+
+def test_0021_refuses_unknown_legal_evidence_before_any_ddl():
+    engine.dispose()
+    try:
+        command.downgrade(_alembic_config(), "0020")
+        with engine.begin() as connection:
+            role_id = connection.scalar(text("SELECT id FROM roles WHERE name='user'"))
+            user_id = connection.execute(
+                text(
+                    "INSERT INTO users (email, display_name, role_id) "
+                    "VALUES ('unknown-legal-backfill@example.com', 'Unknown', :role_id)"
+                ),
+                {"role_id": role_id},
+            ).lastrowid
+            connection.execute(
+                text(
+                    "INSERT INTO legal_acceptances "
+                    "(user_id, bundle_version, terms_version, eula_version, "
+                    "acceptable_use_version, privacy_version, terms_sha256, eula_sha256, "
+                    "acceptable_use_sha256, privacy_sha256, accepted_at, retention_until) "
+                    "VALUES (:user_id, :version, :version, :version, :version, :version, "
+                    ":digest, :digest, :digest, :digest, '2026-07-20 12:00:00', "
+                    "'2033-07-18 12:00:00')"
+                ),
+                {
+                    "user_id": user_id,
+                    "version": "2026-07-20-v1",
+                    "digest": "a" * 64,
+                },
+            )
+
+        with pytest.raises(RuntimeError, match="unknown or modified evidence"):
+            command.upgrade(_alembic_config(), "head")
+        with engine.connect() as connection:
+            assert connection.scalar(text("SELECT version_num FROM alembic_version")) == "0020"
+            legal_columns = {
+                item["name"] for item in inspect(connection).get_columns("legal_acceptances")
+            }
+            user_columns = {item["name"] for item in inspect(connection).get_columns("users")}
+            assert "bundle_effective_date" not in legal_columns
+            assert "location_retention_until" not in user_columns
+        with engine.begin() as connection:
+            connection.execute(text("DELETE FROM legal_acceptances"))
+            connection.execute(
+                text("DELETE FROM users WHERE email='unknown-legal-backfill@example.com'")
+            )
+        command.upgrade(_alembic_config(), "head")
+    finally:
+        command.upgrade(_alembic_config(), "head")
+        engine.dispose()
+
+
+def test_0021_refuses_incoherent_legacy_location_before_any_ddl():
+    engine.dispose()
+    try:
+        command.downgrade(_alembic_config(), "0020")
+        with engine.begin() as connection:
+            role_id = connection.scalar(text("SELECT id FROM roles WHERE name='user'"))
+            connection.execute(
+                text(
+                    "INSERT INTO users (email, display_name, role_id, last_latitude) "
+                    "VALUES ('orphan-legacy-location@example.com', 'Orphan', :role_id, 47.6)"
+                ),
+                {"role_id": role_id},
+            )
+
+        with pytest.raises(RuntimeError, match="without a coherent capture time"):
+            command.upgrade(_alembic_config(), "head")
+        with engine.connect() as connection:
+            assert connection.scalar(text("SELECT version_num FROM alembic_version")) == "0020"
+            legal_columns = {
+                item["name"] for item in inspect(connection).get_columns("legal_acceptances")
+            }
+            user_columns = {item["name"] for item in inspect(connection).get_columns("users")}
+            assert "bundle_effective_date" not in legal_columns
+            assert "location_retention_until" not in user_columns
+        with engine.begin() as connection:
+            connection.execute(
+                text("DELETE FROM users WHERE email='orphan-legacy-location@example.com'")
+            )
+        command.upgrade(_alembic_config(), "head")
     finally:
         command.upgrade(_alembic_config(), "head")
         engine.dispose()

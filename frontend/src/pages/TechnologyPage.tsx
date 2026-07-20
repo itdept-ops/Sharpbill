@@ -58,7 +58,7 @@ export function TechnologyPage() {
             Built the modern way — <span className="lit">agentically.</span>
           </h1>
           <p>
-            Kingfisher is a full-stack access-control console designed, built, and reviewed through
+            KingFisher is a full-stack access-control console designed, built, and reviewed through
             a multi-agent workflow: models handle the grind — code, tests, docs,
             adversarial review — while the architect steers intent. What follows is the actual
             repository baseline, not a claim of production deployment.

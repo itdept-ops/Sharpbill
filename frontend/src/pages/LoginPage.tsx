@@ -70,23 +70,33 @@ export function LoginPage() {
     setLegalAccepted(false);
   }, []);
 
+  const clearLocationChoice = useCallback(() => {
+    shareLocationRef.current = false;
+    setShareLocation(false);
+  }, []);
+
   const loadLegalManifest = useCallback((signal?: AbortSignal) => {
     setLegalManifestFailed(false);
     setLegalManifest(null);
     clearLegalAcceptance();
+    clearLocationChoice();
     api
       .get<LegalManifest>("/api/legal/manifest", { signal })
       .then((manifest) => {
         setLegalManifest(manifest);
-        if (!isSupportedLegalManifest(manifest)) clearLegalAcceptance();
+        if (!isSupportedLegalManifest(manifest)) {
+          clearLegalAcceptance();
+          clearLocationChoice();
+        }
       })
       .catch((e) => {
         if (isAbort(e) && signal?.aborted) return;
         setLegalManifest(null);
         setLegalManifestFailed(true);
         clearLegalAcceptance();
+        clearLocationChoice();
       });
-  }, [clearLegalAcceptance]);
+  }, [clearLegalAcceptance, clearLocationChoice]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -370,6 +380,7 @@ export function LoginPage() {
           <label className="location-optin">
             <input
               type="checkbox"
+              disabled={!legalReady || signingIn !== null}
               checked={shareLocation}
               onChange={(e) => {
                 shareLocationRef.current = e.target.checked;
@@ -378,7 +389,11 @@ export function LoginPage() {
             />
             <span>
               Share this device&apos;s location after sign-in
-              <small>Optional · used to set your place and timezone. Your browser will ask first.</small>
+              <small>
+                {legalReady && legalManifest
+                  ? `Optional · used to set your place and timezone · precise coordinates scheduled for clearing after ${legalManifest.precise_location_retention_hours} hours unless held · derived place/timezone remain until you clear them · browser permission is required and may prompt`
+                  : "Location sharing becomes available after the current legal and retention policy loads."}
+              </small>
             </span>
           </label>
 

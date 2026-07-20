@@ -87,12 +87,14 @@ def clear_precise_location(user: User) -> bool:
             user.last_longitude,
             user.last_location_accuracy,
             user.last_location_at,
+            user.location_retention_until,
         )
     )
     user.last_latitude = None
     user.last_longitude = None
     user.last_location_accuracy = None
     user.last_location_at = None
+    user.location_retention_until = None
     return changed
 
 
@@ -248,30 +250,52 @@ def prune_sessions_governed(db: Session, limit: int, *, now: datetime | None = N
 
 
 def clear_stale_precise_locations(db: Session, limit: int, *, now: datetime | None = None) -> int:
-    """Clear, rather than delete, one bounded batch of precise-location records."""
+    """Clear samples at the earlier of their capture deadline or current policy deadline."""
     if retention_hold_active(db):
         return 0
-    cutoff = (now or _now()) - timedelta(hours=settings.precise_location_retention_hours)
+    current = now or _now()
     stale_ids = list(
         db.scalars(
             select(User.id)
-            .where(
-                or_(
-                    User.last_location_at <= cutoff,
-                    # Unknown capture time cannot justify retaining orphaned coordinates.
-                    User.last_location_at.is_(None)
-                    & or_(
-                        User.last_latitude.is_not(None),
-                        User.last_longitude.is_not(None),
-                        User.last_location_accuracy.is_not(None),
-                    ),
-                ),
-            )
-            .order_by(User.last_location_at.is_not(None), User.last_location_at, User.id)
+            .where(User.location_retention_until <= current)
+            .order_by(User.location_retention_until, User.id)
             .limit(limit)
             .with_for_update(skip_locked=True)
         )
     )
+    remaining = limit - len(stale_ids)
+    if remaining > 0:
+        policy_cutoff = current - timedelta(hours=settings.precise_location_retention_hours)
+        policy_query = (
+            select(User.id)
+            .where(User.last_location_at <= policy_cutoff)
+            .order_by(User.last_location_at, User.id)
+            .limit(remaining)
+            .with_for_update(skip_locked=True)
+        )
+        if stale_ids:
+            policy_query = policy_query.where(User.id.not_in(stale_ids))
+        stale_ids.extend(db.scalars(policy_query))
+    remaining = limit - len(stale_ids)
+    if remaining > 0:
+        # Unknown capture time cannot justify retaining orphaned precise coordinates.
+        orphan_query = (
+            select(User.id)
+            .where(
+                User.last_location_at.is_(None),
+                or_(
+                    User.last_latitude.is_not(None),
+                    User.last_longitude.is_not(None),
+                    User.last_location_accuracy.is_not(None),
+                ),
+            )
+            .order_by(User.id)
+            .limit(remaining)
+            .with_for_update(skip_locked=True)
+        )
+        if stale_ids:
+            orphan_query = orphan_query.where(User.id.not_in(stale_ids))
+        stale_ids.extend(db.scalars(orphan_query))
     if stale_ids:
         db.execute(
             update(User)
@@ -281,6 +305,7 @@ def clear_stale_precise_locations(db: Session, limit: int, *, now: datetime | No
                 last_longitude=None,
                 last_location_accuracy=None,
                 last_location_at=None,
+                location_retention_until=None,
             )
         )
     return len(stale_ids)

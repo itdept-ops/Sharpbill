@@ -1,7 +1,9 @@
 from fastapi import APIRouter
 
+from app.config import settings
 from app.legal_acceptance import (
     CURRENT_LEGAL_BUNDLE_VERSION,
+    LEGAL_ACCEPTANCE_LABEL,
     LEGAL_BUNDLE_EFFECTIVE_DATE,
     LEGAL_DOCUMENTS,
 )
@@ -17,10 +19,9 @@ def legal_manifest() -> LegalManifestOut:
         bundle_version=CURRENT_LEGAL_BUNDLE_VERSION,
         effective_date=LEGAL_BUNDLE_EFFECTIVE_DATE,
         required_at_login=True,
-        acceptance_label=(
-            "I agree to the Terms of Service, EULA, and Acceptable Use Policy, and acknowledge "
-            "the Privacy Notice."
-        ),
+        acceptance_label=LEGAL_ACCEPTANCE_LABEL,
+        precise_location_retention_hours=settings.precise_location_retention_hours,
+        legal_acceptance_retention_days=settings.legal_acceptance_retention_days,
         documents=[
             LegalDocumentOut(
                 key=document.key,

@@ -35,6 +35,7 @@ const privacyStatus = {
     erasure_grace_days: 30,
     disabled_accounts_days: 365,
     security_events_days: 400,
+    legal_acceptances_days: 2555,
     generated_exports_retained: false,
   },
   retention_hold: false,

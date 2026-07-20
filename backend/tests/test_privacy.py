@@ -227,6 +227,7 @@ def test_stale_personal_mutations_cannot_reintroduce_pii_after_erasure(client):
             assert erased.last_longitude is None
             assert erased.last_location_accuracy is None
             assert erased.last_location_at is None
+            assert erased.location_retention_until is None
     finally:
         location_db.close()
         profile_db.close()

@@ -15,16 +15,18 @@ const mocks = vi.hoisted(() => ({
     calm: false,
   } as AuthConfig,
   legalManifest: {
-    bundle_version: "2026-07-20-v1",
+    bundle_version: "2026-07-20-v2",
     effective_date: "2026-07-20",
     required_at_login: true,
     acceptance_label:
       "I agree to the Terms of Service, EULA, and Acceptable Use Policy, and acknowledge the Privacy Notice.",
+    precise_location_retention_hours: 24,
+    legal_acceptance_retention_days: 2555,
     documents: [
       {
         key: "terms",
         title: "Terms of Service",
-        version: "2026-07-20-v1",
+        version: "2026-07-20-v2",
         sha256: "0000000000000000000000000000000000000000000000000000000000000000",
         url: "/legal/terms-of-service.html",
         acceptance: "agreement",
@@ -32,7 +34,7 @@ const mocks = vi.hoisted(() => ({
       {
         key: "eula",
         title: "End User License Agreement",
-        version: "2026-07-20-v1",
+        version: "2026-07-20-v2",
         sha256: "0000000000000000000000000000000000000000000000000000000000000000",
         url: "/legal/eula.html",
         acceptance: "agreement",
@@ -40,7 +42,7 @@ const mocks = vi.hoisted(() => ({
       {
         key: "acceptable_use",
         title: "Acceptable Use Policy",
-        version: "2026-07-20-v1",
+        version: "2026-07-20-v2",
         sha256: "0000000000000000000000000000000000000000000000000000000000000000",
         url: "/legal/acceptable-use-policy.html",
         acceptance: "agreement",
@@ -48,7 +50,7 @@ const mocks = vi.hoisted(() => ({
       {
         key: "privacy",
         title: "Privacy Notice",
-        version: "2026-07-20-v1",
+        version: "2026-07-20-v2",
         sha256: "0000000000000000000000000000000000000000000000000000000000000000",
         url: "/legal/privacy-notice.html",
         acceptance: "acknowledgement",
@@ -114,6 +116,8 @@ beforeEach(() => {
     required_at_login: true,
     acceptance_label:
       "I agree to the Terms of Service, EULA, and Acceptable Use Policy, and acknowledge the Privacy Notice.",
+    precise_location_retention_hours: 24,
+    legal_acceptance_retention_days: 2555,
     documents: [
       { key: "terms", title: "Terms of Service", version: LEGAL_BUNDLE_VERSION, sha256: LEGAL_DOCUMENT_SHA256.terms, url: "/legal/terms-of-service.html", acceptance: "agreement" },
       { key: "eula", title: "End User License Agreement", version: LEGAL_BUNDLE_VERSION, sha256: LEGAL_DOCUMENT_SHA256.eula, url: "/legal/eula.html", acceptance: "agreement" },
@@ -206,6 +210,9 @@ describe("LoginPage provider matrix", () => {
     expect(checkbox).toBeRequired();
     expect(checkbox).toBeEnabled();
     expect(screen.getByText(/Draft bundle — counsel review required before production/i)).toBeInTheDocument();
+    expect(
+      screen.getByText(/precise coordinates scheduled for clearing after 24 hours unless held/i),
+    ).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /continue with microsoft/i })).toBeDisabled();
     expect(mocks.post).not.toHaveBeenCalledWith("/api/auth/nonce");
 
@@ -230,6 +237,38 @@ describe("LoginPage provider matrix", () => {
     }
   });
 
+  it("blocks location opt-in until the verified active retention policy is displayed", async () => {
+    let resolveManifest!: (manifest: LegalManifest) => void;
+    const deferredManifest = new Promise<LegalManifest>((resolve) => {
+      resolveManifest = resolve;
+    });
+    mocks.get.mockImplementation((path: string) => {
+      if (path === "/api/auth/config") return Promise.resolve(mocks.config);
+      if (path === "/api/legal/manifest") return deferredManifest;
+      return Promise.reject(new Error(`Unexpected GET ${path}`));
+    });
+
+    renderLogin();
+
+    const locationOptIn = screen.getByRole("checkbox", {
+      name: /share this device's location after sign-in/i,
+    });
+    expect(locationOptIn).toBeDisabled();
+    expect(locationOptIn).not.toBeChecked();
+    expect(screen.queryByText(/coordinates scheduled for clearing after 24 hours/i)).not.toBeInTheDocument();
+    expect(screen.getByText(/becomes available after the current legal and retention policy loads/i)).toBeInTheDocument();
+
+    await act(async () => {
+      resolveManifest({ ...mocks.legalManifest, precise_location_retention_hours: 720 });
+    });
+
+    await waitFor(() => expect(locationOptIn).toBeEnabled());
+    expect(locationOptIn).not.toBeChecked();
+    expect(
+      screen.getByText(/precise coordinates scheduled for clearing after 720 hours unless held/i),
+    ).toBeInTheDocument();
+  });
+
   it("fails closed when the legal manifest cannot load", async () => {
     mocks.get.mockImplementation((path: string) => {
       if (path === "/api/auth/config") return Promise.resolve(mocks.config);
@@ -247,6 +286,16 @@ describe("LoginPage provider matrix", () => {
 
   it("fails closed when the server legal bundle is newer than this web build", async () => {
     mocks.legalManifest = { ...mocks.legalManifest, bundle_version: "2026-08-01-v2" };
+
+    renderLogin();
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(/web build does not match/i);
+    expect(await acceptanceCheckbox()).toBeDisabled();
+    expect(screen.getByRole("button", { name: /continue with microsoft/i })).toBeDisabled();
+  });
+
+  it("fails closed when the public retention disclosure is outside supported bounds", async () => {
+    mocks.legalManifest = { ...mocks.legalManifest, precise_location_retention_hours: 721 };
 
     renderLogin();
 

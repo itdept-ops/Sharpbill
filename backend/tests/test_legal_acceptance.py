@@ -42,6 +42,12 @@ def _historic_acceptance(
         eula_sha256=digest,
         acceptable_use_sha256=digest,
         privacy_sha256=digest,
+        bundle_effective_date=accepted_at.date(),
+        acceptance_label="Historic acceptance assertion",
+        terms_action="agreement",
+        eula_action="agreement",
+        acceptable_use_action="agreement",
+        privacy_action="acknowledgement",
         accepted_at=accepted_at,
         retention_until=retention_until,
     )
@@ -51,43 +57,45 @@ def test_public_manifest_is_the_exact_versioned_login_contract(client):
     response = client.get("/api/legal/manifest")
     assert response.status_code == 200
     assert response.json() == {
-        "bundle_version": "2026-07-20-v1",
+        "bundle_version": "2026-07-20-v2",
         "effective_date": "2026-07-20",
         "required_at_login": True,
         "acceptance_label": (
             "I agree to the Terms of Service, EULA, and Acceptable Use Policy, and acknowledge "
             "the Privacy Notice."
         ),
+        "precise_location_retention_hours": 24,
+        "legal_acceptance_retention_days": 2555,
         "documents": [
             {
                 "key": "terms",
                 "title": "Terms of Service",
-                "version": "2026-07-20-v1",
-                "sha256": "2c77250037d037141e79fd11f1a85cde1e9257d51cb325e7fdaefa6cf4f0ff2e",
+                "version": "2026-07-20-v2",
+                "sha256": "f5a30fded3b6b4715f13d0711c9168dd643aac48ff14164e95bc7610734fb912",
                 "url": "/legal/terms-of-service.html",
                 "acceptance": "agreement",
             },
             {
                 "key": "eula",
                 "title": "End User License Agreement",
-                "version": "2026-07-20-v1",
-                "sha256": "16bd045a449990e3f7325f0d67d81d4fee54f679ec53164835f0c19725e25638",
+                "version": "2026-07-20-v2",
+                "sha256": "2715b0daa99c2a553b08448eb81307affcfd2ca5ece005563eb4ad83d7fae6b3",
                 "url": "/legal/eula.html",
                 "acceptance": "agreement",
             },
             {
                 "key": "acceptable_use",
                 "title": "Acceptable Use Policy",
-                "version": "2026-07-20-v1",
-                "sha256": "d4391a0abe57885964606521039a4cca0151f8e11d95c628efc51b603eefdb0d",
+                "version": "2026-07-20-v2",
+                "sha256": "1290bb3dbcf3b79fb2051693ae7be6898b421daf24af1ddb037098cc1ee07217",
                 "url": "/legal/acceptable-use-policy.html",
                 "acceptance": "agreement",
             },
             {
                 "key": "privacy",
                 "title": "Privacy Notice",
-                "version": "2026-07-20-v1",
-                "sha256": "fb96f77cc9846282c9555105994d0dc9b400c2a6eaf35e15b390b5a3c5db2d3d",
+                "version": "2026-07-20-v2",
+                "sha256": "53e22a3bff270fb2215631f061cd001f89a96971e6fa3bb8374ff2f829931695",
                 "url": "/legal/privacy-notice.html",
                 "acceptance": "acknowledgement",
             },
@@ -127,7 +135,7 @@ def test_login_rejects_missing_unchecked_and_stale_legal_acceptance_before_provi
             json={
                 "email": "stale-legal@example.com",
                 "legal_accepted": True,
-                "legal_bundle_version": "2026-07-19-v1",
+                "legal_bundle_version": "2026-07-20-v1",
             },
         )
     assert unchecked.status_code == 428
@@ -197,26 +205,35 @@ def test_every_session_records_bounded_immutable_exact_acceptance_evidence(clien
     assert len(rows) == 2
     for evidence in rows:
         assert evidence.bundle_version == CURRENT_LEGAL_BUNDLE_VERSION
-        assert evidence.terms_version == "2026-07-20-v1"
-        assert evidence.eula_version == "2026-07-20-v1"
-        assert evidence.acceptable_use_version == "2026-07-20-v1"
-        assert evidence.privacy_version == "2026-07-20-v1"
+        assert evidence.terms_version == "2026-07-20-v2"
+        assert evidence.eula_version == "2026-07-20-v2"
+        assert evidence.acceptable_use_version == "2026-07-20-v2"
+        assert evidence.privacy_version == "2026-07-20-v2"
         assert (
             evidence.terms_sha256
-            == "2c77250037d037141e79fd11f1a85cde1e9257d51cb325e7fdaefa6cf4f0ff2e"
+            == "f5a30fded3b6b4715f13d0711c9168dd643aac48ff14164e95bc7610734fb912"
         )
         assert (
             evidence.eula_sha256
-            == "16bd045a449990e3f7325f0d67d81d4fee54f679ec53164835f0c19725e25638"
+            == "2715b0daa99c2a553b08448eb81307affcfd2ca5ece005563eb4ad83d7fae6b3"
         )
         assert (
             evidence.acceptable_use_sha256
-            == "d4391a0abe57885964606521039a4cca0151f8e11d95c628efc51b603eefdb0d"
+            == "1290bb3dbcf3b79fb2051693ae7be6898b421daf24af1ddb037098cc1ee07217"
         )
         assert (
             evidence.privacy_sha256
-            == "fb96f77cc9846282c9555105994d0dc9b400c2a6eaf35e15b390b5a3c5db2d3d"
+            == "53e22a3bff270fb2215631f061cd001f89a96971e6fa3bb8374ff2f829931695"
         )
+        assert evidence.bundle_effective_date.isoformat() == "2026-07-20"
+        assert evidence.acceptance_label == (
+            "I agree to the Terms of Service, EULA, and Acceptable Use Policy, and acknowledge "
+            "the Privacy Notice."
+        )
+        assert evidence.terms_action == "agreement"
+        assert evidence.eula_action == "agreement"
+        assert evidence.acceptable_use_action == "agreement"
+        assert evidence.privacy_action == "acknowledgement"
         assert evidence.source_ip == "127.0.0.1"
         assert evidence.user_agent == long_user_agent[:400]
         assert evidence.request_id == "legal-request-001"
@@ -234,7 +251,20 @@ def test_every_session_records_bounded_immutable_exact_acceptance_evidence(clien
     assert all(event.target_id == CURRENT_LEGAL_BUNDLE_VERSION for event in legal_events)
     assert all(
         event.event_metadata["terms_sha256"]
-        == "2c77250037d037141e79fd11f1a85cde1e9257d51cb325e7fdaefa6cf4f0ff2e"
+        == "f5a30fded3b6b4715f13d0711c9168dd643aac48ff14164e95bc7610734fb912"
+        for event in legal_events
+    )
+    assert all(
+        event.event_metadata["bundle_effective_date"] == "2026-07-20"
+        and event.event_metadata["acceptance_label"]
+        == (
+            "I agree to the Terms of Service, EULA, and Acceptable Use Policy, and acknowledge "
+            "the Privacy Notice."
+        )
+        and event.event_metadata["terms_action"] == "agreement"
+        and event.event_metadata["eula_action"] == "agreement"
+        and event.event_metadata["acceptable_use_action"] == "agreement"
+        and event.event_metadata["privacy_action"] == "acknowledgement"
         for event in legal_events
     )
 
@@ -407,5 +437,12 @@ def test_database_rejects_noncanonical_legal_digest(client, db):
     table = LegalAcceptance.__table__
     with pytest.raises(DBAPIError):
         db.execute(table.update().where(table.c.id == acceptance.id).values(terms_sha256="A" * 64))
+        db.commit()
+    db.rollback()
+
+    with pytest.raises(DBAPIError):
+        db.execute(
+            table.update().where(table.c.id == acceptance.id).values(privacy_action="consent")
+        )
         db.commit()
     db.rollback()

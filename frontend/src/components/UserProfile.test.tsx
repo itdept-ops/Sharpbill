@@ -67,6 +67,7 @@ const policy = {
   erasure_grace_days: 30,
   disabled_accounts_days: 365,
   security_events_days: 400,
+  legal_acceptances_days: 2555,
   generated_exports_retained: false,
 };
 
@@ -92,6 +93,15 @@ beforeEach(() => {
 afterEach(() => vi.restoreAllMocks());
 
 describe("UserProfile privacy controls", () => {
+  it("shows the active non-extending legal acceptance retention policy", async () => {
+    render(<UserProfile user={self} />);
+
+    expect(await screen.findByText("Legal acceptance evidence")).toBeInTheDocument();
+    expect(screen.getByText(/permits retention for no more than 2555 days/i)).toHaveTextContent(
+      /earlier recorded deadline remains earlier/i,
+    );
+  });
+
   it("clears the signed-in user's saved location after explicit confirmation", async () => {
     mocks.del.mockResolvedValue(undefined);
     vi.spyOn(window, "confirm").mockReturnValue(true);

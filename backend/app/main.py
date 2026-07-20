@@ -191,7 +191,7 @@ async def _lifespan(_: FastAPI):
 
 
 app = FastAPI(
-    title="Kingfisher CRM API",
+    title="KingFisher CRM API",
     docs_url="/api/docs" if _docs_enabled else None,
     openapi_url="/api/openapi.json" if _docs_enabled else None,
     lifespan=_lifespan,

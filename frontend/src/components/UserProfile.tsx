@@ -301,9 +301,11 @@ export function UserProfile({ user: initial }: { user: User }) {
                   <div className="kv-row">
                     <span className="k">Saved location</span>
                     <span className="v">
-                      {user.last_location_at || user.location || user.timezone
-                        ? `Stored; precise coordinates expire within ${privacy.policy.precise_location_hours} hours.`
-                        : "No location or timezone is saved."}
+                      {user.last_location_at
+                        ? `Precise coordinates are scheduled for clearing after ${privacy.policy.precise_location_hours} hours unless held; derived place and timezone remain until you clear them.`
+                        : user.location || user.timezone
+                          ? "Only derived place or timezone is stored; it remains until you clear it or the account lifecycle removes it."
+                          : "No location or timezone is saved."}
                     </span>
                   </div>
                   <div className="kv-row">
@@ -322,6 +324,12 @@ export function UserProfile({ user: initial }: { user: User }) {
                       ) : (
                         `Not scheduled; requests have a ${privacy.policy.erasure_grace_days}-day cancellation window.`
                       )}
+                    </span>
+                  </div>
+                  <div className="kv-row">
+                    <span className="k">Legal acceptance evidence</span>
+                    <span className="v">
+                      {`The current policy permits retention for no more than ${privacy.policy.legal_acceptances_days} days, unless a documented retention hold applies. An earlier recorded deadline remains earlier, and a shorter policy also shortens existing schedules.`}
                     </span>
                   </div>
                 </div>

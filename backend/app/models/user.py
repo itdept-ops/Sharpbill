@@ -28,6 +28,7 @@ class User(Base):
         # Retention workers use timestamp + primary-key indexes for deterministic,
         # bounded batches without scanning the full user directory.
         Index("ix_users_last_location_at_id", "last_location_at", "id"),
+        Index("ix_users_location_retention_until_id", "location_retention_until", "id"),
         Index("ix_users_deactivated_at_id", "deactivated_at", "id"),
         Index("ix_users_erasure_due_at_id", "erasure_due_at", "id"),
         CheckConstraint(
@@ -41,6 +42,17 @@ class User(Base):
         CheckConstraint(
             "last_location_accuracy IS NULL OR last_location_accuracy BETWEEN 0 AND 100000",
             name="last_location_accuracy_valid",
+        ),
+        CheckConstraint(
+            "(last_latitude IS NULL AND last_longitude IS NULL "
+            "AND last_location_accuracy IS NULL AND last_location_at IS NULL "
+            "AND location_retention_until IS NULL) OR "
+            "((last_latitude IS NOT NULL OR last_longitude IS NOT NULL "
+            "OR last_location_accuracy IS NOT NULL) AND last_location_at IS NOT NULL "
+            "AND location_retention_until IS NOT NULL "
+            "AND location_retention_until >= last_location_at "
+            ")",
+            name="location_retention_valid",
         ),
         CheckConstraint("is_active IN (0, 1)", name="is_active_boolean"),
         CheckConstraint("is_approved IN (0, 1)", name="is_approved_boolean"),
@@ -96,6 +108,8 @@ class User(Base):
     last_longitude: Mapped[float | None] = mapped_column(Double)
     last_location_accuracy: Mapped[float | None] = mapped_column(Double)
     last_location_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=False))
+    # Capture-time deadline prevents a later policy increase from silently extending this sample.
+    location_retention_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=False))
     # Per-user UI accent color (hex, e.g. "#35ff74"); null = the default green.
     accent_color: Mapped[str | None] = mapped_column(String(9))
     # Extensible per-user UI preferences bag (base tone, glow, motion, rain, density,

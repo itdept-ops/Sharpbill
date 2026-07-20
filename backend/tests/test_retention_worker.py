@@ -172,6 +172,7 @@ def test_cycle_anonymizes_due_account_but_retains_identity_suppression_marker(cl
     user.last_longitude = -122.3
     user.last_location_accuracy = 20
     user.last_location_at = now
+    user.location_retention_until = now + timedelta(hours=settings.precise_location_retention_hours)
     user.erasure_requested_at = now - timedelta(days=31)
     user.erasure_due_at = now - timedelta(seconds=1)
     identity = db.scalar(select(UserIdentity).where(UserIdentity.user_id == user.id))
@@ -217,6 +218,7 @@ def test_cycle_anonymizes_due_account_but_retains_identity_suppression_marker(cl
             erased.last_longitude,
             erased.last_location_accuracy,
             erased.last_location_at,
+            erased.location_retention_until,
         )
     )
     retained_identity = db.scalar(select(UserIdentity).where(UserIdentity.user_id == erased.id))
@@ -301,11 +303,17 @@ def test_cycle_bounds_gps_pending_and_disabled_lifecycle_batches(client, db):
     stale_location.last_location_at = now - timedelta(
         hours=settings.precise_location_retention_hours + 1
     )
+    stale_location.location_retention_until = stale_location.last_location_at + timedelta(
+        hours=settings.precise_location_retention_hours
+    )
     fresh_location.last_latitude = 40.7
     fresh_location.last_longitude = -74.0
     fresh_location.last_location_accuracy = 10
     fresh_location.last_location_at = now - timedelta(
         hours=settings.precise_location_retention_hours - 1
+    )
+    fresh_location.location_retention_until = fresh_location.last_location_at + timedelta(
+        hours=settings.precise_location_retention_hours
     )
 
     pending.is_approved = False
@@ -360,6 +368,9 @@ def test_location_clear_helper_removes_coarse_and_precise_profile(client, db):
     user.last_longitude = -122.3
     user.last_location_accuracy = 15
     user.last_location_at = datetime.now(UTC).replace(tzinfo=None)
+    user.location_retention_until = user.last_location_at + timedelta(
+        hours=settings.precise_location_retention_hours
+    )
 
     assert clear_user_location(user)
     assert all(
@@ -371,9 +382,53 @@ def test_location_clear_helper_removes_coarse_and_precise_profile(client, db):
             user.last_longitude,
             user.last_location_accuracy,
             user.last_location_at,
+            user.location_retention_until,
         )
     )
     assert not clear_user_location(user)
+
+
+def test_location_policy_reduction_applies_but_increase_never_extends_capture_deadline(
+    client, db, monkeypatch
+):
+    now = datetime.now(UTC).replace(tzinfo=None)
+
+    def login_user(email: str) -> User:
+        payload = client.post("/api/auth/dev", json={"email": email, "role": "user"}).json()
+        db.rollback()
+        user = db.get(User, payload["id"])
+        assert user is not None
+        return user
+
+    stored_deadline = login_user("location-stored-deadline@example.com")
+    policy_reduction = login_user("location-policy-reduction@example.com")
+    stored_deadline.last_latitude = 1
+    stored_deadline.last_longitude = 2
+    stored_deadline.last_location_at = now - timedelta(hours=1)
+    stored_deadline.location_retention_until = now - timedelta(seconds=1)
+    policy_reduction.last_latitude = 3
+    policy_reduction.last_longitude = 4
+    policy_reduction.last_location_at = now - timedelta(hours=10)
+    policy_reduction.location_retention_until = now + timedelta(hours=100)
+    db.commit()
+
+    monkeypatch.setattr(settings, "precise_location_retention_hours", 20)
+    increased = run_retention_cycle(precise_location_batch_size=10, max_batches=1)
+    assert increased.precise_locations_cleared == 1
+    db.expire_all()
+    assert db.get(User, stored_deadline.id).last_latitude is None
+    assert db.get(User, policy_reduction.id).last_latitude == 3
+
+    # End the assertion read snapshot before the independent worker's next transaction.
+    db.rollback()
+    monkeypatch.setattr(settings, "precise_location_retention_hours", 6)
+    reduced = run_retention_cycle(precise_location_batch_size=10, max_batches=1)
+    assert reduced.precise_locations_cleared == 1
+    db.expire_all()
+    reduced_user = db.get(User, policy_reduction.id)
+    assert reduced_user is not None
+    assert reduced_user.last_latitude is None
+    assert reduced_user.location_retention_until is None
 
 
 def test_admin_erasure_is_refused_and_never_selected(client, db):
@@ -408,6 +463,9 @@ def test_global_hold_preserves_governed_data_but_never_expired_nonces(client, db
     user.last_longitude = -75.0
     user.last_location_accuracy = 25
     user.last_location_at = now - timedelta(hours=settings.precise_location_retention_hours + 1)
+    user.location_retention_until = user.last_location_at + timedelta(
+        hours=settings.precise_location_retention_hours
+    )
     user.erasure_requested_at = now - timedelta(days=31)
     user.erasure_due_at = now - timedelta(seconds=1)
     old_log = RequestLog(

@@ -1,7 +1,7 @@
 import threading
 import time
 from concurrent.futures import ThreadPoolExecutor
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 
 import pytest
 from sqlalchemy import select
@@ -347,7 +347,7 @@ def test_auth_config_reports_dev_enabled(client):
     assert config["microsoft_client_id"] == settings.azure_client_id
 
 
-def test_update_location(client):
+def test_update_location(client, db):
     client.post("/api/auth/dev", json={"email": "geo@example.com"})
     r = client.post(
         "/api/auth/location", json={"latitude": 37.7749, "longitude": -122.4194, "accuracy": 12.5}
@@ -357,6 +357,13 @@ def test_update_location(client):
     assert me["last_latitude"] == 37.7749
     assert me["last_longitude"] == -122.4194
     assert me["last_location_at"] is not None
+    db.rollback()
+    stored = db.scalar(select(User).where(User.email == "geo@example.com"))
+    assert stored is not None and stored.location_retention_until is not None
+    assert stored.last_location_at is not None
+    assert stored.location_retention_until - stored.last_location_at == timedelta(
+        hours=settings.precise_location_retention_hours
+    )
     # location + timezone are derived from the GPS coordinates (offline reverse-geocode)
     assert me["timezone"] == "America/Los_Angeles"
     assert "San Francisco" in (me["location"] or "")

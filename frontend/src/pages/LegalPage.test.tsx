@@ -4,7 +4,7 @@ import { describe, expect, it, vi } from "vitest";
 
 vi.mock("../components/MatrixRain", () => ({ MatrixRain: () => null }));
 
-import { LEGAL_BUNDLE_VERSION } from "../legal";
+import { LEGAL_BUNDLE_VERSION, LEGAL_DRAFT_WARNING } from "../legal";
 import { LegalPage } from "./LegalPage";
 
 describe("LegalPage", () => {
@@ -16,12 +16,17 @@ describe("LegalPage", () => {
     );
 
     expect(screen.getByRole("heading", { level: 1, name: "Privacy Notice" })).toBeInTheDocument();
-    expect(screen.getByRole("note", { name: "Draft legal notice" })).toHaveTextContent(
+    const draftNotice = screen.getByRole("note", { name: "Draft legal notice" });
+    expect(draftNotice).toHaveTextContent(
       /DRAFT — PENDING LEGAL COUNSEL REVIEW/i,
     );
+    expect(draftNotice).toHaveTextContent(LEGAL_DRAFT_WARNING);
     expect(screen.getAllByText(LEGAL_BUNDLE_VERSION)).toHaveLength(2);
     expect(screen.getByRole("heading", { level: 2, name: /Data the service processes/i })).toBeInTheDocument();
     expect(screen.getByText(/2,555 days/)).toBeInTheDocument();
+    expect(screen.getByText(/KingFisher, based in Hillsboro, Oregon/i)).toBeInTheDocument();
+    expect(screen.getAllByText(/privacy@kingfisher\.com/i).length).toBeGreaterThan(0);
+    expect(screen.getByText(/at least 18 years old/i)).toBeInTheDocument();
     expect(screen.getByRole("navigation", { name: "Legal" })).toBeInTheDocument();
   });
 

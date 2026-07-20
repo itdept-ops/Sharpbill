@@ -12,8 +12,12 @@ from app.errors import ApiError
 from app.models import LegalAcceptance
 from app.security_events import add_security_event
 
-CURRENT_LEGAL_BUNDLE_VERSION = "2026-07-20-v1"
+CURRENT_LEGAL_BUNDLE_VERSION = "2026-07-20-v2"
 LEGAL_BUNDLE_EFFECTIVE_DATE = date(2026, 7, 20)
+LEGAL_ACCEPTANCE_LABEL = (
+    "I agree to the Terms of Service, EULA, and Acceptable Use Policy, and acknowledge "
+    "the Privacy Notice."
+)
 # Digests bind the compact, NFC-normalized ``kingfisher-legal-document/v1`` canonical JSON
 # artifact used by the official web build. The canonicalization contract is tested in frontend;
 # these server constants are the acceptance authority and immutable evidence snapshot.
@@ -33,32 +37,32 @@ LEGAL_DOCUMENTS = (
     LegalDocument(
         key="terms",
         title="Terms of Service",
-        version="2026-07-20-v1",
-        sha256="2c77250037d037141e79fd11f1a85cde1e9257d51cb325e7fdaefa6cf4f0ff2e",
+        version="2026-07-20-v2",
+        sha256="f5a30fded3b6b4715f13d0711c9168dd643aac48ff14164e95bc7610734fb912",
         url="/legal/terms-of-service.html",
         acceptance="agreement",
     ),
     LegalDocument(
         key="eula",
         title="End User License Agreement",
-        version="2026-07-20-v1",
-        sha256="16bd045a449990e3f7325f0d67d81d4fee54f679ec53164835f0c19725e25638",
+        version="2026-07-20-v2",
+        sha256="2715b0daa99c2a553b08448eb81307affcfd2ca5ece005563eb4ad83d7fae6b3",
         url="/legal/eula.html",
         acceptance="agreement",
     ),
     LegalDocument(
         key="acceptable_use",
         title="Acceptable Use Policy",
-        version="2026-07-20-v1",
-        sha256="d4391a0abe57885964606521039a4cca0151f8e11d95c628efc51b603eefdb0d",
+        version="2026-07-20-v2",
+        sha256="1290bb3dbcf3b79fb2051693ae7be6898b421daf24af1ddb037098cc1ee07217",
         url="/legal/acceptable-use-policy.html",
         acceptance="agreement",
     ),
     LegalDocument(
         key="privacy",
         title="Privacy Notice",
-        version="2026-07-20-v1",
-        sha256="fb96f77cc9846282c9555105994d0dc9b400c2a6eaf35e15b390b5a3c5db2d3d",
+        version="2026-07-20-v2",
+        sha256="53e22a3bff270fb2215631f061cd001f89a96971e6fa3bb8374ff2f829931695",
         url="/legal/privacy-notice.html",
         acceptance="acknowledgement",
     ),
@@ -89,6 +93,10 @@ def _document_sha256(key: str) -> str:
     return next(document.sha256 for document in LEGAL_DOCUMENTS if document.key == key)
 
 
+def _document_action(key: str) -> str:
+    return next(document.acceptance for document in LEGAL_DOCUMENTS if document.key == key)
+
+
 def add_legal_acceptance(
     db: Session,
     *,
@@ -112,6 +120,12 @@ def add_legal_acceptance(
         eula_sha256=_document_sha256("eula"),
         acceptable_use_sha256=_document_sha256("acceptable_use"),
         privacy_sha256=_document_sha256("privacy"),
+        bundle_effective_date=LEGAL_BUNDLE_EFFECTIVE_DATE,
+        acceptance_label=LEGAL_ACCEPTANCE_LABEL,
+        terms_action=_document_action("terms"),
+        eula_action=_document_action("eula"),
+        acceptable_use_action=_document_action("acceptable_use"),
+        privacy_action=_document_action("privacy"),
         accepted_at=current,
         retention_until=current + timedelta(days=settings.legal_acceptance_retention_days),
         source_ip=(str(source_ip)[:45] if source_ip else None),
@@ -137,6 +151,12 @@ def add_legal_acceptance(
             "eula_sha256": acceptance.eula_sha256,
             "acceptable_use_sha256": acceptance.acceptable_use_sha256,
             "privacy_sha256": acceptance.privacy_sha256,
+            "bundle_effective_date": acceptance.bundle_effective_date.isoformat(),
+            "acceptance_label": acceptance.acceptance_label,
+            "terms_action": acceptance.terms_action,
+            "eula_action": acceptance.eula_action,
+            "acceptable_use_action": acceptance.acceptable_use_action,
+            "privacy_action": acceptance.privacy_action,
         },
     )
     return acceptance

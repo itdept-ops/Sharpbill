@@ -152,6 +152,7 @@ export interface RetentionPolicy {
   erasure_grace_days: number;
   disabled_accounts_days: number;
   security_events_days: number;
+  legal_acceptances_days: number;
   generated_exports_retained: boolean;
 }
 

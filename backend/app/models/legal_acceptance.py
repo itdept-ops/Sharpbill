@@ -1,6 +1,15 @@
-from datetime import datetime
+from datetime import date, datetime
 
-from sqlalchemy import BigInteger, CheckConstraint, DateTime, ForeignKey, Index, Integer, String
+from sqlalchemy import (
+    BigInteger,
+    CheckConstraint,
+    Date,
+    DateTime,
+    ForeignKey,
+    Index,
+    Integer,
+    String,
+)
 from sqlalchemy import event as sqlalchemy_event
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -42,6 +51,30 @@ class LegalAcceptance(Base):
             "privacy_sha256 REGEXP '^[0-9a-f]{64}$'",
             name="privacy_sha256_valid",
         ),
+        CheckConstraint(
+            "CHAR_LENGTH(TRIM(acceptance_label)) BETWEEN 1 AND 500",
+            name="acceptance_label_valid",
+        ),
+        CheckConstraint(
+            "terms_action IN ('agreement', 'acknowledgement')",
+            name="terms_action_valid",
+        ),
+        CheckConstraint(
+            "eula_action IN ('agreement', 'acknowledgement')",
+            name="eula_action_valid",
+        ),
+        CheckConstraint(
+            "acceptable_use_action IN ('agreement', 'acknowledgement')",
+            name="acceptable_use_action_valid",
+        ),
+        CheckConstraint(
+            "privacy_action IN ('agreement', 'acknowledgement')",
+            name="privacy_action_valid",
+        ),
+        CheckConstraint(
+            "bundle_effective_date <= DATE(accepted_at)",
+            name="effective_date_not_after_acceptance",
+        ),
         CheckConstraint("retention_until > accepted_at", name="retention_after_acceptance"),
         CheckConstraint(
             "personal_data_erased_at IS NULL OR "
@@ -69,6 +102,12 @@ class LegalAcceptance(Base):
     eula_sha256: Mapped[str] = mapped_column(String(64, collation="utf8mb4_0900_bin"))
     acceptable_use_sha256: Mapped[str] = mapped_column(String(64, collation="utf8mb4_0900_bin"))
     privacy_sha256: Mapped[str] = mapped_column(String(64, collation="utf8mb4_0900_bin"))
+    bundle_effective_date: Mapped[date] = mapped_column(Date)
+    acceptance_label: Mapped[str] = mapped_column(String(500, collation="utf8mb4_0900_bin"))
+    terms_action: Mapped[str] = mapped_column(String(16, collation="utf8mb4_0900_bin"))
+    eula_action: Mapped[str] = mapped_column(String(16, collation="utf8mb4_0900_bin"))
+    acceptable_use_action: Mapped[str] = mapped_column(String(16, collation="utf8mb4_0900_bin"))
+    privacy_action: Mapped[str] = mapped_column(String(16, collation="utf8mb4_0900_bin"))
     accepted_at: Mapped[datetime] = mapped_column(DateTime(timezone=False))
     retention_until: Mapped[datetime] = mapped_column(DateTime(timezone=False))
     source_ip: Mapped[str | None] = mapped_column(String(45))

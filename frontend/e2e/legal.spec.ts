@@ -28,6 +28,10 @@ test("signed-out legal acceptance gate and draft documents are reachable", async
   await expect(page.getByRole("note", { name: "Draft legal notice" })).toContainText(
     "DRAFT — PENDING LEGAL COUNSEL REVIEW",
   );
+  await expect(page.getByText("2026-07-20-v2").first()).toBeVisible();
+  await expect(page.getByText(/KingFisher, based in Hillsboro, Oregon/i)).toBeVisible();
+  await expect(page.getByText(/privacy@kingfisher\.com/i).first()).toBeVisible();
+  await expect(page.getByText(/at least 18 years old/i)).toBeVisible();
 
   await page.emulateMedia({ media: "print" });
   expect(await page.evaluate(() => window.matchMedia("print").matches)).toBe(true);
