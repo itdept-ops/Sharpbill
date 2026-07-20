@@ -1,14 +1,17 @@
 # How this was built — one operator, a fleet of adversarial agents
 
 Kingfisher is an access-control console: verified SSO keyed to a provider's immutable identity,
-database-backed RBAC enforced on every request, live presence, per-device sessions, and a one-click
-kill-switch. That's the *product*. This is the more interesting part — **how it was built.**
+database-backed RBAC enforced on every request, live presence, per-device sessions, a one-click
+kill-switch, bounded access telemetry, and a durable security-event outbox. That's the *product*.
+External outbox delivery and immutable retention remain environment controls. This is the more
+interesting part — **how it was built.**
 
 It was designed, implemented, hardened, and reviewed by one person orchestrating a fleet of AI
 agents through a multi-agent workflow. Not "an AI wrote some code," but a real software development
 lifecycle where models handled the grind — decomposition, parallel drafting, adversarial review,
-test authoring, live verification — while the operator steered intent and made the calls. The
-receipts are in the git history and the CI badge.
+test authoring, and live verification — while the operator steered intent and made the calls. The
+repository history, tests, and CI workflow record that engineering process; they are not a
+production assurance or compliance certification.
 
 ## The loop
 
@@ -25,9 +28,10 @@ Each substantial change ran through four phases, each a fan-out of agents:
    verification, privacy, dead-code — and every finding is then handed to a **second** agent whose
    job is to *refute* it. Only findings that survive refutation get fixed. This kills the
    plausible-but-wrong "finding" that makes most AI review noise.
-4. **Verify before commit.** Not "the tests pass" — the actual flow is driven end-to-end in a real
-   browser (Playwright over the running stack) and the behavior observed, then committed only when
-   green. Every push watches CI to completion.
+4. **Verify before commit.** Changes are expected to pass the relevant static, migration,
+   integration, frontend, and browser checks before they are accepted. Playwright drives selected
+   workflows over the local running stack; live provider tenants and external deployment controls
+   require separate environment-level validation.
 
 ## The proof: real bugs the adversarial pass caught
 
@@ -56,8 +60,16 @@ that still guards it:
   so a kicked user's live connection lingered. Fix: re-authenticate on every wake and drop revoked
   sockets (close 1008).
 - **LIKE-wildcard leakage & X-Forwarded-For spoofing.** Search terms didn't escape `%`/`_` (so
-  `a_b` matched `axb`), and the audit log trusted a caller-supplied `X-Forwarded-For` for the source
+  `a_b` matched `axb`), and the request log trusted a caller-supplied `X-Forwarded-For` for the source
   IP. Both fixed and tested.
+- **Sensitive-export overgrant.** Directory read access also authorized a bulk CSV extract, and
+  request-log readers could inspect the higher-value durable security-event stream. Fix: migration
+  `0016` introduces independent `users.export` and `security_events.view` grants, initially assigned
+  only to the built-in admin role; both export paths self-audit.
+- **Stale administrative overwrite.** Two administrators editing the same role or user access could
+  silently replace each other's decision. Fix: version counters returned by reads are mandatory
+  preconditions on role update/delete and user role/direct-grant changes; missing/stale writes fail
+  with `428`/`409` and regression tests exercise the conflict.
 
 None of these are hypothetical. Each was a working exploit against a real permission model, caught
 before it shipped, and each has a test named after the failure it prevents.
@@ -65,18 +77,25 @@ before it shipped, and each has a test named after the failure it prevents.
 ## What verifies it
 
 - **Backend:** the full HTTP stack under `pytest` against a real MySQL database, schema built by the
-  actual Alembic migrations — 90-plus tests spanning auth, token replay, RBAC guards, per-device
-  sessions, presence/kick, rate limiting, CSV-safety, location privacy, and the audit log.
+  actual Alembic migrations — an integration suite spanning auth, token replay, RBAC guards,
+  per-device sessions, presence/kick, rate limiting, CSV-safety, location privacy, and request
+  logging, plus access-log backpressure, scheduled bounded retention, optimistic write conflicts,
+  least-privilege exports, strict production identity/proxy configuration, security-event outbox
+  semantics, signed organization-authority persistence, and schema invariants through Alembic head
+  `0017`.
 - **Frontend:** Vitest + Testing Library over the code that gates access in the browser.
-- **End-to-end:** a Playwright job boots the real stack (Vite + FastAPI + MySQL via Docker Compose)
-  and proves, in a browser, that an admin can sign in and drive the console — and that a plain user
-  is redirected away from the admin directory. RBAC, enforced end to end, on every push.
+- **End-to-end:** a Playwright job boots the local stack (Vite + FastAPI + MySQL via Docker Compose)
+  and checks, in a browser, that an admin can sign in and drive selected console workflows — and
+  that a plain user is redirected away from the admin directory. This is representative application
+  coverage, not a live-provider, penetration, load, recovery, or deployment test.
 
 ## Why it matters
 
 The interesting claim isn't "AI can write a CRUD app." It's that a single operator, running an
-adversarial multi-agent process with discipline, can ship software that is **verified, reviewed, and
-honest** — and that the process catches real security bugs a solo developer under deadline would
-miss. The features here exist to prove the process. The process is the point.
+adversarial multi-agent process with discipline, can produce software that is **tested, reviewed,
+and honest about its boundary** — and that the process catches real security bugs a solo developer
+under deadline would miss. The features here demonstrate the process; production approval still
+depends on the external identity, infrastructure, recovery, monitoring, governance, and independent
+security controls listed in the operations documentation.
 
 *The best résumé is a running product.*
