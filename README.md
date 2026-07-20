@@ -31,6 +31,7 @@ Docker Compose.
 - [Architecture](#architecture)
 - [Security model](#security-model)
 - [Data retention & privacy policy](docs/DATA_RETENTION_PRIVACY.md)
+- [Legal documents & acceptance release process](docs/LEGAL_DOCUMENTS.md)
 - [Quick start](#quick-start)
 - [Signing in](#signing-in)
 - [API surface](#api-surface)
@@ -86,7 +87,8 @@ independently committed, bounded batches, so cleanup does not depend on a future
 The approved lifecycle defaults are exact GPS for 24 hours, pending accounts for 30 days, sessions
 for 30 days after expiry/revocation, request logs for 90 days, explicit erasure after a 30-day grace
 period, disabled accounts for 365 days, and repository security events for 400 days. Generated CSV
-exports are streamed and are not retained as server-side files. See
+exports are streamed and are not retained as server-side files. Versioned legal-acceptance evidence
+has a provisional 2,555-day default that requires deployment-specific counsel approval. See
 [`docs/DATA_RETENTION_PRIVACY.md`](docs/DATA_RETENTION_PRIVACY.md) for anonymization, hold, backup,
 and evidence requirements.
 
@@ -310,6 +312,15 @@ Never use that command against data that must be retained.
 
 ## Signing in
 
+- **Versioned legal acceptance** is a server-enforced login precondition for every provider,
+  including local dev-auth. The browser retrieves `/api/legal/manifest`, presents individually
+  linked Terms, EULA, Acceptable Use Policy, and Privacy Notice, and sends an explicit checkbox
+  decision with the exact bundle version. The web build verifies canonical per-document SHA-256
+  digests from the manifest, and successful session evidence snapshots those versions and digests.
+  Missing acceptance and stale/mismatched clients fail closed before a session is issued. The
+  checked-in legal text is a counsel-review draft; see
+  [`docs/LEGAL_DOCUMENTS.md`](docs/LEGAL_DOCUMENTS.md) for the required operator inputs and release
+  procedure.
 - **Google and Microsoft** appear only when each provider has both application credentials and its
   database setting enabled. The SPA reads the effective provider flags and public OAuth client IDs
   at runtime from `/api/auth/config`; no environment-specific client ID is baked into the static web
@@ -341,6 +352,7 @@ Never use that command against data that must be retained.
 | GET | `/api/health/ready` | — | DB, schema, effective identity, admin-path, and admission readiness |
 | GET | `/api/health` | — | backward-compatible readiness alias |
 | GET | `/api/auth/config` | — | effective sign-in methods and their public runtime OAuth client IDs |
+| GET | `/api/legal/manifest` | — | current login-required legal bundle, document versions, and canonical SHA-256 digests |
 | POST | `/api/auth/nonce` | — | issue bounded, single-use provider login state |
 | POST | `/api/auth/google` · `/microsoft` | — | verify ID token → session cookie |
 | POST | `/api/auth/dev` | — (local only) | dev login |

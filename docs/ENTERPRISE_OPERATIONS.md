@@ -217,6 +217,10 @@ baseline from MySQL 8.0.46 to digest-pinned MySQL 8.4.10:
    current/head/drift checks passed, the API reported database, schema, identity-provider,
    administration, and admission-policy readiness as `ok`, and the rebuilt web service returned
    HTTP 200.
+10. The additive `0020` legal-acceptance migration was then applied to the live local database.
+    `alembic current` reported the single packaged head, `alembic check` reported no model drift,
+    every readiness dimension remained `ok`, the versioned legal manifest matched the rebuilt web
+    bundle, the login and legal routes returned HTTP 200, and the new evidence table began empty.
 
 Those names and artifacts are local to that workstation and must be inventoried before cleanup.
 This proves a local logical restore and application/schema validation only. It does **not** prove a
@@ -230,15 +234,22 @@ artifact, time, and outcome; the application must never delete Docker volumes. F
 backup copies have a proposed 35-day default expiry, pending external environment-owner approval
 and implementation. See `docs/DATA_RETENTION_PRIVACY.md`.
 
-The engine-cutover phase intentionally records the `0012`→`0013` state reached before later
+The engine-cutover phase intentionally records the `0012` to `0013` state reached before later
 remediation work. The subsequent local steps separately exercised migrations `0014` through the
 then-current `0017` head with restore-tested boundaries, followed by a cold verified snapshot and
-linear migration through current head `0019`. Every target environment must still repeat its own
+linear migration through the then-current head `0019`. The later additive `0020` head received
+runtime validation but no new restore-test boundary. Neither that validation nor later migration
+tests retroactively broadens this recovery rehearsal. Every target environment must still repeat
+its own
 normal head/readiness gates; this local evidence must not be presented as a production restore or
 migration rehearsal.
 
 ## Identity and session operations
 
+- Publish the API manifest and matching web legal content as one release. Treat every published
+  bundle/document version as immutable, retain its approved rendered copy, and assign a new version
+  for substantive changes. Missing, false, or stale acceptance must fail before provider work or
+  session issuance; see `docs/LEGAL_DOCUMENTS.md` for the counsel and release gates.
 - Review provider enabled/configured state, the runtime client IDs returned by `/api/auth/config`,
   immutable bootstrap identities, and database `signup_mode` before every production release.
 - Production startup requires a canonical HTTPS `PUBLIC_ORIGIN` and at least one configured
@@ -304,6 +315,11 @@ migration rehearsal.
   lifecycle evidence, a missing/modified privacy permission, or non-admin/direct privacy grants.
   Resolve the state through the approved privacy workflow; never discard evidence to force a
   downgrade.
+- Migration `0020` creates append-only legal-acceptance evidence with versioned, canonical
+  document digests and adds its bounded, hold-aware retention path. Its downgrade refuses to
+  discard retained acceptance records. Never
+  delete those records merely to force rollback; follow the approved retention/hold process and
+  retain the approved rendered bundle outside the mutable application release.
 - Role update/delete must carry the `version` from the latest role read. User role assignment and
   direct-permission replacement must carry the latest `access_version`. Missing values return
   `428 PRECONDITION_REQUIRED`; mismatches return `409 STALE_WRITE`. Refresh, show the intervening
@@ -320,25 +336,29 @@ migration rehearsal.
 The approved data lifecycle is authoritative in `docs/DATA_RETENTION_PRIVACY.md`: exact GPS expires
 after 24 hours; never-approved pending accounts after 30 days; sessions 30 days after expiry or
 revocation; request logs after 90 days; verified erasure requests after a 30-day grace period;
-disabled accounts after 365 days; and repository security events plus delivery state after 400
-days. Active profile data lasts for the account lifetime. Generated CSV responses are not retained
-as server-side files.
+disabled accounts after 365 days; repository security events plus delivery state after 400 days;
+and versioned legal-acceptance evidence after a provisional 2,555 days. Active profile data lasts
+for the account lifetime. Generated CSV responses are not retained as server-side files. Counsel
+must approve the legal-evidence period and residual pseudonymous account link for each deployment.
 
 The API's delayed interval worker enforces these schedules independently of new login or log
 traffic. Each data class is processed in bounded, independently committed, idempotent batches.
 The duration controls are `PRECISE_LOCATION_RETENTION_HOURS`,
 `PENDING_ACCOUNT_RETENTION_DAYS`, `SESSION_RETENTION_DAYS`,
 `REQUEST_LOG_RETENTION_DAYS`, `ACCOUNT_ERASURE_GRACE_DAYS`,
-`DISABLED_ACCOUNT_RETENTION_DAYS`, and `SECURITY_EVENT_RETENTION_DAYS`. Configure their bounded
+`DISABLED_ACCOUNT_RETENTION_DAYS`, `SECURITY_EVENT_RETENTION_DAYS`, and
+`LEGAL_ACCEPTANCE_RETENTION_DAYS`. Configure their bounded
 batch-size counterparts, `RETENTION_WORKER_INTERVAL_SECONDS`,
 `RETENTION_WORKER_MAX_BATCHES_PER_CYCLE`, and the bounded shutdown timeout from measured volume/lock
 behavior. Alert on cycle failure, oldest eligible record, backlog growth, and shutdown timeout; do
 not increase batches until lock, redo, and replica-lag impact is measured.
 
 Account lifecycle expiry performs privacy-safe anonymization rather than unsafe relational-root
-deletion. It revokes sessions, removes profile/GPS/provider-email copies and direct grants, assigns
-the least-privilege role, and retains only the opaque provider binding required to prevent silent
-reprovisioning or bootstrap reuse. Unless a hold applies, users may clear exact and derived location
+deletion. It revokes sessions, removes profile/GPS/provider-email copies, legal-acceptance request
+metadata, and direct grants; assigns the least-privilege role; and retains only the opaque provider
+binding required to prevent silent reprovisioning or bootstrap reuse plus the time/version and
+pseudonymous account link required by the provisional contract-evidence policy. Unless a hold
+applies, users may clear exact and derived location
 immediately and receive a 30-day erasure grace period. Privacy administration and hold changes
 require dedicated authority and security-event evidence.
 
@@ -385,7 +405,7 @@ privileged-account misuse, migration failure, and restore. Track follow-up work 
 - Dependency, secret, static-analysis, and deployable-image scans meet the approved policy.
 - The exact image digests and software bill of materials are retained.
 - Readiness reports the expected schema and synthetic login/navigation checks pass.
-- The deployed database reports the exact packaged single Alembic head (`0019` for this revision),
+- The deployed database reports the exact packaged single Alembic head (`0020` for this revision),
   and the identity, administration, and admission readiness dimensions are all `ok`.
 - Privacy lifecycle boundary/hold tests pass, no overdue unheld application record exceeds the
   approved schedule, and the local 2026-07-20 recovery artifacts are disposed by 2026-08-03 unless

@@ -4,7 +4,7 @@
 - Effective date: 2026-07-20
 - Scope: One Kingfisher deployment and its database (one organization)
 - Owners: Product owner, privacy owner, security owner, and environment operator
-- Repository control status: Implemented and verified through Alembic `0019`; external backup and
+- Repository control status: Implemented and verified through Alembic `0020`; external backup and
   monitoring controls remain environment-owned
 
 This is the repository's data-minimization baseline. It is an engineering policy, not legal advice
@@ -22,17 +22,30 @@ Extending one requires a documented purpose, data owner, privacy/security approv
 | Explicit account-erasure request | 30-day grace | Verified request time | At due time, anonymize the account and revoke access unless canceled or held |
 | Disabled account | 365 days | Deactivation | Anonymize the account unless reactivated or held |
 | Repository security events and delivery state | 400 days | Event occurrence | Delete the event and dependent delivery state, including undelivered records, unless held |
+| Versioned legal-acceptance evidence | 2,555 days (provisional) | Successful acceptance | Delete the evidence row in bounded batches unless held; account anonymization first clears IP, user agent, and request ID while retaining the internal link to the anonymized account tombstone |
 | Generated CSV exports | Not retained server-side | Response generation | Stream to the authorized requester; retain only the security event recording that an export occurred |
 | Active profile fields and derived location/timezone | Active account lifetime | Collection/update | Anonymize when an erasure, pending-account, or disabled-account lifecycle becomes due |
 
 Login nonces and other short-lived anti-replay state are security controls, not business records.
 They expire on their protocol lifetime and are pruned even during a privacy hold.
 
+The 2,555-day legal-evidence period and the residual pseudonymous account link require operator and
+counsel approval for the deployment's governing jurisdictions; they are not a jurisdiction-neutral
+legal conclusion. Reducing the configured period shortens existing cohorts as well as new records;
+increasing it does not silently extend an expiry already stamped on a record. Any governed
+extension requires the same documented purpose, owner, approval, and expiry as another retention
+exception. See [`LEGAL_DOCUMENTS.md`](LEGAL_DOCUMENTS.md) for the release gate.
+
 Migration `0019` records `deactivated_at`, `erasure_requested_at`, `erasure_due_at`, and `erased_at`
 on the account; adds deployment-wide `retention_hold` and `retention_hold_reference` settings; seeds
 `privacy.manage` only to the built-in admin role; and removes the redundant identity-provider email
 copy. Database constraints reject contradictory lifecycle timestamps, active/deactivated mismatch,
 or an enabled hold without a nonblank reference.
+
+Migration `0020` adds append-only `legal_acceptances` evidence with exact bundle/document versions
+and canonical content digests, acceptance and expiry timestamps, bounded nullable request context,
+database invariants, and indexes for account lookup and bounded retention. A downgrade refuses to
+discard any retained evidence.
 
 ## Account anonymization
 
@@ -45,7 +58,8 @@ operation must be idempotent and transactional. It must:
    copies;
 3. remove direct permission grants and assign only the built-in least-privilege user role;
 4. mark the account inactive, unapproved, and erased with lifecycle timestamps; and
-5. preserve only the minimum opaque provider binding needed to prevent silent reprovisioning or
+5. clear IP, user-agent, and request-ID metadata from retained legal-acceptance evidence; and
+6. preserve only the minimum opaque provider binding needed to prevent silent reprovisioning or
    reuse of a consumed administrator-bootstrap subject.
 
 That residual provider/subject binding is a security suppression record, is not returned as a
