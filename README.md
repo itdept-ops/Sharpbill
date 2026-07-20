@@ -30,6 +30,7 @@ Docker Compose.
 - [Screens](#screens)
 - [Architecture](#architecture)
 - [Security model](#security-model)
+- [Data retention & privacy policy](docs/DATA_RETENTION_PRIVACY.md)
 - [Quick start](#quick-start)
 - [Signing in](#signing-in)
 - [API surface](#api-surface)
@@ -44,8 +45,9 @@ Docker Compose.
 ### Authentication keyed to the provider's immutable ID
 When configured and enabled, sign in with **Google** or **Microsoft**. Tokens are verified
 **server-side** and each account is
-keyed to the provider's **immutable subject id** (Google `sub` / Microsoft `oid`) — *never* the
-email address. A user who changes their provider email can't hijack or merge into another account.
+keyed to the provider's **immutable subject id** (Google `sub` / Microsoft tenant-scoped
+`(tid, oid)`) — *never* the email address. A user who changes their provider email can't hijack or
+merge into another account, and equal Microsoft object IDs from different tenants remain distinct.
 The verified id is stored; its external subject is returned only to that user or an administrator,
 not to an ordinary directory viewer. A secret-gated **dev-login** endpoint (local environment only,
 off by default) supports automated tests before OAuth keys exist.
@@ -56,12 +58,14 @@ assign them through a grouped permission-matrix builder. On top of the role, adm
 individual permissions directly to a user** — so a user's **effective access = their role's
 permissions ∪ their direct grants**. Access is read fresh from the database on **every request**. Built-in
 permissions: `users.read`, `users.manage`, `users.export`, `roles.manage`, `presence.view`,
-`presence.kick`, `settings.manage`, `logs.view`, `security_events.view`. Sensitive extraction is
-split from ordinary viewing: `users.read` does not grant CSV export, and `logs.view` does not grant
-access to the durable security-event stream. Migration `0016` grants the two new permissions only
-to the built-in admin role; operators must delegate them deliberately. System roles are protected,
-and role/direct-grant mutation paths require both `users.manage` and `roles.manage` and enforce that
-a delegate can grant only permissions they already hold.
+`presence.kick`, `settings.manage`, `logs.view`, `security_events.view`, `privacy.manage`.
+Sensitive extraction is split from ordinary viewing: `users.read` does not grant CSV export, and
+`logs.view` does not grant access to the durable security-event stream. Privacy holds and
+account-lifecycle administration require the separate `privacy.manage` permission. Migrations
+`0016` and `0019` grant these sensitive
+permissions only to the built-in admin role; operators must delegate them deliberately. System
+roles are protected, and role/direct-grant mutation paths require both `users.manage` and
+`roles.manage` and enforce that a delegate can grant only permissions they already hold.
 
 ### Deep, permission-gated user management
 A paginated, filterable directory (search · role · status · online) showing role, department,
@@ -79,16 +83,24 @@ polling fallback). Deactivation and logout are durable too, so old cookies can't
 The default cap is 20 active sessions per user; a new login revokes the oldest over-cap session.
 A scheduled worker also removes expired/old-revoked session rows and aged request logs in
 independently committed, bounded batches, so cleanup does not depend on a future login or log write.
-Defaults are 30-day session-row retention, 90-day request-log retention, and an hourly cycle capped
-at ten batches per table. Security-event `retention_until` remains intent for the external evidence
-system; the worker does not delete security events.
+The approved lifecycle defaults are exact GPS for 24 hours, pending accounts for 30 days, sessions
+for 30 days after expiry/revocation, request logs for 90 days, explicit erasure after a 30-day grace
+period, disabled accounts for 365 days, and repository security events for 400 days. Generated CSV
+exports are streamed and are not retained as server-side files. See
+[`docs/DATA_RETENTION_PRIVACY.md`](docs/DATA_RETENTION_PRIVACY.md) for anonymization, hold, backup,
+and evidence requirements.
 
 ### Admin controls, GPS, and request activity
-Admins set the sign-up mode (**open / approval / closed**), toggle each provider, choose the default
-role, **approve pending sign-ups**, and flip a site-wide **calm mode** (dims the code-rain and drops
-the scanlines for everyone). An **optional GPS capture** on login (native prompt; denial is a no-op)
+Admins set the authoritative sign-up mode (**open / approval / closed**), toggle each provider,
+choose the default role, **approve pending sign-ups**, and flip a site-wide **calm mode** (dims the
+code-rain and drops the scanlines for everyone). Open admits any cryptographically verified new
+identity from an enabled provider to the least-privilege default role; approval creates a pending
+account; closed permits existing accounts and explicitly configured immutable bootstrap identities
+only. Email domains and provider tenants do not form a second admission policy. An **optional GPS
+capture** on login (native prompt; denial is a no-op)
 records last-known coordinates — visible only to the user themselves and to `users.manage` holders —
-and derives the user's **location + timezone offline** from them. A **request activity log** records
+and derives the user's **location + timezone offline** from them. Exact coordinates expire after 24
+hours by default. A **request activity log** records
 selected application requests (method · endpoint · user · IP · status; noisy probes are excluded)
 for holders of `logs.view`. Each selected request is written to structured stdout synchronously,
 then offered to a bounded, single-writer queue for database persistence so telemetry writes do not
@@ -165,7 +177,7 @@ per-request permission gate.
 - **Frontend** — **React 18 + TypeScript + Vite**, React Router v6, hand-written CSS
   (the "DATASTREAM" terminal theme). Vite proxies `/api` (incl. WebSocket upgrade) to the API.
 - **Database** — digest-pinned **MySQL 8.4.10 LTS** (`utf8mb4`), schema owned entirely by one
-  linear Alembic history (migrations `0001`…`0017`). The data model supports one organization per
+  linear Alembic history (migrations `0001`…`0019`). The data model supports one organization per
   isolated deployment; it is not a shared multi-tenant SaaS schema.
 - **Runtime** — **Docker Compose** (mysql + api + web with hot reload). CI runs on **Node 24**.
 
@@ -180,9 +192,10 @@ session JWT** in an `HttpOnly`, `SameSite=Lax` cookie → role + permissions + a
 re-read from the DB on every request.
 
 Successful provider login also persists the signed Google hosted-domain (`hd`) or Microsoft tenant
-(`tid`) authority separately from mutable email. Readiness and administrative-recovery guards fail
-closed when a claimed bootstrap identity is inactive, demoted, pending, or no longer admitted by
-the current organization policy.
+(`tid`) context separately from mutable email. These claims support attribution, tenant-scoped
+Microsoft identity, and immutable bootstrap checks; they are not ordinary-account domain
+allowlists. Readiness and administrative-recovery guards fail closed when a claimed bootstrap
+identity is inactive, demoted, pending, or no longer matches its immutable bootstrap configuration.
 
 ---
 
@@ -194,8 +207,8 @@ review. They do not establish production readiness or legal/regulatory complianc
 - **Verified provider identity.** ID tokens are validated server-side — signature (Google certs /
   Microsoft JWKS), `aud` == client id, issuer (Google allowlist / Microsoft `tid`-bound), expiry,
   `email_verified` (Google), `RS256` pinned (no alg-confusion) — and identity is keyed on the
-  **immutable subject** (Google `sub` / Microsoft `oid`), never email. Two providers sharing an
-  email are two accounts; a changed email never merges or hijacks.
+  **immutable subject** (Google `sub` / Microsoft tenant-scoped `(tid, oid)`), never email. Two
+  providers sharing an email are two accounts; a changed email never merges or hijacks.
 - **Bounded provider key retrieval.** Google certificates and Microsoft JWKS use short explicit
   network timeouts, bounded verification/fetch concurrency, a size-capped single-flight cache,
   stale-key outage tolerance, and circuit/unknown-`kid` backoff. A disabled provider is rejected
@@ -234,19 +247,18 @@ review. They do not establish production readiness or legal/regulatory complianc
 - **Bounded readiness.** Process-only liveness never touches dependencies. Database-backed
   readiness has a separate probe bucket and brief nonblocking single-flight cache, so public probes
   cannot bypass application throttling and pile up database checks.
-- **Organization admission.** Production refuses public signup and requires each configured
-  provider's `ALLOWED_EMAIL_DOMAINS` / `ALLOWED_AZURE_TENANTS` policy; Google checks the signed
-  `hd` claim and Microsoft checks the signed `tid` claim. Public provisioning is local-only and
-  requires an explicit acknowledgement.
+- **Onboarding policy.** The database-backed `signup_mode` is the sole new-account admission
+  control: open admits verified identities, approval creates pending accounts, and closed rejects
+  new non-bootstrap identities. Google `hd` and Microsoft `tid` are verified context, not domain
+  allowlists. Provider toggles still fail closed before token verification.
 - **Input bounds.** The ASGI boundary enforces a configurable total request-body limit even when
   `Content-Length` is absent (1 MiB by default), and identity/location DTOs impose field and
   finite-number limits.
 - **Production startup and admission guards.** Production mode requires secure cookies, verified
-  database TLS, a canonical HTTPS `PUBLIC_ORIGIN`, at least one configured identity provider,
-  closed public signup, and the matching organization allowlist. Microsoft configuration admits
-  exactly one Azure tenant. Traffic readiness additionally requires an effective provider enabled
-  in site settings, a non-admin default role, and either an accessible active administrator or a
-  valid bootstrap path. Production also validates Google web-client-ID syntax, requires the Azure
+  database TLS, a canonical HTTPS `PUBLIC_ORIGIN`, and at least one configured identity provider.
+  Traffic readiness additionally requires an effectively enabled provider in site settings, a
+  non-admin default role, and either an accessible active administrator or a valid bootstrap path.
+  Production also validates Google web-client-ID syntax, requires the Azure
   client ID to be a UUID, and accepts proxy trust only as explicit IP/CIDR entries; hostnames,
   wildcards, and production-wide `0.0.0.0/0` or `::/0` trust are rejected. The environment owner
   must still enforce TLS at the database, edge, and network layers.
@@ -312,8 +324,8 @@ Never use that command against data that must be retained.
 - **Admin bootstrap** is provider-specific: production Google bootstrap requires an immutable
   subject in `GOOGLE_ADMIN_SUBJECTS` (production rejects email-based `ADMIN_EMAILS`); Microsoft
   requires both the signed tenant in `AZURE_ADMIN_TENANT_ID` and the immutable object ID in
-  `AZURE_ADMIN_OBJECT_IDS`, and that admin tenant must be the single value in
-  `ALLOWED_AZURE_TENANTS`.
+  `AZURE_ADMIN_OBJECT_IDS`. This tenant binding protects bootstrap identity; it is not an onboarding
+  allowlist.
   `ADMIN_EMAILS` remains a local-development recovery convenience only. Review and remove
   bootstrap values after initialization.
 - A public **[Security walkthrough](#security--auth--permission-walkthrough)** (`/security`) explains
@@ -337,6 +349,9 @@ Never use that command against data that must be retained.
 | GET | `/api/auth/me` | session | current user |
 | POST | `/api/auth/location` | session | store optional last-known GPS |
 | GET · DELETE | `/api/auth/sessions[/{id}]` | session | list / revoke your own device sessions |
+| GET | `/api/privacy` | session | current retention policy, hold state, and erasure status |
+| DELETE | `/api/privacy/location` | session | immediately clear saved exact and derived location |
+| POST · DELETE | `/api/privacy/erasure-request` | session | schedule / cancel personal erasure during the grace period |
 | GET · DELETE | `/api/users/{id}/sessions[/{sid}]` | `users.read` / `presence.kick` | a user's sessions / revoke one |
 | GET | `/api/dashboard` | session | headline stats (incl. online count) |
 | GET | `/api/dashboard/analytics` | `users.read` | chart data (roles, providers, signups, status) |
@@ -350,6 +365,8 @@ Never use that command against data that must be retained.
 | POST | `/api/users/bulk` | `users.manage` (+ `roles.manage` for assign-role) | bulk actions |
 | GET | `/api/users/export.csv` | `users.export` | bounded, self-audited CSV of the filtered directory |
 | GET · PUT | `/api/admin/settings` | `settings.manage` | site settings (signup mode, providers, default role) |
+| GET · PUT | `/api/admin/privacy[/hold]` | `privacy.manage` | policy/hold status and documented hold update |
+| POST · DELETE | `/api/admin/privacy/users/{id}/erasure-request` | `privacy.manage` | schedule / cancel verified account erasure |
 | GET | `/api/roles` · `/api/permissions` | `roles.manage` | list |
 | POST | `/api/roles` · `/api/permissions` | `roles.manage` | create |
 | PATCH · DELETE | `/api/roles/{id}` | `roles.manage` | edit/delete with latest role `version` precondition |
@@ -370,8 +387,9 @@ Never use that command against data that must be retained.
   a local-only destructive-test guard and schema built by the real Alembic migrations (never
   `create_all`). Coverage spans auth, token
   replay, RBAC guards, presence/kick, bulk actions, CSV-injection, location privacy, pagination,
-  rate limiting, bounded/scheduled retention, optimistic write preconditions, least-privilege
-  exports, security-event outbox behavior, and migration invariants through head `0017`.
+  rate limiting, bounded/scheduled retention, erasure/hold workflows, optimistic write preconditions,
+  least-privilege exports, security-event outbox behavior, and migration invariants through the
+  packaged head `0019`.
 - **Frontend** — `vitest` + Testing Library over the code that gates access in the browser (the API
   client's error/401 handling, `RequirePermission`, badges).
 - **E2E** — a Playwright job boots the local stack (Vite + FastAPI + MySQL via Docker Compose) and
@@ -392,7 +410,7 @@ Never use that command against data that must be retained.
 ## Project layout
 
 ```
-backend/   FastAPI app, SQLAlchemy models, Alembic migrations (0001 schema … 0017), pytest suite
+backend/   FastAPI app, SQLAlchemy models, Alembic migrations (0001 schema … 0019), pytest suite
 frontend/  React + Vite SPA (DATASTREAM terminal theme)
 deploy/    production compose + Caddyfile (reference; not used locally)
 docs/img/  README screenshots

@@ -81,8 +81,8 @@ before it shipped, and each has a test named after the failure it prevents.
   per-device sessions, presence/kick, rate limiting, CSV-safety, location privacy, and request
   logging, plus access-log backpressure, scheduled bounded retention, optimistic write conflicts,
   least-privilege exports, strict production identity/proxy configuration, security-event outbox
-  semantics, signed organization-authority persistence, and schema invariants through Alembic head
-  `0017`.
+  semantics, tenant-scoped Microsoft identity keys, database-controlled provider-wide onboarding,
+  privacy lifecycle/hold/anonymization controls, and schema invariants through Alembic head `0019`.
 - **Frontend:** Vitest + Testing Library over the code that gates access in the browser.
 - **End-to-end:** a Playwright job boots the local stack (Vite + FastAPI + MySQL via Docker Compose)
   and checks, in a browser, that an admin can sign in and drive selected console workflows — and

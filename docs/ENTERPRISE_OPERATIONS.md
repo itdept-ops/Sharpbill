@@ -22,20 +22,24 @@ The supported repository-managed runtime is the loopback-only local Compose stac
   `/api/auth/config`, so an environment-specific client ID is not embedded in the static web image;
 - production validates Google web-client-ID syntax, canonicalizes Azure client/tenant/object UUIDs,
   and limits `TRUSTED_PROXY_IPS` to explicit IP/CIDR entries without wildcard or world-wide trust;
+- database `site_settings.signup_mode` is the only new-account admission policy; no environment
+  email-domain or provider-tenant allowlist can silently override it;
 - `users.export` is independent from directory read access, while `security_events.view` is
   independent from operational request-log access; migration `0016` initially grants both only to
   the built-in admin role;
+- `privacy.manage` independently controls erasure, retention, and hold administration; migration
+  `0019` initially grants it only to the built-in admin role;
 - role update/delete and user role/direct-grant changes require the latest returned optimistic
   `version`/`access_version`, rejecting missing preconditions with `428` and stale writes with `409`;
 - selected access telemetry is emitted synchronously to structured stdout and offered to a bounded,
   single-writer database queue with protected depth/drop/failure metrics;
-- an interval worker independently prunes aged request logs and expired/revoked sessions in bounded,
+- an interval worker independently performs approved privacy-lifecycle cleanup in bounded,
   separately committed batches, with delayed first execution and bounded shutdown;
 - selected authentication and privileged outcomes are inserted as append-only event facts plus
   independent retry/lease state in a durable repository outbox;
 - `/api/health/live` reports process liveness, while `/api/health/ready` requires MySQL, the exact
-  packaged Alembic head, an effective identity provider, a safe signup default, and a reachable
-  active administrator or valid bootstrap path; and
+  packaged Alembic head, an effective identity provider, a non-admin signup default role, and a
+  reachable active administrator or valid bootstrap path; and
 - rate limits, live presence, token-replay memory, and WebSocket broadcasts are process-local. The
   production image therefore runs one API worker until those controls are externalized.
 
@@ -59,10 +63,16 @@ cannot close them:
   encryption, HA, PITR, retention, and independently timed restore drills;
 - attributable delivery from the repository's transactional security-event outbox into a
   restricted append-only sink/SIEM, including dispatcher ownership, loss/lag monitoring, tamper
-  detection, and legal retention; and
+  detection, and legal retention;
 - measured SLOs, load/failure tests, distributed rate-limit/presence coordination, client/runtime
-  telemetry, on-call/incident exercises, independent penetration testing, privacy review, and
-  production-like accessibility validation.
+  telemetry, on-call/incident exercises, independent penetration testing, jurisdiction-specific
+  privacy review, and production-like accessibility validation; and
+- externally operated artifact signing, provenance publication/verification, and release-policy
+  enforcement.
+
+The owner explicitly deferred these gates on 2026-07-20. Deferral is not acceptance for production;
+it means repository work may continue while the associated audit findings remain deferred or
+mitigated until an accountable external owner supplies evidence.
 
 ## Service objectives
 
@@ -84,8 +94,9 @@ Never log session cookies, provider tokens, authorization headers, secrets, or r
   and a usable identity/admission path. At least one configured provider must also be enabled in
   site settings (or the explicitly enabled local dev path must be usable), the signup default must
   not be the protected admin role, and either an active administrator must be reachable through an
-  effective provider or a valid bootstrap path must remain. An instance that is alive but not ready
-  must receive no application traffic.
+  effective provider or a valid bootstrap path must remain. `signup_mode` may be open, approval, or
+  closed; it is authoritative regardless of the verified account's email domain or provider tenant.
+  An instance that is alive but not ready must receive no application traffic.
 - Startup/migration checks are serial. Application replicas do not run schema changes concurrently.
 
 ## Database change procedure
@@ -145,7 +156,7 @@ ORDER BY total_bytes DESC;
    migrator uses verified TLS and a dedicated identity, and the 0013 data preflight succeeds before
    its first DDL. Run `alembic upgrade 0013` from one migration process while watching process state,
    metadata locks, disk/temp capacity, database saturation, and the pre-agreed window. Keep traffic
-   drained, then run `alembic upgrade head` to the current `0017` head. Never run migrations from
+   drained, then run `alembic upgrade head` to the exact packaged head. Never run migrations from
    multiple application replicas.
 5. **Validate before admission.** Compare critical row counts/checksums to the pre-change record;
    inspect the expected collations, constraints, `BIGINT`, session expiry, and indexes; run
@@ -199,27 +210,43 @@ baseline from MySQL 8.0.46 to digest-pinned MySQL 8.4.10:
    restore-check container and volume were removed afterward.
 7. The live local volume then advanced to `0017`; `current`, `heads`, `alembic check`, all material
    row counts, the new authority columns, and every readiness dimension passed.
+8. Before the next decision batch, a stopped cold snapshot was copied to retained volume
+   `kingfisher_pre0019_backup_20260720`. All 200 files matched the source byte-for-byte by aggregate
+   hash verification.
+9. The live local volume advanced linearly from `0017` through `0018` and `0019`. Alembic
+   current/head/drift checks passed, the API reported database, schema, identity-provider,
+   administration, and admission-policy readiness as `ok`, and the rebuilt web service returned
+   HTTP 200.
 
 Those names and artifacts are local to that workstation and must be inventoried before cleanup.
 This proves a local logical restore and application/schema validation only. It does **not** prove a
 production RPO/RTO, encrypted or immutable retention, PITR, cross-boundary recovery, HA failover,
 legal hold, or an independently operated restore drill.
 
+These local recovery artifacts have an approved expiry of **2026-08-03**. On or after that date,
+the workstation owner must remove each exact, inventoried artifact through a target-verified
+disposal procedure unless a documented hold identifies the specific artifact. Record the operator,
+artifact, time, and outcome; the application must never delete Docker volumes. Future production
+backup copies have a proposed 35-day default expiry, pending external environment-owner approval
+and implementation. See `docs/DATA_RETENTION_PRIVACY.md`.
+
 The engine-cutover phase intentionally records the `0012`→`0013` state reached before later
 remediation work. The subsequent local steps separately exercised migrations `0014` through the
-repository's current linear head `0017`, with a new restore-tested boundary before each migration
-batch. Every target environment must still repeat its own normal head/readiness gates; this local
-evidence must not be presented as a production restore or migration rehearsal.
+then-current `0017` head with restore-tested boundaries, followed by a cold verified snapshot and
+linear migration through current head `0019`. Every target environment must still repeat its own
+normal head/readiness gates; this local evidence must not be presented as a production restore or
+migration rehearsal.
 
 ## Identity and session operations
 
 - Review provider enabled/configured state, the runtime client IDs returned by `/api/auth/config`,
-  hosted domains, the single admitted Microsoft tenant, bootstrap identities, and the signup policy
-  before every production release.
-- Production startup requires a canonical HTTPS `PUBLIC_ORIGIN`, closed public signup, and at least
-  one configured provider. Google requires a signed-hosted-domain admission allowlist. If Microsoft
-  is configured, `ALLOWED_AZURE_TENANTS` must contain exactly one tenant. Readiness then requires at
-  least one of those configured providers to remain enabled in site settings.
+  immutable bootstrap identities, and database `signup_mode` before every production release.
+- Production startup requires a canonical HTTPS `PUBLIC_ORIGIN` and at least one configured
+  provider. Readiness then requires at least one configured provider to remain enabled in site
+  settings. `signup_mode` is authoritative: open admits any verified new identity to the configured
+  least-privilege default role, approval creates a pending account, and closed rejects new accounts
+  except an explicitly configured immutable bootstrap subject. Do not implement an email-domain or
+  provider-tenant onboarding allowlist.
 - Production validates Google client IDs against the OAuth web-client identifier form and Azure
   client IDs as canonical UUIDs. Proxy trust accepts only explicit IP/CIDR peers; hostnames,
   wildcards, invalid networks, and world-wide production CIDRs are rejected. Keep
@@ -230,15 +257,16 @@ evidence must not be presented as a production restore or migration rehearsal.
   outage/unknown-key backoff settings inside the API worker and identity-provider budgets. Alert on
   `PROVIDER_UNAVAILABLE`; do not raise the limits to mask an outage or attacker-generated `kid`
   flood. Exercise planned key rotation and stale-cache expiry before each production release.
-- Production startup rejects `ADMIN_EMAILS`, Azure admin object IDs without a configured admin
-  tenant, and an Azure admin tenant outside `ALLOWED_AZURE_TENANTS`. Use immutable
-  `GOOGLE_ADMIN_SUBJECTS` for hosted Google bootstrap and keep every bootstrap identifier under
-  separate review.
+- Production startup rejects `ADMIN_EMAILS` and Azure admin object IDs without a configured admin
+  tenant. Use immutable `GOOGLE_ADMIN_SUBJECTS` for Google bootstrap; Microsoft bootstrap requires
+  the exact configured tenant plus immutable object ID. Keep every bootstrap identifier under
+  separate review. This tenant binding is bootstrap authority, not an onboarding restriction.
 - Migration `0017` persists the last signature-verified Google `hd` or Microsoft `tid` claim for
-  each identity. Administrative recovery counts a claimed bootstrap only while its owner remains
-  active, approved, an administrator, and admitted by the current organization policy. Legacy
-  claimed identities with no persisted authority fail readiness closed until a successful provider
-  login refreshes that evidence; do not bypass this by editing the identity row manually.
+  each identity. Google `hd` is attribution context. Microsoft identity lookup and uniqueness use
+  the tenant-scoped `(tid, oid)` namespace because `oid` alone is tenant-local. Administrative
+  recovery counts a claimed bootstrap only while its owner remains active, approved, an
+  administrator, and still matches its configured immutable bootstrap context. Do not bypass this
+  by editing the identity row manually.
 - Keep dev authentication disabled outside isolated local development. Rotate its independent secret
   whenever exposure is suspected.
 - Rotate the session signing key by moving the old active value into
@@ -252,8 +280,9 @@ evidence must not be presented as a production restore or migration rehearsal.
   against the organization's access and evidence policy. Login revokes the oldest over-cap live
   session. The interval worker independently prunes expired/old-revoked rows in bounded batches;
   monitor cleanup lag and do not treat session-row retention as security-event retention.
-- Revoke sessions and review admission policy after provider, tenant, allowlist, employee-status, or
-  incident-driven access changes.
+- Revoke sessions and review provider state, `signup_mode`, employee status, and bootstrap authority
+  after directory or incident-driven access changes. Because domain membership is not an admission
+  policy, offboarding remains an administrator/directory lifecycle responsibility.
 - Require recent strong authentication or the organization's IdP step-up policy before sensitive
   production administration. Application-only controls are not a substitute for Conditional Access
   or equivalent provider policy.
@@ -263,32 +292,68 @@ evidence must not be presented as a production restore or migration rehearsal.
 - `users.read` permits directory reads but not CSV extraction; `users.export` controls the bounded
   directory export. `logs.view` permits operational request-log reads/metrics but not durable
   security evidence; `security_events.view` controls both security-event reads and export. Both
-  exports create a security event. Review these grants separately and remove them from broad support
-  roles unless their duties require bulk data/evidence access.
+  exports create a security event. `privacy.manage` separately controls retention/erasure/hold
+  administration. Review these grants separately and remove them from broad support roles unless
+  their duties require bulk data, evidence, or privacy authority.
 - Migration `0016` creates those two built-in permissions and grants them only to the built-in admin
   role. Its upgrade refuses a conflicting custom permission with either reserved key, and its
   downgrade refuses to discard retained non-admin grants. Resolve either refusal intentionally;
   never rename or delete grants merely to force a migration through.
+- Migration `0019` creates `privacy.manage`, adds account lifecycle timestamps and global hold state,
+  and removes the redundant provider-email copy. Its downgrade refuses an active hold, retained
+  lifecycle evidence, a missing/modified privacy permission, or non-admin/direct privacy grants.
+  Resolve the state through the approved privacy workflow; never discard evidence to force a
+  downgrade.
 - Role update/delete must carry the `version` from the latest role read. User role assignment and
   direct-permission replacement must carry the latest `access_version`. Missing values return
   `428 PRECONDITION_REQUIRED`; mismatches return `409 STALE_WRITE`. Refresh, show the intervening
   state to the operator, re-authorize the intended delta, and submit a new decision. Automated
   clients must not convert either response into a blind retry.
+- Lifecycle, role, grant, and singleton-policy check-and-act paths use current locking reads that
+  replace any older SQLAlchemy identity-map state. Keep the `populate_existing`, relationship
+  refresh, and global `site_settings -> user/role` lock order together; removing only the refresh
+  can leave a row physically locked while policy checks still observe an earlier MySQL
+  `REPEATABLE READ` snapshot. Independently committed bulk items reauthorize on every item.
 
 ## Scheduled retention operations
 
-The API starts a delayed interval worker so cleanup does not depend on a new login or request-log
-write. By default, every 3,600 seconds it commits up to ten independent batches per table: 2,000
-request logs per batch older than 90 days and 500 expired/old-revoked sessions per batch older than
-30 days. Thus one default cycle deletes at most 20,000 request logs and 5,000 sessions. Configure
-`REQUEST_LOG_RETENTION_DAYS`, `SESSION_RETENTION_DAYS`, both batch sizes,
-`RETENTION_WORKER_INTERVAL_SECONDS`, `RETENTION_WORKER_MAX_BATCHES_PER_CYCLE`, and the bounded
-shutdown timeout from measured volume/lock behavior. Alert on cycle failure, backlog growth, and a
-shutdown timeout; do not increase batches until lock, redo, and replica-lag impact is measured.
+The approved data lifecycle is authoritative in `docs/DATA_RETENTION_PRIVACY.md`: exact GPS expires
+after 24 hours; never-approved pending accounts after 30 days; sessions 30 days after expiry or
+revocation; request logs after 90 days; verified erasure requests after a 30-day grace period;
+disabled accounts after 365 days; and repository security events plus delivery state after 400
+days. Active profile data lasts for the account lifetime. Generated CSV responses are not retained
+as server-side files.
 
-`SECURITY_EVENT_RETENTION_DAYS` sets each event's `retention_until` intent. The repository worker
-does not delete security events or delivery rows. External dispatcher/SIEM/WORM retention,
-legal-hold, verified deletion, loss/lag, and dead-letter operations remain environment-owner work.
+The API's delayed interval worker enforces these schedules independently of new login or log
+traffic. Each data class is processed in bounded, independently committed, idempotent batches.
+The duration controls are `PRECISE_LOCATION_RETENTION_HOURS`,
+`PENDING_ACCOUNT_RETENTION_DAYS`, `SESSION_RETENTION_DAYS`,
+`REQUEST_LOG_RETENTION_DAYS`, `ACCOUNT_ERASURE_GRACE_DAYS`,
+`DISABLED_ACCOUNT_RETENTION_DAYS`, and `SECURITY_EVENT_RETENTION_DAYS`. Configure their bounded
+batch-size counterparts, `RETENTION_WORKER_INTERVAL_SECONDS`,
+`RETENTION_WORKER_MAX_BATCHES_PER_CYCLE`, and the bounded shutdown timeout from measured volume/lock
+behavior. Alert on cycle failure, oldest eligible record, backlog growth, and shutdown timeout; do
+not increase batches until lock, redo, and replica-lag impact is measured.
+
+Account lifecycle expiry performs privacy-safe anonymization rather than unsafe relational-root
+deletion. It revokes sessions, removes profile/GPS/provider-email copies and direct grants, assigns
+the least-privilege role, and retains only the opaque provider binding required to prevent silent
+reprovisioning or bootstrap reuse. Unless a hold applies, users may clear exact and derived location
+immediately and receive a 30-day erasure grace period. Privacy administration and hold changes
+require dedicated authority and security-event evidence.
+
+Authenticated users inspect policy/status and clear or schedule/cancel through `/api/privacy`.
+Holders of `privacy.manage` inspect global state, update a referenced hold, and schedule/cancel a
+verified target's request through `/api/admin/privacy`. A hold blocks deletion/scheduling with
+`423 RETENTION_HOLD` but permits canceling an erasure request because cancellation preserves data.
+Administrator accounts cannot be scheduled or automatically anonymized; transfer authority first.
+
+A documented hold pauses governed application deletion but never extends anti-replay nonce state.
+Review holds at least every 90 days. Repository security events expire at 400 days even when their
+external delivery has not succeeded unless held; dependent delivery state is removed with the
+event. An external dispatcher/SIEM/WORM sink may have its own approved evidence schedule and still
+requires environment-owner implementation, loss/lag monitoring, tamper controls, and verified
+deletion.
 
 ## Security and audit events
 
@@ -300,11 +365,12 @@ operated collection path.
 
 Privileged changes and authentication outcomes are staged transactionally as append-only event
 facts with separate mutable retry/lease state. The repository supplies bounded cursor reads,
-self-audited CSV export, retention intent, and worker-facing claim/success/failure primitives. It
+self-audited CSV export, an approved 400-day application retention schedule, and worker-facing
+claim/success/failure primitives. It
 does **not** run an external dispatcher or provide immutable storage. An environment owner must
 deliver the outbox to restricted append-only/WORM storage or a SIEM, monitor loss, lag, retries and
-dead letters, enforce legal retention/deletion, grant evidence access separately from application
-administration, and test tamper detection.
+dead letters, apply the separately approved external-evidence retention/deletion schedule, grant
+evidence access separately from application administration, and test tamper detection.
 
 ## Incident minimums
 
@@ -319,8 +385,11 @@ privileged-account misuse, migration failure, and restore. Track follow-up work 
 - Dependency, secret, static-analysis, and deployable-image scans meet the approved policy.
 - The exact image digests and software bill of materials are retained.
 - Readiness reports the expected schema and synthetic login/navigation checks pass.
-- The deployed database reports the current single Alembic head (`0017` for this revision), and
-  the identity, administration, and admission readiness dimensions are all `ok`.
+- The deployed database reports the exact packaged single Alembic head (`0019` for this revision),
+  and the identity, administration, and admission readiness dimensions are all `ok`.
+- Privacy lifecycle boundary/hold tests pass, no overdue unheld application record exceeds the
+  approved schedule, and the local 2026-07-20 recovery artifacts are disposed by 2026-08-03 unless
+  a specific documented hold applies.
 - External review/ruleset, secrets, deployment approval, rollback, backup, and monitoring controls
   are independently evidenced by their owners.
 - All open risk acceptances have an owner and expiry date.
