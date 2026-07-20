@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="color-scheme" content="light dark">
-  <title>Kingfisher Enterprise Readiness Audit — 2026-07-20</title>
+  <title>KingFisher Enterprise Readiness Audit — 2026-07-20</title>
   <style>
     :root {
       --bg:#f5f7fa; --surface:#ffffff; --surface-2:#eef3f7; --ink:#15202b; --muted:#526373;
@@ -188,7 +188,7 @@
     <div class="wrap">
       <div class="eyebrow">Enterprise readiness review · Evidence baseline 23343f9</div>
       <h1>Strong application core.<br>Pre-production enterprise posture.</h1>
-      <p class="lede">A source, runtime, database, container, browser, dependency, and GitHub-control audit of Kingfisher CRM. The code is compact and testable; identity integration, data operations, delivery governance, and production resilience are not yet safe enough for an enterprise launch.</p>
+      <p class="lede">A source, runtime, database, container, browser, dependency, and GitHub-control audit of KingFisher CRM. The code is compact and testable; identity integration, data operations, delivery governance, and production resilience are not yet safe enough for an enterprise launch.</p>
       <div class="meta" aria-label="Audit metadata">
         <span class="tag">2026-07-20</span><span class="tag">Branch <span class="mono">main</span></span>
         <span class="tag">HEAD = origin/main</span><span class="tag">131 source/config files · 12,116 raw lines</span>
@@ -251,7 +251,7 @@
       <div class="wrap">
         <h2>Architecture and control boundaries</h2>
         <p class="section-lede">The application is a single-organization access-control console: a React SPA uses same-origin HTTP/WebSocket routes to FastAPI; FastAPI verifies provider tokens, issues its own cookie session, evaluates database-backed RBAC, and writes to MySQL. The main risks sit at the seams.</p>
-        <div class="architecture" role="img" aria-label="Kingfisher application architecture from browser through web tier, API, and MySQL">
+        <div class="architecture" role="img" aria-label="KingFisher application architecture from browser through web tier, API, and MySQL">
           <div class="node warn"><b>Identity providers</b><small>Google is wired with a DB nonce. Microsoft verification exists, but the browser path and CSP do not.</small></div>
           <div class="arrow" aria-hidden="true">→</div>
           <div class="node warn"><b>React SPA</b><small>Vite in development; Nginx in production. Strict TypeScript, browser cookie session, WebSocket presence.</small></div>
@@ -579,7 +579,7 @@
 
     <section id="remediation">
       <div class="wrap">
-        <div class="eyebrow">Remediation update · 2026-07-20 · implementation evidence through <code>92105a9</code></div>
+        <div class="eyebrow">Remediation update · 2026-07-20 · implementation evidence through <code>c1e99eb</code></div>
         <h2>Repository remediation ledger</h2>
         <p class="section-lede">The verdict, scores, evidence, and finding cards above remain the point-in-time audit baseline at <code>23343f9</code>. This addendum records subsequent corrective action without rewriting that historical evidence.</p>
 
@@ -596,7 +596,7 @@
             <caption>Product-owner direction and the evidence boundary that remains.</caption>
             <thead><tr><th scope="col">Decision</th><th scope="col">Outcome</th><th scope="col">Approved direction</th><th scope="col">Remaining evidence</th></tr></thead>
             <tbody>
-              <tr><td>D-01 Architecture</td><td><span class="status-badge status-approved">Approved</span></td><td>Kingfisher is single-tenant: one organization per isolated application deployment and database.</td><td>Infrastructure isolation remains an environment acceptance check; shared-customer hosting requires a new ADR and schema redesign.</td></tr>
+              <tr><td>D-01 Architecture</td><td><span class="status-badge status-approved">Approved</span></td><td>KingFisher is single-tenant: one organization per isolated application deployment and database.</td><td>Infrastructure isolation remains an environment acceptance check; shared-customer hosting requires a new ADR and schema redesign.</td></tr>
               <tr><td>D-02 Onboarding</td><td><span class="status-badge status-approved">Approved</span></td><td>Database <code>site_settings.signup_mode</code> is the sole new-account admission policy. Open admits verified identities, approval creates pending accounts, and closed rejects new non-bootstrap accounts. No email-domain or provider-tenant allowlist applies.</td><td>Repository tests now prove all three modes, least-privilege default-role enforcement, immutable bootstrap behavior, and Microsoft <code>(tid, oid)</code> identity scoping. Live-provider tenant testing remains deferred under D-03.</td></tr>
               <tr><td>D-03 Live IdP</td><td><span class="status-badge status-deferred">Deferred</span></td><td>No live Google/Microsoft tenant or outage exercise is authorized now.</td><td>KF-H02 and the provider portions of KF-M18 remain mitigated pending externally owned live-provider evidence.</td></tr>
               <tr><td>D-04 AWS</td><td><span class="status-badge status-deferred">Deferred</span></td><td>No AWS resource, production database, HA/PITR, secrets, networking, deployment, or rollback change is authorized now.</td><td>KF-H12 remains Deferred.</td></tr>
@@ -605,6 +605,7 @@
               <tr><td>D-07 Observability</td><td><span class="status-badge status-deferred">Deferred</span></td><td>No external metrics, traces, dashboards, alerts, SIEM/WORM delivery, or on-call integration is authorized now.</td><td>The external portions of KF-H11, KF-M06, KF-M11, KF-M16, and KF-M20 remain open/mitigated.</td></tr>
               <tr><td>D-08 Load targets</td><td><span class="status-badge status-deferred">Deferred</span></td><td>No production cardinality, latency target, or load/failure campaign is approved now.</td><td>The scale portions of KF-H05, KF-M07, KF-M10, KF-M12, and KF-M18 remain mitigated.</td></tr>
               <tr><td>D-09 Release signing</td><td><span class="status-badge status-deferred">Deferred</span></td><td>No release-signing or provenance service integration is authorized now.</td><td>KF-M19 remains mitigated for signed provenance/release signing.</td></tr>
+              <tr><td>D-10 Legal bundle v2</td><td><span class="status-badge status-approved">Approved</span></td><td>Use KingFisher in Hillsboro, Oregon; owner-supplied legal/privacy/support mailboxes; age 18+; a free service with no SLA; Oregon law and courts without mandatory arbitration or a contractual class-action waiver; conservative warranty, liability, indemnity, export, and termination terms.</td><td>The repository implementation is fixed and versioned. Production publication remains blocked on qualified counsel approval, complete legal-entity/address facts, verified mailbox/domain authority, provider/subprocessor facts, and controller/processor confirmation. <code>kingfisher.com</code> is associated with an unrelated UK company and must not be treated as controlled without proof.</td></tr>
             </tbody>
           </table>
         </div>
@@ -618,12 +619,12 @@
 
         <h3>Verification evidence</h3>
         <div class="verification-grid">
-          <div class="verification-item"><b>Python / database</b><p>369 of 369 backend tests passed on real MySQL 8.4 through Alembic <code>0020</code>. Ruff, formatting, mypy, migration/drift checks, lifecycle constraints, privacy concurrency, and versioned legal-acceptance regressions passed.</p></div>
-          <div class="verification-item"><b>React / browser</b><p>ESLint and TypeScript passed; Vitest passed 44 of 44 tests and the production Vite build completed successfully. Legal-page and login-acceptance browser smoke passed; the earlier three-scenario browser evidence remains the broader production-like E2E baseline.</p></div>
+          <div class="verification-item"><b>Python / database</b><p>376 of 376 backend tests passed on an ephemeral real MySQL 8.4 database through Alembic <code>0021</code> with 88.61% branch coverage. Ruff, formatting, mypy, migration/drift checks, lifecycle constraints, privacy concurrency, location-deadline, and exact legal-evidence regressions passed.</p></div>
+          <div class="verification-item"><b>React / browser</b><p>ESLint and TypeScript passed; Vitest passed 48 of 48 tests and the production Vite build completed successfully. Tests cover fail-closed manifest/digest matching, initially unchecked legal acceptance, location-policy loading, full draft-warning display, and active retention disclosure. Live in-app browser smoke and the dedicated Playwright legal/print scenario passed against the rebuilt Docker site.</p></div>
           <div class="verification-item"><b>Production-like E2E</b><p>A clean isolated Compose environment migrated from an empty database through Alembic <code>0017</code>; all 3 Playwright scenarios passed and temporary resources were removed.</p></div>
           <div class="verification-item"><b>Dependencies / supply chain</b><p>Linux/Python 3.13 production and development locks reproduced byte-for-byte. Both hash-locked graphs passed pip-audit with no known vulnerabilities.</p></div>
           <div class="verification-item"><b>Container posture</b><p>Final API and web images scanned with zero Critical, High, Medium, or Low Docker Scout findings. API runs as UID/GID 65532 and contains no runtime pip.</p></div>
-          <div class="verification-item"><b>Recovery / runtime</b><p>Earlier logical backups were checksum/restore-verified. A new cold <code>kingfisher_pre0019_backup_20260720</code> snapshot matched all 200 source files byte-for-byte by aggregate hashes. Current verification migrated through <code>0017→0018→0019→0020</code>; every API readiness dimension is <code>ok</code>, web returns HTTP 200, and bounded local logs were verified.</p></div>
+          <div class="verification-item"><b>Recovery / runtime</b><p>Earlier logical backups were checksum/restore-verified. A cold <code>kingfisher_pre0019_backup_20260720</code> snapshot matched all 200 source files byte-for-byte by aggregate hashes. Current verification migrated linearly through <code>0017→0018→0019→0020→0021</code>; every readiness dimension is <code>ok</code>, Alembic current/head agree at <code>0021</code> with no drift, the v2 manifest exposes four matching documents and active retention, login/legal routes return HTTP 200, and all three Docker services are healthy/running on loopback.</p></div>
         </div>
 
         <h3>Finding-by-finding disposition</h3>
@@ -651,14 +652,14 @@
               <tr id="rem-KF-M01"><td>KF-M01</td><td><span class="status-badge status-fixed">Fixed</span></td><td>Made the built-in admin role a true meta-role that ordinary permission-subset delegation cannot assign.</td><td><code>776d4f8</code></td></tr>
               <tr id="rem-KF-M02"><td>KF-M02</td><td><span class="status-badge status-fixed">Fixed</span></td><td>Centralized and enforced actor/target hierarchy across role, permission, status, session, and bulk mutations; independently committed bulk items reauthorize current actor, role, grant, and target state.</td><td><code>776d4f8</code> <code>b329e39</code></td></tr>
               <tr id="rem-KF-M03"><td>KF-M03</td><td><span class="status-badge status-fixed">Fixed</span></td><td>Added production cookie-CSRF enforcement using Origin/Referer and Fetch Metadata checks for unsafe methods.</td><td><code>776d4f8</code></td></tr>
-              <tr id="rem-KF-M04"><td>KF-M04</td><td><span class="status-badge status-fixed">Fixed</span></td><td>Implemented the approved lifecycle schedules, <code>privacy.manage</code>, self/admin erasure and location workflows, referenced global holds, bounded cleanup, privacy-safe anonymization with identity suppression, and erased-account login denial. Current locking reads prevent cached request state from restoring personal data or mutating erased tombstones across login, presence, profile, GPS, privacy, session, approval, status, and bulk paths. External backup/restore and provider-directory lifecycle remain separately owned controls.</td><td><code>776d4f8</code> <code>34b2cd8</code> <code>98787fc</code> <code>b329e39</code></td></tr>
+              <tr id="rem-KF-M04"><td>KF-M04</td><td><span class="status-badge status-fixed">Fixed</span></td><td>Implemented the approved lifecycle schedules, <code>privacy.manage</code>, self/admin erasure and location workflows, referenced global holds, bounded cleanup, privacy-safe anonymization with identity suppression, and erased-account login denial. Each precise-location capture now stores its own deletion deadline; policy reductions shorten existing retention while later increases cannot silently extend an earlier capture. Current locking reads prevent cached request state from restoring personal data or mutating erased tombstones across login, presence, profile, GPS, privacy, session, approval, status, and bulk paths. External backup/restore and provider-directory lifecycle remain separately owned controls.</td><td><code>776d4f8</code> <code>34b2cd8</code> <code>98787fc</code> <code>b329e39</code> <code>e3236c7</code></td></tr>
               <tr id="rem-KF-M05"><td>KF-M05</td><td><span class="status-badge status-fixed">Fixed</span></td><td>Enforced ASGI request-body, token, and location bounds plus browser request timeouts and abort handling.</td><td><code>776d4f8</code> <code>d9b5fed</code></td></tr>
               <tr id="rem-KF-M06"><td>KF-M06</td><td><span class="status-badge status-mitigated">Mitigated</span></td><td>Standardized safe errors and provider 503 behavior; added bounded key fetches, single-flight caches, stale-key fallback, unknown-key cooldown, and outage circuits. External metrics remain.</td><td><code>776d4f8</code></td></tr>
               <tr id="rem-KF-M07"><td>KF-M07</td><td><span class="status-badge status-fixed">Fixed</span></td><td>Implemented bounded non-blocking request-log delivery and transactional security-event persistence with structured boundary-rejection evidence.</td><td><code>776d4f8</code></td></tr>
-              <tr id="rem-KF-M08"><td>KF-M08</td><td><span class="status-badge status-mitigated">Mitigated</span></td><td>Normalized timestamps, extended the linear history through <code>0020</code>, added CI drift checks, guarded downgrade preflights, and documented migration procedure. Historical migrations remain immutable; populated N-1/N-2 zero-downtime rehearsal remains release work.</td><td><code>776d4f8</code> <code>71b32a8</code> <code>34b2cd8</code> <code>b329e39</code> <code>8b246a4</code></td></tr>
+              <tr id="rem-KF-M08"><td>KF-M08</td><td><span class="status-badge status-mitigated">Mitigated</span></td><td>Normalized timestamps, extended the linear history through <code>0021</code>, added CI drift checks, guarded upgrade/downgrade preflights, and documented migration procedure. Migration <code>0021</code> safely backfills known legal semantics and capture-time location deadlines while refusing unknown evidence. Historical migrations remain immutable; populated N-1/N-2 zero-downtime rehearsal remains release work.</td><td><code>776d4f8</code> <code>71b32a8</code> <code>34b2cd8</code> <code>b329e39</code> <code>8b246a4</code> <code>e3236c7</code></td></tr>
               <tr id="rem-KF-M09"><td>KF-M09</td><td><span class="status-badge status-fixed">Fixed</span></td><td>Added database CHECK constraints for booleans, geography, provider state, identity keys, retention holds, and account-lifecycle invariants with direct-SQL tests.</td><td><code>776d4f8</code> <code>b329e39</code></td></tr>
               <tr id="rem-KF-M10"><td>KF-M10</td><td><span class="status-badge status-mitigated">Mitigated</span></td><td>Aggregated roles, capped presence, keyset-paginated logs, bounded exports, and capped offsets. User-search leading wildcards and production EXPLAIN evidence remain scale considerations.</td><td><code>776d4f8</code></td></tr>
-              <tr id="rem-KF-M11"><td>KF-M11</td><td><span class="status-badge status-mitigated">Mitigated</span></td><td>Promoted identifiers, added cleanup indexes, and implemented scheduled bounded retention—including versioned acceptance evidence—plus an application legal hold. Partition/archive strategy, external evidence retention, and lag alerts remain operational scale controls.</td><td><code>776d4f8</code> <code>34b2cd8</code> <code>b329e39</code> <code>8b246a4</code></td></tr>
+              <tr id="rem-KF-M11"><td>KF-M11</td><td><span class="status-badge status-mitigated">Mitigated</span></td><td>Promoted identifiers, added cleanup indexes, and implemented scheduled bounded retention—including versioned acceptance evidence—plus an application legal hold. Legal evidence now snapshots the effective date, exact checkbox statement, per-document agreement/acknowledgement action, versions, and canonical digests; its capture-time expiry cannot be lengthened by a later policy increase. Partition/archive strategy, external evidence retention, and lag alerts remain operational scale controls.</td><td><code>776d4f8</code> <code>34b2cd8</code> <code>b329e39</code> <code>8b246a4</code> <code>e3236c7</code></td></tr>
               <tr id="rem-KF-M12"><td>KF-M12</td><td><span class="status-badge status-mitigated">Mitigated</span></td><td>Configured explicit pool, connection/read/write timeouts, recycling, UTC, and server timestamps. Statement policy, retry instrumentation, and failover drills remain environment-specific.</td><td><code>776d4f8</code> <code>34b2cd8</code></td></tr>
               <tr id="rem-KF-M13"><td>KF-M13</td><td><span class="status-badge status-fixed">Fixed</span></td><td>Aligned settings, users, and roles navigation and page access with authoritative permissions.</td><td><code>d9b5fed</code> <code>776d4f8</code> <code>9f45b66</code></td></tr>
               <tr id="rem-KF-M14"><td>KF-M14</td><td><span class="status-badge status-fixed">Fixed</span></td><td>Added responsive navigation and mobile layouts with verified no-overflow behavior.</td><td><code>d9b5fed</code></td></tr>
@@ -675,9 +676,9 @@
               <tr id="rem-KF-L04"><td>KF-L04</td><td><span class="status-badge status-mitigated">Mitigated</span></td><td>Added <code>no-store</code>, <code>__Host-session</code>, CSP, and security headers. Edge HSTS, MFA, and recent-auth requirements must be enforced by production identity/edge controls.</td><td><code>d9b5fed</code> <code>776d4f8</code> <code>34b2cd8</code></td></tr>
               <tr id="rem-KF-L05"><td>KF-L05</td><td><span class="status-badge status-fixed">Fixed</span></td><td>Lazy-loaded provider GIS only when effectively enabled and made precise-location collection an explicit, explainable opt-in.</td><td><code>d9b5fed</code> <code>9f45b66</code></td></tr>
               <tr id="rem-KF-L06"><td>KF-L06</td><td><span class="status-badge status-fixed">Fixed</span></td><td>Extracted bulk-action helpers and enforced a McCabe complexity ceiling of 10.</td><td><code>776d4f8</code> <code>71b32a8</code></td></tr>
-              <tr id="rem-KF-L07"><td>KF-L07</td><td><span class="status-badge status-fixed">Fixed</span></td><td>Aligned documentation and public capability claims with current onboarding, privacy-lifecycle, legal-acceptance, single-tenant, external-control, and packaged Alembic <code>0020</code> behavior.</td><td><code>34b2cd8</code> <code>9f45b66</code> <code>98787fc</code> <code>b329e39</code> <code>8b246a4</code> <code>92105a9</code></td></tr>
+              <tr id="rem-KF-L07"><td>KF-L07</td><td><span class="status-badge status-fixed">Fixed</span></td><td>Aligned documentation and public capability claims with current onboarding, privacy lifecycle, legal acceptance, single-tenancy, external-control boundaries, owner-selected Oregon legal defaults, and packaged Alembic <code>0021</code> behavior.</td><td><code>34b2cd8</code> <code>9f45b66</code> <code>98787fc</code> <code>b329e39</code> <code>8b246a4</code> <code>92105a9</code> <code>c1e99eb</code></td></tr>
               <tr id="rem-KF-A01"><td>KF-A01</td><td><span class="status-badge status-fixed">Fixed</span></td><td>Recorded one organization per isolated application deployment and database. Shared-customer hosting now explicitly requires a new ADR/schema redesign; onboarding remains an independent database setting without a domain allowlist.</td><td><code>1ba34c4</code> <code>776d4f8</code> <code>34b2cd8</code> <code>b329e39</code></td></tr>
-              <tr id="control-legal-acceptance"><td>Post-audit legal acceptance</td><td><span class="status-badge status-fixed">Fixed</span></td><td>Added public versioned Terms, EULA, Acceptable Use, and Privacy pages; fail-closed manifest gating for every login provider; and transactionally persisted, retention-governed acceptance evidence under Alembic <code>0020</code>. The checked-in prose remains a counsel-review draft: qualified legal approval, deployment-specific terms, and jurisdictional conclusions remain external release requirements.</td><td><code>8b246a4</code> <code>92105a9</code></td></tr>
+              <tr id="control-legal-acceptance"><td>Post-audit legal acceptance</td><td><span class="status-badge status-fixed">Fixed</span></td><td>Published the owner-selected <code>2026-07-20-v2</code> Terms, EULA, Acceptable Use Policy, and Privacy Notice as public HTML routes; made the initially unchecked agreement mandatory and fail-closed for every login provider; displayed active location and legal-evidence retention policy; bound the full draft warning into canonical SHA-256 content; and transactionally stored the effective date, exact checkbox statement, per-document action, version, digest, timestamp, and bounded request evidence under Alembic <code>0021</code>. Repository implementation is fixed. The prose remains a counsel-review draft, and the unverified <code>kingfisher.com</code> mailboxes are expressly non-operative until control is proved or they are replaced.</td><td><code>8b246a4</code> <code>92105a9</code> <code>e3236c7</code> <code>c1e99eb</code></td></tr>
             </tbody>
           </table>
         </div>
@@ -787,7 +788,7 @@
     <section id="sources">
       <div class="wrap">
         <h2>Primary standards and vendor references</h2>
-        <p class="section-lede">Current technical claims were checked against primary/official sources. These are benchmarks, not assertions that Kingfisher is compliant.</p>
+        <p class="section-lede">Current technical and Oregon legal-baseline claims were checked against primary/official sources. These are benchmarks, not assertions that KingFisher is compliant or that the counsel-review draft is legal advice.</p>
         <ol class="sources">
           <li><a href="https://owasp.org/www-project-application-security-verification-standard/">OWASP ASVS 5.0</a></li>
           <li><a href="https://csrc.nist.gov/pubs/sp/800/218/final">NIST SP 800-218 Secure Software Development Framework</a></li>
@@ -811,13 +812,18 @@
           <li><a href="https://docs.aws.amazon.com/AmazonRDS/latest/gettingstartedguide/managing-backup-restore.html">AWS RDS backup and restore</a></li>
           <li><a href="https://docs.aws.amazon.com/AmazonRDS/latest/UserGuide/Concepts.MultiAZSingleStandby.html">AWS RDS Multi-AZ</a></li>
           <li><a href="https://docs.aws.amazon.com/AmazonRDS/latest/UserGuide/mysql-ssl-connections.require-ssl.html">AWS RDS MySQL TLS enforcement</a></li>
+          <li><a href="https://www.doj.state.or.us/consumer-protection/for-businesses/privacy-law-faqs-for-businesses/">Oregon Department of Justice privacy-law FAQ for businesses</a></li>
+          <li><a href="https://www.oregonlegislature.gov/bills_laws/ors/ors646a.html">Oregon Revised Statutes chapter 646A</a></li>
+          <li><a href="https://www.oregonlegislature.gov/bills_laws/ors/ors015.html">Oregon Revised Statutes chapter 15 choice-of-law provisions</a></li>
+          <li><a href="https://www.ord.uscourts.gov/index.php/court-info/contact-us/division-map">United States District Court for the District of Oregon division map</a></li>
+          <li><a href="https://www.kingfisher.com/about-us">Kingfisher plc official company profile (domain-ownership conflict check)</a></li>
         </ol>
       </div>
     </section>
   </main>
 
   <footer>
-    <div class="wrap">Kingfisher enterprise readiness audit · Evidence captured 2026-07-20 · Baseline <code>23343f9</code> · Implementation evidence through <code>92105a9</code>. This is a code/configuration review, not a penetration test, legal opinion, compliance certification, load test, or proof of external cloud controls.</div>
+    <div class="wrap">KingFisher enterprise readiness audit · Evidence captured 2026-07-20 · Baseline <code>23343f9</code> · Implementation evidence through <code>c1e99eb</code>. This is a code/configuration review, not a penetration test, legal opinion, compliance certification, load test, or proof of external cloud controls.</div>
   </footer>
   <script>
     (() => {
