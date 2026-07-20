@@ -3,12 +3,17 @@
 from concurrent.futures import ThreadPoolExecutor
 from threading import Barrier
 
+import pytest
+from fastapi import Request
 from sqlalchemy import select
 
 from app.auth import VerifiedIdentity
 from app.db import SessionLocal
+from app.errors import ApiError
 from app.main import app
-from app.models import SiteSettings, User, UserIdentity
+from app.models import Permission, Role, SiteSettings, User, UserIdentity
+from app.routers import settings as settings_router
+from app.schemas.settings import SiteSettingsUpdate
 from tests.client import TestClient
 
 
@@ -43,6 +48,106 @@ def test_update_settings(client):
     assert resp.status_code == 200
     assert resp.json()["signup_mode"] == "approval"
     assert resp.json()["allow_google"] is False
+
+
+def test_settings_lock_replaces_cached_provider_state_before_transition(client):
+    _admin(client)
+
+    with SessionLocal() as stale_db:
+        actor = stale_db.scalar(select(User).where(User.email == "admin@example.com"))
+        cached = stale_db.get(SiteSettings, 1)
+        assert actor is not None and cached is not None
+        assert bool(cached.allow_google) and bool(cached.allow_microsoft)
+
+        with SessionLocal() as concurrent_db:
+            current = concurrent_db.get(SiteSettings, 1)
+            assert current is not None
+            current.allow_google = False
+            concurrent_db.commit()
+
+        request = Request(
+            {
+                "type": "http",
+                "method": "PUT",
+                "path": "/api/admin/settings",
+                "headers": [],
+                "client": ("127.0.0.1", 12345),
+            }
+        )
+        with pytest.raises(ApiError) as caught:
+            settings_router.update_settings(
+                body=SiteSettingsUpdate(allow_microsoft=False),
+                request=request,
+                db=stale_db,
+                actor=actor,
+            )
+        assert caught.value.code == "NO_PROVIDER_ENABLED"
+        stale_db.rollback()
+
+    with SessionLocal() as verification_db:
+        current = verification_db.get(SiteSettings, 1)
+        assert current is not None
+        assert bool(current.allow_google) is False
+        assert bool(current.allow_microsoft) is True
+
+
+def test_default_role_transition_refreshes_cached_permission_seniority(client):
+    _admin(client)
+    delegate_role = client.post(
+        "/api/roles",
+        json={
+            "name": "SettingsRoleRefreshDelegate",
+            "permission_keys": ["settings.manage", "roles.manage"],
+        },
+    ).json()
+    target_role = client.post(
+        "/api/roles", json={"name": "SettingsRoleRefreshTarget", "permission_keys": []}
+    ).json()
+    delegate = TestClient(app)
+    assert (
+        delegate.post(
+            "/api/auth/dev",
+            json={"email": "settings-role-refresh@example.com", "role": delegate_role["name"]},
+        ).status_code
+        == 200
+    )
+
+    with SessionLocal() as stale_db:
+        actor = stale_db.scalar(
+            select(User).where(User.email == "settings-role-refresh@example.com")
+        )
+        cached = stale_db.get(Role, target_role["id"])
+        assert actor is not None and cached is not None
+        assert cached.permission_keys == set()
+
+        with SessionLocal() as concurrent_db:
+            current = concurrent_db.get(Role, target_role["id"])
+            users_manage = concurrent_db.scalar(
+                select(Permission).where(Permission.key == "users.manage")
+            )
+            assert current is not None and users_manage is not None
+            current.permissions = [*current.permissions, users_manage]
+            current.version += 1
+            concurrent_db.commit()
+
+        request = Request(
+            {
+                "type": "http",
+                "method": "PUT",
+                "path": "/api/admin/settings",
+                "headers": [],
+                "client": ("127.0.0.1", 12345),
+            }
+        )
+        with pytest.raises(ApiError) as caught:
+            settings_router.update_settings(
+                body=SiteSettingsUpdate(default_role_id=target_role["id"]),
+                request=request,
+                db=stale_db,
+                actor=actor,
+            )
+        assert caught.value.code == "INSUFFICIENT_PRIVILEGE"
+        stale_db.rollback()
 
 
 def test_null_provider_toggle_keeps_existing_effective_state(client):

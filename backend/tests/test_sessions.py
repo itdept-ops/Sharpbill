@@ -2,12 +2,22 @@
 
 from datetime import UTC, datetime, timedelta
 
+import pytest
 from sqlalchemy import func, select
+from starlette.requests import Request
 
-from app.auth.sessions import prune_stale_sessions
+from app.auth.deps import _touch
+from app.auth.sessions import (
+    SessionPrincipalUnavailable,
+    prune_stale_sessions,
+    revoke_session,
+    start_session,
+)
 from app.config import settings
+from app.db import SessionLocal
 from app.main import app
-from app.models import UserSession
+from app.models import User, UserSession
+from app.privacy_lifecycle import anonymize_user
 from tests.client import TestClient
 
 
@@ -181,3 +191,86 @@ def test_stale_session_cleanup_is_bounded_and_keeps_recent_revocations(client, d
     assert "cleanup-stale-expired" not in remaining
     assert "cleanup-old-revoked" not in remaining
     assert "cleanup-recent-revoked" in remaining
+
+
+def test_session_issuance_rechecks_lifecycle_after_a_stale_login_read(client):
+    user = _login(client, "session-erasure-race@example.com")
+    stale_session = SessionLocal()
+    try:
+        stale_user = stale_session.get(User, user["id"])
+        assert stale_user is not None and stale_user.is_active
+
+        with SessionLocal() as eraser:
+            target = eraser.get(User, user["id"])
+            assert target is not None
+            anonymize_user(eraser, target, policy_trigger="race_test")
+            eraser.commit()
+
+        request = Request(
+            {
+                "type": "http",
+                "method": "POST",
+                "path": "/api/auth/dev",
+                "headers": [],
+                "client": ("127.0.0.1", 12345),
+            }
+        )
+        with pytest.raises(SessionPrincipalUnavailable) as caught:
+            start_session(stale_session, user["id"], request)
+        assert caught.value.code == "ACCOUNT_ERASED"
+        stale_session.rollback()
+
+        assert (
+            stale_session.scalar(
+                select(func.count())
+                .select_from(UserSession)
+                .where(UserSession.user_id == user["id"])
+            )
+            == 0
+        )
+    finally:
+        stale_session.close()
+
+
+def test_presence_touch_and_revoke_fail_closed_after_retention_deletes_session(client):
+    user = _login(client, "stale-session-erasure@example.com")
+    touch_db = SessionLocal()
+    revoke_db = SessionLocal()
+    try:
+        touch_user = touch_db.get(User, user["id"])
+        touch_session = touch_db.scalar(
+            select(UserSession).where(UserSession.user_id == user["id"])
+        )
+        stale_revoke_session = revoke_db.scalar(
+            select(UserSession).where(UserSession.user_id == user["id"])
+        )
+        assert touch_user is not None
+        assert touch_session is not None
+        assert stale_revoke_session is not None
+
+        with SessionLocal() as eraser:
+            target = eraser.get(User, user["id"])
+            assert target is not None
+            anonymize_user(eraser, target, policy_trigger="session_mutation_race_test")
+            eraser.commit()
+
+        # Both paths started with live ORM objects. Neither may restore presence metadata or
+        # surface SQLAlchemy's StaleDataError/ObjectDeletedError after retention wins the race.
+        assert _touch(touch_db, touch_user, touch_session) is None
+        assert revoke_session(stale_revoke_session, revoke_db) is False
+
+        with SessionLocal() as verifier:
+            erased = verifier.get(User, user["id"])
+            assert erased is not None and erased.erased_at is not None
+            assert erased.last_seen_at is None
+            assert (
+                verifier.scalar(
+                    select(func.count())
+                    .select_from(UserSession)
+                    .where(UserSession.user_id == user["id"])
+                )
+                == 0
+            )
+    finally:
+        touch_db.close()
+        revoke_db.close()

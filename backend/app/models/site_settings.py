@@ -30,6 +30,13 @@ class SiteSettings(Base):
         CheckConstraint("allow_google IN (0, 1)", name="allow_google_boolean"),
         CheckConstraint("allow_microsoft IN (0, 1)", name="allow_microsoft_boolean"),
         CheckConstraint("calm_mode IN (0, 1)", name="calm_mode_boolean"),
+        CheckConstraint("retention_hold IN (0, 1)", name="retention_hold_boolean"),
+        CheckConstraint(
+            "(retention_hold = 0 AND retention_hold_reference IS NULL) OR "
+            "(retention_hold = 1 AND retention_hold_reference IS NOT NULL "
+            "AND CHAR_LENGTH(TRIM(retention_hold_reference)) BETWEEN 1 AND 255)",
+            name="retention_hold_state_valid",
+        ),
         _TABLE_ARGS,
     )
 
@@ -42,6 +49,10 @@ class SiteSettings(Base):
     default_role_id: Mapped[int] = mapped_column(ForeignKey("roles.id", ondelete="RESTRICT"))
     # Global "calm" mode: dims the code-rain and drops the scanline overlay for everyone.
     calm_mode: Mapped[bool] = mapped_column(TINYINT(1), server_default=text("0"))
+    # A global legal/operational hold pauses governed retention jobs. The required reference is
+    # an external case/ticket identifier; detailed evidence belongs in the security-event log.
+    retention_hold: Mapped[bool] = mapped_column(TINYINT(1), server_default=text("0"))
+    retention_hold_reference: Mapped[str | None] = mapped_column(String(255))
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=False),
         server_default=text("CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6)"),

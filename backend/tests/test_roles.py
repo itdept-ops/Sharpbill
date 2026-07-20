@@ -1,11 +1,16 @@
 """RBAC: permissions/roles CRUD, protection guards, and end-to-end permission enforcement."""
 
+import pytest
+from fastapi import Request
 from sqlalchemy import select
 
+from app.db import SessionLocal
+from app.errors import ApiError
 from app.main import app
-from app.models import Permission, Role, User
+from app.models import Permission, Role, SiteSettings, User
 from app.permissions import BUILTIN_PERMISSIONS, SYSTEM_ROLES
 from app.routers import roles as roles_router
+from app.schemas.role import RoleUpdate
 from tests.client import TestClient
 
 
@@ -248,3 +253,147 @@ def test_stale_role_replacement_is_rejected(client):
     assert stale.json()["detail"]["code"] == "STALE_WRITE"
     refreshed = next(item for item in client.get("/api/roles").json() if item["id"] == role["id"])
     assert refreshed["description"] == "first"
+
+
+def test_locking_role_read_replaces_cached_version_before_optimistic_check(client):
+    _login(client, "cached-role-admin@example.com", role="admin")
+    created = client.post(
+        "/api/roles", json={"name": "CachedVersionRole", "permission_keys": []}
+    ).json()
+
+    with SessionLocal() as stale_db:
+        actor = stale_db.scalar(select(User).where(User.email == "cached-role-admin@example.com"))
+        cached = stale_db.get(Role, created["id"])
+        assert actor is not None and cached is not None
+        assert cached.version == created["version"]
+
+        with SessionLocal() as concurrent_db:
+            current = concurrent_db.get(Role, created["id"])
+            assert current is not None
+            current.description = "concurrent"
+            current.version += 1
+            concurrent_db.commit()
+
+        request = Request(
+            {
+                "type": "http",
+                "method": "PATCH",
+                "path": f"/api/roles/{created['id']}",
+                "headers": [],
+                "client": ("127.0.0.1", 12345),
+            }
+        )
+        with pytest.raises(ApiError) as caught:
+            roles_router.update_role(
+                role_id=created["id"],
+                body=RoleUpdate(description="stale overwrite", expected_version=created["version"]),
+                request=request,
+                db=stale_db,
+                actor=actor,
+            )
+        assert caught.value.code == "STALE_WRITE"
+        stale_db.rollback()
+
+    with SessionLocal() as verification_db:
+        current = verification_db.get(Role, created["id"])
+        assert current is not None
+        assert current.description == "concurrent"
+        assert current.version == created["version"] + 1
+
+
+def test_locking_role_read_refreshes_cached_permissions_before_seniority_check(client):
+    _login(client, "permission-refresh-admin@example.com", role="admin")
+    delegate_role = client.post(
+        "/api/roles",
+        json={"name": "PermissionRefreshDelegate", "permission_keys": ["roles.manage"]},
+    ).json()
+    target_role = client.post(
+        "/api/roles",
+        json={"name": "PermissionRefreshTarget", "permission_keys": ["roles.manage"]},
+    ).json()
+    delegate = TestClient(app)
+    _login(delegate, "permission-refresh-delegate@example.com", role=delegate_role["name"])
+
+    with SessionLocal() as stale_db:
+        actor = stale_db.scalar(
+            select(User).where(User.email == "permission-refresh-delegate@example.com")
+        )
+        cached = stale_db.get(Role, target_role["id"])
+        assert actor is not None and cached is not None
+        assert cached.permission_keys == {"roles.manage"}
+
+        with SessionLocal() as concurrent_db:
+            current = concurrent_db.get(Role, target_role["id"])
+            users_manage = concurrent_db.scalar(
+                select(Permission).where(Permission.key == "users.manage")
+            )
+            assert current is not None and users_manage is not None
+            current.permissions = [*current.permissions, users_manage]
+            current.version += 1
+            concurrent_db.commit()
+
+        request = Request(
+            {
+                "type": "http",
+                "method": "PATCH",
+                "path": f"/api/roles/{target_role['id']}",
+                "headers": [],
+                "client": ("127.0.0.1", 12345),
+            }
+        )
+        with pytest.raises(ApiError) as caught:
+            roles_router.update_role(
+                role_id=target_role["id"],
+                body=RoleUpdate(
+                    description="must be denied", expected_version=target_role["version"]
+                ),
+                request=request,
+                db=stale_db,
+                actor=actor,
+            )
+        assert caught.value.code == "INSUFFICIENT_PRIVILEGE"
+        stale_db.rollback()
+
+
+def test_settings_lock_refreshes_concurrent_default_before_role_delete(client):
+    _login(client, "cached-default-admin@example.com", role="admin")
+    created = client.post(
+        "/api/roles", json={"name": "ConcurrentSignupDefault", "permission_keys": []}
+    ).json()
+
+    with SessionLocal() as stale_db:
+        actor = stale_db.scalar(
+            select(User).where(User.email == "cached-default-admin@example.com")
+        )
+        cached_site = stale_db.get(SiteSettings, 1)
+        assert actor is not None and cached_site is not None
+        assert cached_site.default_role_id != created["id"]
+
+        with SessionLocal() as concurrent_db:
+            current_site = concurrent_db.get(SiteSettings, 1)
+            assert current_site is not None
+            current_site.default_role_id = created["id"]
+            concurrent_db.commit()
+
+        request = Request(
+            {
+                "type": "http",
+                "method": "DELETE",
+                "path": f"/api/roles/{created['id']}",
+                "headers": [],
+                "client": ("127.0.0.1", 12345),
+            }
+        )
+        with pytest.raises(ApiError) as caught:
+            roles_router.delete_role(
+                role_id=created["id"],
+                request=request,
+                expected_version=created["version"],
+                db=stale_db,
+                actor=actor,
+            )
+        assert caught.value.code == "ROLE_IN_USE"
+        stale_db.rollback()
+
+    with SessionLocal() as verification_db:
+        assert verification_db.get(Role, created["id"]) is not None

@@ -3,6 +3,7 @@ from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, selectinload
 
+from app.account_lifecycle import lock_current_role, lock_current_site_settings
 from app.auth.deps import require_permission
 from app.concurrency import require_version
 from app.db import get_db
@@ -106,7 +107,7 @@ def _changed_role_fields(
 
 def _lock_site_settings(db: Session) -> SiteSettings:
     """Use the singleton as the global lock-order root for settings/role mutations."""
-    site = db.scalar(select(SiteSettings).where(SiteSettings.id == 1).with_for_update())
+    site = lock_current_site_settings(db)
     if site is None:
         raise ApiError(500, "SETTINGS_NOT_INITIALIZED", "Site settings are not initialized")
     return site
@@ -218,7 +219,7 @@ def update_role(
     actor: User = Depends(require_permission(ROLES_MANAGE)),
 ) -> RoleOut:
     _lock_site_settings(db)
-    role = db.scalar(select(Role).where(Role.id == role_id).with_for_update())
+    role = lock_current_role(db, role_id)
     if role is None:
         raise ApiError(404, "NOT_FOUND", "Role not found")
     # The admin role is fully locked — editing it could lock everyone out of administration.
@@ -298,7 +299,7 @@ def delete_role(
     actor: User = Depends(require_permission(ROLES_MANAGE)),
 ) -> Response:
     site = _lock_site_settings(db)
-    role = db.scalar(select(Role).where(Role.id == role_id).with_for_update())
+    role = lock_current_role(db, role_id)
     if role is None:
         raise ApiError(404, "NOT_FOUND", "Role not found")
     if role.is_system:

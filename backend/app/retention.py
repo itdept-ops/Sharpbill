@@ -13,10 +13,16 @@ from dataclasses import asdict, dataclass
 
 from sqlalchemy.orm import Session
 
-from app.auth.sessions import prune_stale_sessions
+from app.auth.nonce import prune_expired_nonces
 from app.config import settings
 from app.db import SessionLocal
-from app.request_logging import prune_request_logs
+from app.privacy_lifecycle import (
+    anonymize_due_accounts,
+    clear_stale_precise_locations,
+    prune_request_logs_governed,
+    prune_security_events_governed,
+    prune_sessions_governed,
+)
 
 _log = logging.getLogger("app.retention")
 
@@ -26,10 +32,18 @@ PruneBatch = Callable[[Session, int], int]
 
 @dataclass(frozen=True)
 class RetentionResult:
+    nonces_deleted: int
+    nonce_batches: int
     request_logs_deleted: int
     request_log_batches: int
     sessions_deleted: int
     session_batches: int
+    precise_locations_cleared: int
+    precise_location_batches: int
+    accounts_anonymized: int
+    account_batches: int
+    security_events_deleted: int
+    security_event_batches: int
 
 
 def _drain_bounded(
@@ -56,12 +70,19 @@ def _drain_bounded(
 def run_retention_cycle(
     *,
     session_factory: SessionFactory | None = None,
+    nonce_batch_size: int | None = None,
     request_log_batch_size: int | None = None,
     session_batch_size: int | None = None,
+    precise_location_batch_size: int | None = None,
+    account_batch_size: int | None = None,
+    security_event_batch_size: int | None = None,
     max_batches: int | None = None,
 ) -> RetentionResult:
-    """Delete at most ``batch_size * max_batches`` rows from each retained table."""
+    """Apply every lifecycle rule in independently committed, strictly bounded batches."""
     factory = session_factory or SessionLocal
+    login_nonce_batch_size = (
+        settings.nonce_prune_batch_size if nonce_batch_size is None else nonce_batch_size
+    )
     log_batch_size = (
         settings.request_log_prune_batch_size
         if request_log_batch_size is None
@@ -70,22 +91,54 @@ def run_retention_cycle(
     user_session_batch_size = (
         settings.session_prune_batch_size if session_batch_size is None else session_batch_size
     )
+    location_batch_size = (
+        settings.precise_location_prune_batch_size
+        if precise_location_batch_size is None
+        else precise_location_batch_size
+    )
+    user_account_batch_size = (
+        settings.account_retention_prune_batch_size
+        if account_batch_size is None
+        else account_batch_size
+    )
+    event_batch_size = (
+        settings.security_event_prune_batch_size
+        if security_event_batch_size is None
+        else security_event_batch_size
+    )
     cycle_batch_limit = (
         settings.retention_worker_max_batches_per_cycle if max_batches is None else max_batches
     )
-    if min(log_batch_size, user_session_batch_size, cycle_batch_limit) < 1:
+    if (
+        min(
+            login_nonce_batch_size,
+            log_batch_size,
+            user_session_batch_size,
+            location_batch_size,
+            user_account_batch_size,
+            event_batch_size,
+            cycle_batch_limit,
+        )
+        < 1
+    ):
         raise ValueError("retention batch sizes and cycle limit must be positive")
 
+    def prune_nonces(db: Session, limit: int) -> int:
+        # Expired login state is never retained as evidence, even under a legal hold.
+        return prune_expired_nonces(db, limit=limit)
+
     def prune_logs(db: Session, limit: int) -> int:
-        return prune_request_logs(
-            db,
-            older_than_days=settings.request_log_retention_days,
-            limit=limit,
-        )
+        return prune_request_logs_governed(db, limit)
 
     def prune_sessions(db: Session, limit: int) -> int:
-        return prune_stale_sessions(db, limit=limit)
+        return prune_sessions_governed(db, limit)
 
+    nonces_deleted, nonce_batches = _drain_bounded(
+        factory,
+        prune_nonces,
+        batch_size=login_nonce_batch_size,
+        max_batches=cycle_batch_limit,
+    )
     logs_deleted, log_batches = _drain_bounded(
         factory,
         prune_logs,
@@ -98,11 +151,37 @@ def run_retention_cycle(
         batch_size=user_session_batch_size,
         max_batches=cycle_batch_limit,
     )
+    locations_cleared, location_batches = _drain_bounded(
+        factory,
+        clear_stale_precise_locations,
+        batch_size=location_batch_size,
+        max_batches=cycle_batch_limit,
+    )
+    accounts_anonymized, account_batches = _drain_bounded(
+        factory,
+        anonymize_due_accounts,
+        batch_size=user_account_batch_size,
+        max_batches=cycle_batch_limit,
+    )
+    events_deleted, event_batches = _drain_bounded(
+        factory,
+        prune_security_events_governed,
+        batch_size=event_batch_size,
+        max_batches=cycle_batch_limit,
+    )
     result = RetentionResult(
+        nonces_deleted=nonces_deleted,
+        nonce_batches=nonce_batches,
         request_logs_deleted=logs_deleted,
         request_log_batches=log_batches,
         sessions_deleted=sessions_deleted,
         session_batches=session_batches,
+        precise_locations_cleared=locations_cleared,
+        precise_location_batches=location_batches,
+        accounts_anonymized=accounts_anonymized,
+        account_batches=account_batches,
+        security_events_deleted=events_deleted,
+        security_event_batches=event_batches,
     )
     _log.info(
         "%s",

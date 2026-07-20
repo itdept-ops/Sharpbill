@@ -19,6 +19,15 @@ from app.models import User, UserSession
 _CLEANUP_BATCH_SIZE = 500
 
 
+class SessionPrincipalUnavailable(RuntimeError):
+    """The account changed lifecycle state between login verification and session issuance."""
+
+    def __init__(self, code: str, message: str) -> None:
+        self.code = code
+        self.message = message
+        super().__init__(message)
+
+
 def _now() -> datetime:
     return datetime.now(UTC).replace(tzinfo=None)
 
@@ -89,11 +98,24 @@ def _enforce_concurrent_session_cap(db: Session, user_id: int, now: datetime) ->
 
 def start_session(db: Session, user_id: int, request: Request) -> str:
     """Create a session row for a fresh login and return the cookie token bound to it."""
-    prune_stale_sessions(db)
     now = _now()
     # Serialize concurrent logins for one account so two requests cannot both observe spare
     # capacity and exceed the per-user ceiling.
-    db.scalar(select(User.id).where(User.id == user_id).with_for_update())
+    principal = db.execute(
+        select(User.id, User.is_active, User.is_approved, User.erased_at)
+        .where(User.id == user_id)
+        .with_for_update()
+    ).one_or_none()
+    if principal is None:
+        raise SessionPrincipalUnavailable("ACCOUNT_DISABLED", "This account is unavailable")
+    if principal.erased_at is not None:
+        raise SessionPrincipalUnavailable("ACCOUNT_ERASED", "This account has been erased")
+    if not principal.is_approved:
+        raise SessionPrincipalUnavailable(
+            "PENDING_APPROVAL", "Your account is awaiting administrator approval"
+        )
+    if not principal.is_active:
+        raise SessionPrincipalUnavailable("ACCOUNT_DISABLED", "This account has been deactivated")
     _enforce_concurrent_session_cap(db, user_id, now)
     jti = uuid.uuid4().hex
     ua = request.headers.get("user-agent")
@@ -115,10 +137,16 @@ def active_session(db: Session, jti: str, user_id: int) -> UserSession | None:
     )
 
 
-def revoke_session(session: UserSession, db: Session, *, commit: bool = True) -> None:
-    session.revoked_at = _now()
+def revoke_session(session: UserSession, db: Session, *, commit: bool = True) -> bool:
+    """Conditionally revoke one row without an ORM stale-write failure if retention won."""
+    result = db.execute(
+        update(UserSession)
+        .where(UserSession.id == session.id, UserSession.revoked_at.is_(None))
+        .values(revoked_at=_now())
+    )
     if commit:
         db.commit()
+    return (result.rowcount or 0) == 1
 
 
 def revoke_all_for_user(db: Session, user_id: int, *, commit: bool = True) -> None:

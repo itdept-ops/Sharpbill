@@ -3,8 +3,10 @@ from datetime import UTC, datetime
 
 import jwt as pyjwt
 from fastapi import Depends, Request
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.account_lifecycle import account_is_authenticatable, lock_current_user
 from app.auth.jwt import COOKIE_NAME, decode_session_token
 from app.auth.sessions import active_session
 from app.db import get_db
@@ -19,18 +21,35 @@ def _utcnow_naive() -> datetime:
     return datetime.now(UTC).replace(tzinfo=None)
 
 
-def _touch(db: Session, user: User, session: UserSession) -> None:
+def _touch(db: Session, user: User, session: UserSession) -> User | None:
+    """Recheck lifecycle/session state under current locks before touching presence metadata."""
     now = _utcnow_naive()
+    current_user = lock_current_user(db, user.id)
+    if current_user is None or not account_is_authenticatable(current_user):
+        db.rollback()
+        return None
+    current_session = db.scalar(
+        select(UserSession)
+        .where(UserSession.id == session.id, UserSession.user_id == current_user.id)
+        .with_for_update()
+        .execution_options(populate_existing=True)
+    )
+    if (
+        current_session is None
+        or current_session.revoked_at is not None
+        or current_session.expires_at <= now
+    ):
+        db.rollback()
+        return None
     stale = lambda ts: ts is None or (now - ts).total_seconds() > _PRESENCE_REFRESH_SECONDS  # noqa: E731
-    changed = False
-    if stale(user.last_seen_at):
-        user.last_seen_at = now
-        changed = True
-    if stale(session.last_seen_at):
-        session.last_seen_at = now
-        changed = True
-    if changed:
-        db.commit()
+    if stale(current_user.last_seen_at):
+        current_user.last_seen_at = now
+    if stale(current_session.last_seen_at):
+        current_session.last_seen_at = now
+    # Commit even when neither timestamp changed, releasing the lifecycle/session locks before
+    # the route executes. Lifecycle-sensitive mutations take a fresh current lock themselves.
+    db.commit()
+    return current_user
 
 
 def get_current_user(request: Request, db: Session = Depends(get_db)) -> User:
@@ -62,9 +81,11 @@ def get_current_user(request: Request, db: Session = Depends(get_db)) -> User:
 
     # Stash the resolved principal so the request-logging middleware can reuse it instead of
     # decoding the JWT a second time on the way out.
-    request.state.user_id = user.id
-    _touch(db, user, session)
-    return user
+    current_user = _touch(db, user, session)
+    if current_user is None:
+        raise ApiError(401, "INVALID_SESSION", "Session invalid or expired")
+    request.state.user_id = current_user.id
+    return current_user
 
 
 def require_permission(key: str) -> Callable[..., User]:

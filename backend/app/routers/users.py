@@ -8,6 +8,13 @@ from sqlalchemy import Select, func, or_, select
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session, selectinload
 
+from app.account_lifecycle import (
+    account_is_authenticatable,
+    lock_current_role,
+    lock_current_site_settings,
+    lock_current_user,
+    refresh_locked_user_access,
+)
 from app.admin_access import administration_available
 from app.auth.deps import get_current_user, require_permission
 from app.auth.sessions import revoke_all_for_user, revoke_session
@@ -61,6 +68,31 @@ def _get_target(db: Session, user_id: int) -> User:
     return user
 
 
+def _lock_target(db: Session, user_id: int) -> User:
+    user = lock_current_user(db, user_id)
+    if user is None:
+        raise ApiError(404, "NOT_FOUND", "User not found")
+    return user
+
+
+def _reload_locked_access(db: Session, user: User) -> None:
+    """Reload every relationship used by hierarchy checks while its owners are locked."""
+    role = refresh_locked_user_access(db, user)
+    if role is None:  # protected by the users.role_id FK; fail closed on corrupt storage
+        raise ApiError(409, "UNKNOWN_ROLE", "The user's role is unavailable")
+
+
+def _lock_current_bulk_actor(db: Session, actor_id: int) -> User:
+    """Reauthorize the actor inside the current per-item transaction."""
+    actor = lock_current_user(db, actor_id)
+    if actor is None or not account_is_authenticatable(actor):
+        raise ApiError(403, "FORBIDDEN", "Your account can no longer perform this action")
+    _reload_locked_access(db, actor)
+    if USERS_MANAGE not in actor.permission_keys:
+        raise ApiError(403, "FORBIDDEN", "Missing permission: users.manage")
+    return actor
+
+
 def _is_admin(user: User) -> bool:
     return user.role_name == ADMIN_ROLE
 
@@ -73,6 +105,8 @@ def _assert_can_manage_target(actor: User, target: User) -> None:
     actor. Baseline directory/presence read grants do not establish management seniority; unknown
     custom grants do. This covers role and direct grants, not merely the literal admin role.
     """
+    if target.erased_at is not None:
+        raise ApiError(409, "ACCOUNT_ERASED", "An erased account cannot be modified")
     unheld_sensitive = (target.permission_keys - actor.permission_keys) - {
         USERS_READ,
         PRESENCE_VIEW,
@@ -126,7 +160,7 @@ def _active_admin_count(db: Session) -> int:
 
 
 def _lock_administration_boundary(db: Session) -> SiteSettings:
-    site = db.scalar(select(SiteSettings).where(SiteSettings.id == 1).with_for_update())
+    site = lock_current_site_settings(db)
     if site is None:
         raise ApiError(500, "SETTINGS_NOT_INITIALIZED", "Site settings are not initialized")
     return site
@@ -150,27 +184,33 @@ def _assert_administration_remains_available(db: Session, site: SiteSettings) ->
         )
 
 
-def _bulk_role(body: BulkActionRequest, db: Session, actor: User) -> Role | None:
+def _bulk_role(body: BulkActionRequest, db: Session, actor: User) -> int | None:
     if body.action != "assign_role":
         return None
     if body.role_id is None:
         raise ApiError(400, "UNKNOWN_ROLE", "role_id is required for assign_role")
-    role = db.get(Role, body.role_id)
+    _lock_administration_boundary(db)
+    current_actor = _lock_current_bulk_actor(db, actor.id)
+    role = lock_current_role(db, body.role_id)
     if role is None:
         raise ApiError(400, "UNKNOWN_ROLE", "No such role")
-    _assert_role_assignable(actor, role)
-    return role
+    _assert_role_assignable(current_actor, role)
+    return role.id
 
 
 def _mutate_bulk_user(db: Session, user: User, action: str, role: Role | None) -> None:
     if action == "activate":
         user.is_active = True
+        user.deactivated_at = None
         return
     if action == "deactivate":
         if user.role_name == ADMIN_ROLE and _active_admin_count(db) <= 1:
             raise ApiError(403, "LAST_ADMIN", "Cannot deactivate the last remaining admin")
+        now = datetime.now(UTC).replace(tzinfo=None)
+        if user.is_active or user.deactivated_at is None:
+            user.deactivated_at = now
         user.is_active = False
-        user.session_valid_after = datetime.now(UTC).replace(tzinfo=None)
+        user.session_valid_after = now
         return
     if action == "approve":
         user.is_approved = True
@@ -188,21 +228,22 @@ def _apply_bulk_user(
     request: Request,
     user_id: int,
     action: str,
-    role: Role | None,
+    role_id: int | None,
 ) -> None:
     """Apply one validated bulk item; the caller owns error mapping and transaction recovery."""
+    site = _lock_administration_boundary(db)
+    actor = _lock_current_bulk_actor(db, actor.id)
     if user_id == actor.id:
         raise ApiError(400, "CANNOT_MODIFY_SELF", "Cannot act on yourself")
-    site = _lock_administration_boundary(db)
+    role: Role | None = None
     if action == "assign_role":
-        assert role is not None
-        role = db.scalar(select(Role).where(Role.id == role.id).with_for_update())
+        assert role_id is not None
+        role = lock_current_role(db, role_id)
         if role is None:
             raise ApiError(400, "UNKNOWN_ROLE", "No such role")
         _assert_role_assignable(actor, role)
-    user = db.scalar(select(User).where(User.id == user_id).with_for_update())
-    if user is None:
-        raise ApiError(404, "NOT_FOUND", "User not found")
+    user = _lock_target(db, user_id)
+    _reload_locked_access(db, user)
     _assert_can_manage_target(actor, user)
 
     before = {
@@ -400,12 +441,12 @@ def bulk_action(
 ) -> dict:
     """Apply an action to many users. Each id is committed independently; per-item errors are
     reported without aborting the batch. All the single-user guards apply."""
-    role = _bulk_role(body, db, actor)
+    role_id = _bulk_role(body, db, actor)
 
     results: list[_BulkItem] = []
     for uid in body.ids:
         try:
-            _apply_bulk_user(db, actor, request, uid, body.action, role)
+            _apply_bulk_user(db, actor, request, uid, body.action, role_id)
             results.append({"id": uid, "ok": True})
         except ApiError as e:
             db.rollback()
@@ -444,9 +485,8 @@ def update_profile(
 ) -> UserOut:
     if user_id != current.id and USERS_MANAGE not in current.permission_keys:
         raise ApiError(403, "FORBIDDEN", "You can only edit your own profile")
-    user = _get_target(db, user_id)
-    if user_id != current.id:
-        _assert_can_manage_target(current, user)
+    user = _lock_target(db, user_id)
+    _assert_can_manage_target(current, user)
     data = body.model_dump(exclude_unset=True)
     if "ui_prefs" in data:
         incoming = data.pop("ui_prefs")
@@ -457,7 +497,6 @@ def update_profile(
             # instead of clobbering each other (JSON columns have no atomic in-place merge, and
             # a lost update would silently drop a just-changed setting). Reassign a fresh dict —
             # MySQL JSON has no in-place dirty tracking, so mutating the dict would not persist.
-            db.refresh(user, with_for_update=True)
             user.ui_prefs = {**(user.ui_prefs or {}), **incoming}
     for field, value in data.items():
         setattr(user, field, value)
@@ -484,9 +523,7 @@ def update_role(
     if role is None:
         raise ApiError(400, "UNKNOWN_ROLE", "No such role")
     _assert_role_assignable(actor, role)
-    user = db.scalar(select(User).where(User.id == user_id).with_for_update())
-    if user is None:
-        raise ApiError(404, "NOT_FOUND", "User not found")
+    user = _lock_target(db, user_id)
     _assert_can_manage_target(actor, user)
     require_version(body.expected_version, user.access_version, "User access")
     previous_role_id = user.role_id
@@ -536,9 +573,7 @@ def set_user_permissions(
     _assert_access_assignment_authority(actor)
     if user_id == actor.id:
         raise ApiError(400, "CANNOT_MODIFY_SELF", "You cannot change your own permissions")
-    user = db.scalar(select(User).where(User.id == user_id).with_for_update())
-    if user is None:
-        raise ApiError(404, "NOT_FOUND", "User not found")
+    user = _lock_target(db, user_id)
     _assert_can_manage_target(actor, user)
     require_version(body.expected_version, user.access_version, "User access")
     previous_keys = set(user.direct_permission_keys)
@@ -595,15 +630,18 @@ def update_status(
     if user_id == actor.id:
         raise ApiError(400, "CANNOT_MODIFY_SELF", "You cannot deactivate yourself")
     site = _lock_administration_boundary(db)
-    user = db.scalar(select(User).where(User.id == user_id).with_for_update())
-    if user is None:
-        raise ApiError(404, "NOT_FOUND", "User not found")
+    user = _lock_target(db, user_id)
     _assert_can_manage_target(actor, user)
     previous_active = bool(user.is_active)
+    now = datetime.now(UTC).replace(tzinfo=None)
     if not body.is_active:
         if user.role_name == ADMIN_ROLE and _active_admin_count(db) <= 1:
             raise ApiError(403, "LAST_ADMIN", "Cannot deactivate the last remaining admin")
-        user.session_valid_after = datetime.now(UTC).replace(tzinfo=None)
+        user.session_valid_after = now
+        if user.is_active or user.deactivated_at is None:
+            user.deactivated_at = now
+    else:
+        user.deactivated_at = None
     user.is_active = body.is_active
     if not body.is_active:
         # Mark the per-device session rows revoked too (the epoch already blocks token use, but
@@ -636,7 +674,7 @@ def approve_user(
     db: Session = Depends(get_db),
     actor: User = Depends(require_permission(USERS_MANAGE)),
 ) -> UserOut:
-    user = _get_target(db, user_id)
+    user = _lock_target(db, user_id)
     _assert_can_manage_target(actor, user)
     previous_approved = bool(user.is_approved)
     user.is_approved = True
@@ -668,7 +706,7 @@ def kick_user(
 ) -> UserOut:
     if user_id == actor.id:
         raise ApiError(400, "CANNOT_MODIFY_SELF", "You cannot kick your own session")
-    user = _get_target(db, user_id)
+    user = _lock_target(db, user_id)
     _assert_can_manage_target(actor, user)
     user.session_valid_after = datetime.now(UTC).replace(tzinfo=None)
     revoke_all_for_user(db, user.id, commit=False)  # sign the user out of every device
@@ -733,7 +771,7 @@ def revoke_user_session(
     """Sign out one of a user's devices."""
     if user_id == actor.id:
         raise ApiError(400, "CANNOT_MODIFY_SELF", "Use the personal sessions endpoint")
-    user = _get_target(db, user_id)
+    user = _lock_target(db, user_id)
     _assert_can_manage_target(actor, user)
     session = db.get(UserSession, session_id)
     if session is None or session.user_id != user_id:

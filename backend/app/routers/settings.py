@@ -1,9 +1,9 @@
 from typing import cast
 
 from fastapi import APIRouter, Depends, Request
-from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.account_lifecycle import lock_current_role, lock_current_site_settings
 from app.admin_access import administration_available
 from app.auth.deps import require_permission
 from app.auth.service import get_site_settings
@@ -80,7 +80,7 @@ def update_settings(
     # Serialize updates to the singleton. Without a locking read, two admins can each
     # disable a different provider after observing the same old row and jointly commit a
     # state with no sign-in provider enabled.
-    s = db.scalar(select(SiteSettings).where(SiteSettings.id == 1).with_for_update())
+    s = lock_current_site_settings(db)
     if s is None:
         raise ApiError(500, "SETTINGS_NOT_INITIALIZED", "Site settings are not initialized")
     data = body.model_dump(exclude_unset=True)
@@ -98,7 +98,7 @@ def update_settings(
                 "INSUFFICIENT_PRIVILEGE",
                 "Changing the signup default requires both settings.manage and roles.manage",
             )
-        role = db.scalar(select(Role).where(Role.id == data["default_role_id"]).with_for_update())
+        role = lock_current_role(db, data["default_role_id"])
         if role is None:
             raise ApiError(400, "UNKNOWN_ROLE", "No such role")
         if role.name == ADMIN_ROLE:

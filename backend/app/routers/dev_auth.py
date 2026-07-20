@@ -8,14 +8,14 @@ from sqlalchemy.orm import Session
 
 from app.auth.jwt import set_session_cookie
 from app.auth.service import dev_upsert_user
-from app.auth.sessions import start_session
+from app.auth.sessions import SessionPrincipalUnavailable, start_session
 from app.config import settings
 from app.db import get_db
 from app.errors import ApiError
 from app.models import Role
 from app.schemas.auth import DevLoginRequest
 from app.schemas.user import UserOut
-from app.security_events import add_security_event
+from app.security_events import add_security_event, commit_security_event
 
 router = APIRouter()
 
@@ -38,6 +38,8 @@ def dev_login(
     db: Session = Depends(get_db),
 ) -> UserOut:
     user = dev_upsert_user(db, str(body.email), body.role, body.display_name)
+    if user.erased_at is not None:
+        raise ApiError(403, "ACCOUNT_ERASED", "This account has been erased")
     if not user.is_active:
         raise ApiError(403, "ACCOUNT_DISABLED", "This account has been deactivated")
     if not user.is_approved:
@@ -53,7 +55,23 @@ def dev_login(
         target_id=user.id,
         metadata={"provider": "dev"},
     )
-    set_session_cookie(response, start_session(db, user.id, request))
+    try:
+        token = start_session(db, user.id, request)
+    except SessionPrincipalUnavailable as exc:
+        db.rollback()
+        commit_security_event(
+            db,
+            event_type="auth.login",
+            outcome="denied",
+            severity="warning",
+            request=request,
+            actor_user_id=user.id,
+            target_type="user",
+            target_id=user.id,
+            metadata={"provider": "dev", "reason": exc.code},
+        )
+        raise ApiError(403, exc.code, exc.message) from None
+    set_session_cookie(response, token)
     return UserOut.from_user(user, online=True, include_identity_subjects=True)
 
 

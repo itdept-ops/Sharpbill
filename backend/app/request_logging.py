@@ -18,10 +18,6 @@ from app.models import RequestLog
 
 _log = logging.getLogger("app.requests")
 
-_PRUNE_EVERY = 500
-_insert_counter = 0
-_insert_counter_lock = threading.Lock()
-
 # Frequent/noisy paths we don't persist (health checks, the WS, docs, polling, session probes).
 _SKIP_PREFIXES = (
     "/api/health",
@@ -111,7 +107,6 @@ PersistFn = Callable[[RequestLogRecord], None]
 
 
 def _persist_record(record: RequestLogRecord) -> None:
-    global _insert_counter
     with SessionLocal() as db:
         db.add(
             RequestLog(
@@ -123,11 +118,6 @@ def _persist_record(record: RequestLogRecord) -> None:
             )
         )
         db.commit()
-        with _insert_counter_lock:
-            _insert_counter += 1
-            should_prune = _insert_counter % _PRUNE_EVERY == 0
-        if should_prune:
-            prune_request_logs(db)
 
 
 class RequestLogSink:

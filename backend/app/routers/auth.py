@@ -7,6 +7,7 @@ from fastapi import APIRouter, Depends, Request, Response
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.account_lifecycle import account_is_authenticatable, lock_current_user
 from app.auth import ProviderTokenError, ProviderUnavailableError
 from app.auth.deps import get_current_user
 from app.auth.google import verify_google_id_token
@@ -14,7 +15,7 @@ from app.auth.jwt import COOKIE_NAME, clear_session_cookie, decode_session_token
 from app.auth.microsoft import verify_microsoft_id_token
 from app.auth.nonce import NonceCapacityError, issue_nonce
 from app.auth.service import find_or_create_user
-from app.auth.sessions import revoke_session, start_session
+from app.auth.sessions import SessionPrincipalUnavailable, revoke_session, start_session
 from app.config import settings
 from app.db import get_db
 from app.errors import ApiError
@@ -169,7 +170,12 @@ def login_google(
         target_id=user.id,
         metadata={"provider": "google"},
     )
-    set_session_cookie(response, start_session(db, user.id, request))
+    try:
+        token = start_session(db, user.id, request)
+    except SessionPrincipalUnavailable as exc:
+        _audit_login_failure(db, request, provider="google", reason=exc.code)
+        raise ApiError(403, exc.code, exc.message) from None
+    set_session_cookie(response, token)
     return UserOut.from_user(user, online=True, include_identity_subjects=True)
 
 
@@ -206,7 +212,12 @@ def login_microsoft(
         target_id=user.id,
         metadata={"provider": "microsoft"},
     )
-    set_session_cookie(response, start_session(db, user.id, request))
+    try:
+        token = start_session(db, user.id, request)
+    except SessionPrincipalUnavailable as exc:
+        _audit_login_failure(db, request, provider="microsoft", reason=exc.code)
+        raise ApiError(403, exc.code, exc.message) from None
+    set_session_cookie(response, token)
     return UserOut.from_user(user, online=True, include_identity_subjects=True)
 
 
@@ -225,9 +236,7 @@ def logout(request: Request, response: Response, db: Session = Depends(get_db)) 
         session = db.scalar(
             select(UserSession).where(UserSession.jti == jti, UserSession.user_id == user_id)
         )
-        revoked = session is not None and session.revoked_at is None
-        if session is not None and session.revoked_at is None:
-            revoke_session(session, db, commit=False)
+        revoked = revoke_session(session, db, commit=False) if session is not None else False
         add_security_event(
             db,
             event_type="auth.logout",
@@ -280,8 +289,7 @@ def revoke_my_session(
     session = db.get(UserSession, session_id)
     if session is None or session.user_id != user.id:
         raise ApiError(404, "NOT_FOUND", "Session not found")
-    if session.revoked_at is None:
-        revoke_session(session, db, commit=False)
+    revoke_session(session, db, commit=False)
     add_security_event(
         db,
         event_type="session.revoked",
@@ -308,6 +316,12 @@ def update_location(
 
     The frontend only calls this if the user grants location access.
     """
+    current_user = lock_current_user(db, user.id)
+    if not account_is_authenticatable(current_user):
+        db.rollback()
+        raise ApiError(401, "INVALID_SESSION", "Session invalid or expired")
+    assert current_user is not None
+    user = current_user
     user.last_latitude = body.latitude
     user.last_longitude = body.longitude
     user.last_location_accuracy = body.accuracy

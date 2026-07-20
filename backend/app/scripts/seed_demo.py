@@ -88,6 +88,7 @@ def run() -> None:
                 bio=f"{title} on the {dept} team.",
                 role=by_name[role_name],
                 is_active=(status != "disabled"),
+                deactivated_at=(created if status == "disabled" else None),
                 is_approved=(status != "pending"),
                 created_at=created,
                 last_login_at=created,
@@ -97,9 +98,7 @@ def run() -> None:
             )
             db.add(u)
             db.flush()
-            db.add(
-                UserIdentity(user=u, provider="dev", provider_subject=email, provider_email=email)
-            )
+            db.add(UserIdentity(user=u, provider="dev", provider_subject=email))
             new_users += 1
         db.commit()
         total = len(list(db.scalars(select(User))))

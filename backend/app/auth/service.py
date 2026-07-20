@@ -4,6 +4,7 @@ from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
+from app.account_lifecycle import lock_current_user
 from app.auth import VerifiedIdentity
 from app.config import settings
 from app.errors import ApiError
@@ -20,8 +21,13 @@ def _now_naive() -> datetime:
     return datetime.now(UTC).replace(tzinfo=None)
 
 
-def get_site_settings(db: Session) -> SiteSettings:
-    site = db.get(SiteSettings, 1)
+def get_site_settings(db: Session, *, lock_policy: bool = False) -> SiteSettings:
+    statement = select(SiteSettings).where(SiteSettings.id == 1)
+    if lock_policy:
+        # Shared policy locks let logins proceed concurrently while serializing admission,
+        # provider-toggle, default-role, and retention-policy transitions around provisioning.
+        statement = statement.with_for_update(read=True)
+    site = db.scalar(statement.execution_options(populate_existing=True))
     if site is None:  # pragma: no cover - seeded by migration 0003
         raise ApiError(500, "INTERNAL_ERROR", "Site settings row is missing")
     return site
@@ -56,37 +62,6 @@ def _admin_bootstrap(ident: VerifiedIdentity) -> bool:
     return False
 
 
-def _assert_login_allowed(ident: VerifiedIdentity) -> None:
-    """Enforce provider-issued organization claims when an allowlist is configured."""
-    if ident.provider == "google":
-        domains = settings.allowed_email_domain_set
-        # Google explicitly warns that an email suffix does not establish Workspace membership;
-        # only the signed `hd` claim is authoritative for an organization restriction.
-        if domains and (ident.hosted_domain or "").lower() not in domains:
-            raise ApiError(403, "LOGIN_NOT_ALLOWED", "This account is not permitted to sign in")
-    elif ident.provider == "microsoft":
-        tenants = settings.allowed_azure_tenant_set
-        if tenants and (ident.tenant_id or "") not in tenants:
-            raise ApiError(403, "LOGIN_NOT_ALLOWED", "This account is not permitted to sign in")
-
-
-def _assert_new_account_admission(ident: VerifiedIdentity, *, is_admin_boot: bool) -> None:
-    """Require an organization allowlist or an explicit public-signup acknowledgement."""
-    if is_admin_boot or settings.allow_public_signup:
-        return
-    has_provider_allowlist = (
-        bool(settings.allowed_email_domain_set)
-        if ident.provider == "google"
-        else bool(settings.allowed_azure_tenant_set)
-    )
-    if not has_provider_allowlist:
-        raise ApiError(
-            403,
-            "SIGNUP_RESTRICTED",
-            "New accounts require an organization allowlist or explicit public signup",
-        )
-
-
 def _assert_provider_enabled(site: SiteSettings, ident: VerifiedIdentity) -> None:
     if ident.provider == "google" and not site.allow_google:
         raise ApiError(403, "PROVIDER_DISABLED", "Google sign-in is currently disabled")
@@ -96,38 +71,56 @@ def _assert_provider_enabled(site: SiteSettings, ident: VerifiedIdentity) -> Non
 
 def _gate_lifecycle(user: User) -> None:
     """The single approval/active gate applied to every login path."""
+    if user.erased_at is not None:
+        raise ApiError(403, "ACCOUNT_ERASED", "This account has been erased")
     if not user.is_approved:
         raise ApiError(403, "PENDING_APPROVAL", "Your account is awaiting administrator approval")
     if not user.is_active:
         raise ApiError(403, "ACCOUNT_DISABLED", "This account has been deactivated")
 
 
-def find_or_create_user(db: Session, ident: VerifiedIdentity) -> User:
-    """Look up by (provider, provider_subject); provision on first login.
+def _identity_namespace(ident: VerifiedIdentity) -> str:
+    """Return the authority namespace that makes an immutable provider subject unique."""
+    if ident.provider != "microsoft":
+        return ""
+    if not ident.tenant_id:
+        raise ApiError(401, "INVALID_IDENTITY", "Microsoft identity is missing its tenant")
+    return ident.tenant_id
 
-    Identity is keyed on the provider's immutable subject id (Google `sub` / Microsoft `oid`),
+
+def _identity_query(ident: VerifiedIdentity):
+    return select(UserIdentity).where(
+        UserIdentity.provider == ident.provider,
+        UserIdentity.provider_namespace == _identity_namespace(ident),
+        UserIdentity.provider_subject == ident.subject,
+    )
+
+
+def find_or_create_user(db: Session, ident: VerifiedIdentity) -> User:
+    """Look up by the provider's immutable, authority-scoped key; provision on first login.
+
+    Google uses its globally scoped ``sub``. Microsoft uses signed ``(tid, oid)`` because object
+    IDs are tenant-scoped. Identity is keyed on these immutable identifiers,
     NEVER the email — a user changing their provider email cannot become another account, and
     two providers sharing an email are two separate accounts. Provisioning obeys the site's
     signup mode (open / approval / closed) and per-provider toggles.
     """
-    _assert_login_allowed(ident)
-    site = get_site_settings(db)
+    site = get_site_settings(db, lock_policy=True)
     _assert_provider_enabled(site, ident)
 
-    identity = db.scalar(
-        select(UserIdentity).where(
-            UserIdentity.provider == ident.provider,
-            UserIdentity.provider_subject == ident.subject,
-        )
-    )
+    identity = db.scalar(_identity_query(ident))
     if identity is not None:
-        user = identity.user
+        # A retention worker can anonymize this principal after the identity lookup. Use a
+        # current locking read (and overwrite any REPEATABLE READ identity-map snapshot) before
+        # gating or restoring login timestamps, so PII cannot be written back after erasure.
+        user = lock_current_user(db, identity.user_id)
+        if user is None:  # protected by the identity FK; fail closed if storage is corrupted
+            raise ApiError(403, "ACCOUNT_DISABLED", "This account is unavailable")
         _gate_lifecycle(user)
         user.last_login_at = _utcnow()
         user.last_seen_at = _now_naive()
-        identity.provider_email = ident.email  # audit trail only; not used for lookups
-        # Persist only claims that survived provider signature and organization-admission checks.
-        # Readiness uses these immutable authority claims rather than trusting an email suffix.
+        # Retain claims that survived provider signature verification as bounded audit context.
+        # They do not grant access; provider state, account lifecycle, signup mode, and RBAC do.
         identity.provider_tenant_id = ident.tenant_id
         identity.provider_hosted_domain = ident.hosted_domain
         db.commit()
@@ -137,7 +130,6 @@ def find_or_create_user(db: Session, ident: VerifiedIdentity) -> User:
     # An immutable Google sub or Microsoft (tenant, oid) bootstrap identity may enter even when
     # signup is closed, preserving a controlled recovery/seed path. Everyone else obeys it.
     is_admin_boot = _admin_bootstrap(ident)
-    _assert_new_account_admission(ident, is_admin_boot=is_admin_boot)
     if site.signup_mode == "closed" and not is_admin_boot:
         raise ApiError(403, "SIGNUP_CLOSED", "Sign-ups are currently closed")
 
@@ -161,8 +153,8 @@ def find_or_create_user(db: Session, ident: VerifiedIdentity) -> User:
         UserIdentity(
             user=user,
             provider=ident.provider,
+            provider_namespace=_identity_namespace(ident),
             provider_subject=ident.subject,
-            provider_email=ident.email,
             provider_tenant_id=ident.tenant_id,
             provider_hosted_domain=ident.hosted_domain,
         )
@@ -171,12 +163,7 @@ def find_or_create_user(db: Session, ident: VerifiedIdentity) -> User:
         db.commit()
     except IntegrityError:  # two concurrent first logins raced
         db.rollback()
-        identity = db.scalar(
-            select(UserIdentity).where(
-                UserIdentity.provider == ident.provider,
-                UserIdentity.provider_subject == ident.subject,
-            )
-        )
+        identity = db.scalar(_identity_query(ident))
         if identity is None:
             raise
         _gate_lifecycle(identity.user)  # the race loser must still pass the approval gate
@@ -196,7 +183,23 @@ def dev_upsert_user(
     gated /api/auth/dev route.
     """
     email = email.lower()
-    user = db.scalar(select(User).where(User.email == email).order_by(User.id))
+    dev_identity = db.scalar(
+        select(UserIdentity).where(
+            UserIdentity.provider == "dev",
+            UserIdentity.provider_namespace == "",
+            UserIdentity.provider_subject == email,
+        )
+    )
+    # Retained identity markers suppress transparent re-provisioning after erasure. The email
+    # fallback preserves the local convenience of attaching a dev identity to an existing user.
+    user_id = (
+        dev_identity.user_id
+        if dev_identity is not None
+        else db.scalar(select(User.id).where(User.email == email).order_by(User.id))
+    )
+    user = lock_current_user(db, user_id) if user_id is not None else None
+    if user_id is not None and user is None:  # protected by FK; fail closed on corrupt storage
+        raise ApiError(403, "ACCOUNT_DISABLED", "This account is unavailable")
     if user is None:
         resolved = role_name or (ADMIN_ROLE if email in settings.admin_email_set else DEFAULT_ROLE)
         user = User(
@@ -210,7 +213,12 @@ def dev_upsert_user(
         )
         db.add(user)
         db.add(
-            UserIdentity(user=user, provider="dev", provider_subject=email, provider_email=email)
+            UserIdentity(
+                user=user,
+                provider="dev",
+                provider_namespace="",
+                provider_subject=email,
+            )
         )
     else:
         # The dev seam may authenticate an existing account, but must never rewrite its role,
@@ -223,7 +231,10 @@ def dev_upsert_user(
         if not any(i.provider == "dev" for i in user.identities):
             db.add(
                 UserIdentity(
-                    user=user, provider="dev", provider_subject=email, provider_email=email
+                    user=user,
+                    provider="dev",
+                    provider_namespace="",
+                    provider_subject=email,
                 )
             )
     db.commit()

@@ -57,9 +57,7 @@ def test_runtime_database_policy_has_utc_timeouts_pool_and_verified_tls():
         db_require_tls=True,
         db_tls_ca_path="/trusted/company-db-ca.pem",
         public_origin="https://crm.example.com",
-        allow_public_signup=False,
         google_client_id="123456-testclient.apps.googleusercontent.com",
-        allowed_email_domains="example.com",
         azure_client_id="",
         admin_emails="",
         azure_admin_tenant_id="",
@@ -85,6 +83,9 @@ def test_real_mysql_schema_contracts_are_materialized():
     user_columns = {column["name"]: column for column in inspector.get_columns("users")}
 
     assert identity_columns["provider_subject"]["type"].collation == "utf8mb4_0900_bin"
+    assert identity_columns["provider_namespace"]["type"].collation == "utf8mb4_0900_bin"
+    assert identity_columns["provider_namespace"]["nullable"] is False
+    assert "provider_email" not in identity_columns
     assert identity_columns["provider_tenant_id"]["nullable"] is True
     assert identity_columns["provider_hosted_domain"]["nullable"] is True
     assert nonce_columns["nonce"]["type"].collation == "utf8mb4_0900_bin"
@@ -93,6 +94,17 @@ def test_real_mysql_schema_contracts_are_materialized():
     assert settings_columns["id"]["autoincrement"] is False
     assert role_columns["version"]["nullable"] is False
     assert user_columns["access_version"]["nullable"] is False
+    assert user_columns["deactivated_at"]["nullable"] is True
+    assert user_columns["erasure_requested_at"]["nullable"] is True
+    assert user_columns["erasure_due_at"]["nullable"] is True
+    assert user_columns["erased_at"]["nullable"] is True
+    assert settings_columns["retention_hold"]["nullable"] is False
+
+    identity_unique_names = {
+        constraint["name"] for constraint in inspector.get_unique_constraints("user_identities")
+    }
+    assert "uq_user_identities_provider_namespace_subject" in identity_unique_names
+    assert "uq_user_identities_provider_subject" not in identity_unique_names
 
     check_names = {
         constraint["name"] for constraint in inspector.get_check_constraints("site_settings")
@@ -104,6 +116,8 @@ def test_real_mysql_schema_contracts_are_materialized():
         "ck_site_settings_allow_google_boolean",
         "ck_site_settings_allow_microsoft_boolean",
         "ck_site_settings_calm_mode_boolean",
+        "ck_site_settings_retention_hold_boolean",
+        "ck_site_settings_retention_hold_state_valid",
     } <= check_names
     user_check_names = {
         constraint["name"] for constraint in inspector.get_check_constraints("users")
@@ -114,6 +128,9 @@ def test_real_mysql_schema_contracts_are_materialized():
         "ck_users_last_location_accuracy_valid",
         "ck_users_is_active_boolean",
         "ck_users_is_approved_boolean",
+        "ck_users_deactivation_state_valid",
+        "ck_users_erasure_schedule_valid",
+        "ck_users_erasure_state_valid",
     } <= user_check_names
     role_check_names = {
         constraint["name"] for constraint in inspector.get_check_constraints("roles")
@@ -129,6 +146,9 @@ def test_real_mysql_schema_contracts_are_materialized():
         for table in ("users", "user_sessions", "request_logs")
     }
     assert "ix_users_created_at_id" in index_names["users"]
+    assert "ix_users_last_location_at_id" in index_names["users"]
+    assert "ix_users_deactivated_at_id" in index_names["users"]
+    assert "ix_users_erasure_due_at_id" in index_names["users"]
     assert "ix_user_sessions_user_revoked_created" in index_names["user_sessions"]
     assert "ix_user_sessions_expires_at" in index_names["user_sessions"]
     assert "ix_user_sessions_revoked_at" in index_names["user_sessions"]
@@ -162,13 +182,11 @@ def test_oidc_subjects_and_nonces_are_case_sensitive_on_real_mysql(db):
                 user=first,
                 provider="google",
                 provider_subject="OpaqueSubjectABC",
-                provider_email=first.email,
             ),
             UserIdentity(
                 user=second,
                 provider="google",
                 provider_subject="opaquesubjectabc",
-                provider_email=second.email,
             ),
             LoginNonce(
                 nonce="OpaqueNonceABC",
@@ -203,6 +221,9 @@ def test_oidc_subjects_and_nonces_are_case_sensitive_on_real_mysql(db):
         "UPDATE site_settings SET allow_google=2 WHERE id=1",
         "UPDATE site_settings SET allow_microsoft=2 WHERE id=1",
         "UPDATE site_settings SET calm_mode=2 WHERE id=1",
+        "UPDATE site_settings SET retention_hold=2 WHERE id=1",
+        "UPDATE site_settings SET retention_hold=1, retention_hold_reference=NULL WHERE id=1",
+        "UPDATE site_settings SET retention_hold_reference='CASE-1' WHERE id=1",
         (
             "INSERT INTO site_settings "
             "(id, signup_mode, allow_google, allow_microsoft, default_role_id, calm_mode) "
@@ -260,12 +281,34 @@ def test_lifecycle_boolean_checks_reject_invalid_direct_sql(db, statement):
             connection.execute(text(statement))
 
 
+@pytest.mark.parametrize(
+    "statement",
+    [
+        "UPDATE users SET deactivated_at=CURRENT_TIMESTAMP(6) "
+        "WHERE email='lifecycle-check@example.com'",
+        "UPDATE users SET is_active=0 WHERE email='lifecycle-check@example.com'",
+        "UPDATE users SET erasure_requested_at=CURRENT_TIMESTAMP(6) "
+        "WHERE email='lifecycle-check@example.com'",
+        "UPDATE users SET erased_at=CURRENT_TIMESTAMP(6) WHERE email='lifecycle-check@example.com'",
+    ],
+)
+def test_privacy_lifecycle_checks_reject_inconsistent_direct_sql(db, statement):
+    role = db.scalar(select(Role).where(Role.name == "user"))
+    assert role is not None
+    db.add(User(email="lifecycle-check@example.com", display_name="Lifecycle", role=role))
+    db.commit()
+    with pytest.raises(DBAPIError):
+        with engine.begin() as connection:
+            connection.execute(text(statement))
+
+
 def test_permission_descriptions_match_the_canonical_catalog(db):
     descriptions = dict(db.execute(select(Permission.key, Permission.description)).all())
     assert descriptions["users.manage"] == "Manage user profiles, activation, and approval"
     assert descriptions["settings.manage"] == "Manage site-wide configuration"
     assert descriptions["users.export"] == "Export the user directory as CSV"
     assert descriptions["security_events.view"] == "View and export durable security events"
+    assert descriptions["privacy.manage"] == "Manage privacy requests, retention, and legal holds"
 
 
 def test_new_session_gets_configured_utc_naive_expiry(db):
@@ -446,10 +489,8 @@ def test_0017_refuses_to_discard_persisted_identity_admission_authority():
             connection.execute(
                 text(
                     "INSERT INTO user_identities "
-                    "(user_id, provider, provider_subject, provider_email, "
-                    "provider_hosted_domain) VALUES "
-                    "(:user_id, 'google', 'migration-authority-subject', "
-                    "'migration-authority@example.com', 'example.com')"
+                    "(user_id, provider, provider_subject, provider_hosted_domain) VALUES "
+                    "(:user_id, 'google', 'migration-authority-subject', 'example.com')"
                 ),
                 {"user_id": result.lastrowid},
             )
@@ -486,6 +527,98 @@ def test_0017_refuses_to_discard_persisted_identity_admission_authority():
             assert "provider_hosted_domain" not in identity_columns
 
         command.upgrade(_alembic_config(), "head")
+    finally:
+        command.upgrade(_alembic_config(), "head")
+        engine.dispose()
+
+
+def test_0018_refuses_to_collapse_tenant_scoped_microsoft_identities():
+    engine.dispose()
+    try:
+        command.downgrade(_alembic_config(), "0018")
+        with engine.begin() as connection:
+            role_id = connection.scalar(text("SELECT id FROM roles WHERE name='user'"))
+            first = connection.execute(
+                text(
+                    "INSERT INTO users (email, display_name, role_id) "
+                    "VALUES ('tenant-one@example.com', 'Tenant one', :role_id)"
+                ),
+                {"role_id": role_id},
+            ).lastrowid
+            second = connection.execute(
+                text(
+                    "INSERT INTO users (email, display_name, role_id) "
+                    "VALUES ('tenant-two@example.com', 'Tenant two', :role_id)"
+                ),
+                {"role_id": role_id},
+            ).lastrowid
+            connection.execute(
+                text(
+                    "INSERT INTO user_identities "
+                    "(user_id, provider, provider_namespace, provider_subject, "
+                    "provider_tenant_id) VALUES "
+                    "(:first, 'microsoft', 'tenant-one', 'shared-oid', 'tenant-one'), "
+                    "(:second, 'microsoft', 'tenant-two', 'shared-oid', 'tenant-two')"
+                ),
+                {"first": first, "second": second},
+            )
+
+        with pytest.raises(RuntimeError, match="would collapse distinct accounts"):
+            command.downgrade(_alembic_config(), "0017")
+
+        with engine.connect() as connection:
+            assert connection.scalar(text("SELECT version_num FROM alembic_version")) == "0018"
+            constraints = {
+                item["name"]
+                for item in inspect(connection).get_unique_constraints("user_identities")
+            }
+            assert "uq_user_identities_provider_namespace_subject" in constraints
+    finally:
+        command.upgrade(_alembic_config(), "head")
+        engine.dispose()
+
+
+def test_0019_refuses_to_discard_privacy_lifecycle_evidence_and_round_trips():
+    engine.dispose()
+    try:
+        with engine.begin() as connection:
+            role_id = connection.scalar(text("SELECT id FROM roles WHERE name='user'"))
+            connection.execute(
+                text(
+                    "INSERT INTO users "
+                    "(email, display_name, role_id, erasure_requested_at, erasure_due_at) "
+                    "VALUES ('privacy-migration@example.com', 'Privacy migration', :role_id, "
+                    "CURRENT_TIMESTAMP(6), DATE_ADD(CURRENT_TIMESTAMP(6), INTERVAL 30 DAY))"
+                ),
+                {"role_id": role_id},
+            )
+
+        with pytest.raises(RuntimeError, match="privacy lifecycle evidence would be lost"):
+            command.downgrade(_alembic_config(), "0018")
+
+        with engine.begin() as connection:
+            assert connection.scalar(text("SELECT version_num FROM alembic_version")) == "0019"
+            connection.execute(
+                text(
+                    "UPDATE users SET erasure_requested_at=NULL, erasure_due_at=NULL "
+                    "WHERE email='privacy-migration@example.com'"
+                )
+            )
+
+        command.downgrade(_alembic_config(), "0018")
+        with engine.connect() as connection:
+            user_columns = {item["name"] for item in inspect(connection).get_columns("users")}
+            identity_columns = {
+                item["name"] for item in inspect(connection).get_columns("user_identities")
+            }
+            assert "erasure_due_at" not in user_columns
+            assert "provider_email" in identity_columns
+            assert (
+                connection.scalar(
+                    text("SELECT COUNT(*) FROM permissions WHERE `key`='privacy.manage'")
+                )
+                == 0
+            )
     finally:
         command.upgrade(_alembic_config(), "head")
         engine.dispose()

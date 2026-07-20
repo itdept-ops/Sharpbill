@@ -1,5 +1,12 @@
 name: kingfisher
 
+x-bounded-logging: &bounded-logging
+  driver: local
+  options:
+    max-size: "10m"
+    max-file: "5"
+    compress: "true"
+
 services:
   mysql:
     image: mysql:8.4.10@sha256:c592c15aaf4a1961e15d82eb31ea5987dda862d1c4b1e93424438c0e91dc1f8d
@@ -21,6 +28,7 @@ services:
       timeout: 5s
       retries: 12
       start_period: 30s
+    logging: *bounded-logging
 
   api:
     build:
@@ -62,6 +70,14 @@ services:
       RETENTION_WORKER_MAX_BATCHES_PER_CYCLE: ${RETENTION_WORKER_MAX_BATCHES_PER_CYCLE:-10}
       RETENTION_WORKER_SHUTDOWN_TIMEOUT_SECONDS: ${RETENTION_WORKER_SHUTDOWN_TIMEOUT_SECONDS:-10}
       SECURITY_EVENT_RETENTION_DAYS: ${SECURITY_EVENT_RETENTION_DAYS:-400}
+      PRECISE_LOCATION_RETENTION_HOURS: ${PRECISE_LOCATION_RETENTION_HOURS:-24}
+      PENDING_ACCOUNT_RETENTION_DAYS: ${PENDING_ACCOUNT_RETENTION_DAYS:-30}
+      DISABLED_ACCOUNT_RETENTION_DAYS: ${DISABLED_ACCOUNT_RETENTION_DAYS:-365}
+      ACCOUNT_ERASURE_GRACE_DAYS: ${ACCOUNT_ERASURE_GRACE_DAYS:-30}
+      NONCE_PRUNE_BATCH_SIZE: ${NONCE_PRUNE_BATCH_SIZE:-500}
+      PRECISE_LOCATION_PRUNE_BATCH_SIZE: ${PRECISE_LOCATION_PRUNE_BATCH_SIZE:-500}
+      ACCOUNT_RETENTION_PRUNE_BATCH_SIZE: ${ACCOUNT_RETENTION_PRUNE_BATCH_SIZE:-100}
+      SECURITY_EVENT_PRUNE_BATCH_SIZE: ${SECURITY_EVENT_PRUNE_BATCH_SIZE:-500}
       GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
       AZURE_CLIENT_ID: ${AZURE_CLIENT_ID:-}
       IDP_VERIFICATION_MAX_CONCURRENCY: ${IDP_VERIFICATION_MAX_CONCURRENCY:-8}
@@ -79,9 +95,6 @@ services:
       AZURE_ADMIN_OBJECT_IDS: ${AZURE_ADMIN_OBJECT_IDS:-}
       GOOGLE_ADMIN_SUBJECTS: ${GOOGLE_ADMIN_SUBJECTS:-}
       ADMIN_EMAILS: ${ADMIN_EMAILS:-}
-      ALLOWED_EMAIL_DOMAINS: ${ALLOWED_EMAIL_DOMAINS:-}
-      ALLOWED_AZURE_TENANTS: ${ALLOWED_AZURE_TENANTS:-}
-      ALLOW_PUBLIC_SIGNUP: ${ALLOW_PUBLIC_SIGNUP:-false}
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
       TRUSTED_PROXY_IPS: ${TRUSTED_PROXY_IPS:-}
       PUBLIC_ORIGIN: ${PUBLIC_ORIGIN:-}
@@ -106,6 +119,7 @@ services:
     depends_on:
       mysql:
         condition: service_healthy
+    logging: *bounded-logging
 
   web:
     build:
@@ -124,6 +138,7 @@ services:
     depends_on:
       api:
         condition: service_healthy
+    logging: *bounded-logging
 
 volumes:
   mysql_data:

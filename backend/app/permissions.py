@@ -15,6 +15,7 @@ PRESENCE_KICK = "presence.kick"
 SETTINGS_MANAGE = "settings.manage"
 LOGS_VIEW = "logs.view"
 SECURITY_EVENTS_VIEW = "security_events.view"
+PRIVACY_MANAGE = "privacy.manage"
 
 # (key, description) — order is the seed order.
 BUILTIN_PERMISSIONS: list[tuple[str, str]] = [
@@ -27,6 +28,7 @@ BUILTIN_PERMISSIONS: list[tuple[str, str]] = [
     (SETTINGS_MANAGE, "Manage site-wide configuration"),
     (LOGS_VIEW, "View the request activity log"),
     (SECURITY_EVENTS_VIEW, "View and export durable security events"),
+    (PRIVACY_MANAGE, "Manage privacy requests, retention, and legal holds"),
 ]
 
 ADMIN_ROLE = "admin"
@@ -45,6 +47,7 @@ SYSTEM_ROLES: dict[str, dict] = {
             SETTINGS_MANAGE,
             LOGS_VIEW,
             SECURITY_EVENTS_VIEW,
+            PRIVACY_MANAGE,
         ],
     },
     DEFAULT_ROLE: {

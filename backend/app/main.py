@@ -16,7 +16,18 @@ from app.errors import install_error_handlers
 from app.ratelimit import check as rate_check
 from app.request_logging import record_request, shutdown_request_logging, start_request_logging
 from app.retention import shutdown_retention_worker, start_retention_worker
-from app.routers import auth, dashboard, health, logs, presence, roles, security_events, users, ws
+from app.routers import (
+    auth,
+    dashboard,
+    health,
+    logs,
+    presence,
+    privacy,
+    roles,
+    security_events,
+    users,
+    ws,
+)
 from app.routers import settings as settings_router
 
 logging.basicConfig(level=settings.log_level)
@@ -373,12 +384,14 @@ if settings.trusted_proxy_ip_list:
 
 app.include_router(health.router, prefix="/api")
 app.include_router(auth.router, prefix="/api/auth", tags=["auth"])
+app.include_router(privacy.router, prefix="/api/privacy", tags=["privacy"])
 app.include_router(users.router, prefix="/api/users", tags=["users"])
 app.include_router(roles.router, prefix="/api", tags=["rbac"])
 app.include_router(presence.router, prefix="/api/presence", tags=["presence"])
 app.include_router(settings_router.router, prefix="/api/admin", tags=["settings"])
 app.include_router(logs.router, prefix="/api/admin", tags=["logs"])
 app.include_router(security_events.router, prefix="/api/admin", tags=["security-events"])
+app.include_router(privacy.admin_router, prefix="/api/admin/privacy", tags=["privacy-admin"])
 app.include_router(dashboard.router, prefix="/api", tags=["dashboard"])
 app.include_router(ws.router, prefix="/api/ws")
 

@@ -25,6 +25,11 @@ class User(Base):
     __table_args__ = (
         # Directory/export endpoints use this stable ordering for every page.
         Index("ix_users_created_at_id", "created_at", "id"),
+        # Retention workers use timestamp + primary-key indexes for deterministic,
+        # bounded batches without scanning the full user directory.
+        Index("ix_users_last_location_at_id", "last_location_at", "id"),
+        Index("ix_users_deactivated_at_id", "deactivated_at", "id"),
+        Index("ix_users_erasure_due_at_id", "erasure_due_at", "id"),
         CheckConstraint(
             "last_latitude IS NULL OR last_latitude BETWEEN -90 AND 90",
             name="last_latitude_valid",
@@ -39,6 +44,24 @@ class User(Base):
         ),
         CheckConstraint("is_active IN (0, 1)", name="is_active_boolean"),
         CheckConstraint("is_approved IN (0, 1)", name="is_approved_boolean"),
+        CheckConstraint(
+            "(is_active = 1 AND deactivated_at IS NULL) OR "
+            "(is_active = 0 AND deactivated_at IS NOT NULL)",
+            name="deactivation_state_valid",
+        ),
+        CheckConstraint(
+            "(erasure_requested_at IS NULL AND erasure_due_at IS NULL) OR "
+            "(erasure_requested_at IS NOT NULL AND erasure_due_at IS NOT NULL "
+            "AND erasure_due_at >= erasure_requested_at)",
+            name="erasure_schedule_valid",
+        ),
+        CheckConstraint(
+            "erased_at IS NULL OR "
+            "(is_active = 0 AND is_approved = 0 AND deactivated_at IS NOT NULL "
+            "AND erased_at >= deactivated_at "
+            "AND (erasure_requested_at IS NULL OR erased_at >= erasure_requested_at))",
+            name="erasure_state_valid",
+        ),
         _TABLE_ARGS,
     )
 
@@ -61,6 +84,13 @@ class User(Base):
     last_login_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=False))
     last_seen_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=False), index=True)
     session_valid_after: Mapped[datetime | None] = mapped_column(DateTime(timezone=False))
+    # Explicit lifecycle timestamps make retention deterministic. ``deactivated_at`` is set
+    # whenever an account becomes inactive; erasure requests retain a requested/due pair, while
+    # ``erased_at`` records completion of anonymization without deleting the identity tombstone.
+    deactivated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=False))
+    erasure_requested_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=False))
+    erasure_due_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=False))
+    erased_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=False))
     # Optional last-known location (only if the user opts in on login).
     last_latitude: Mapped[float | None] = mapped_column(Double)
     last_longitude: Mapped[float | None] = mapped_column(Double)

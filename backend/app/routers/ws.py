@@ -6,13 +6,14 @@ from urllib.parse import urlsplit
 
 import jwt as pyjwt
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
+from sqlalchemy import select
 from starlette.concurrency import run_in_threadpool
 
+from app.account_lifecycle import account_is_authenticatable, lock_current_user
 from app.auth.jwt import COOKIE_NAME, decode_session_token
-from app.auth.sessions import active_session
 from app.config import settings
 from app.db import SessionLocal
-from app.models import User
+from app.models import User, UserSession
 from app.permissions import PRESENCE_VIEW
 
 router = APIRouter()
@@ -147,14 +148,26 @@ def _authenticate(db, token: str | None) -> User | None:
         payload = decode_session_token(token)
     except (pyjwt.InvalidTokenError, ValueError, KeyError):
         return None
-    user = db.get(User, int(payload.get("sub", 0)))
-    if user is None or not user.is_active or not user.is_approved:
+    user = lock_current_user(db, int(payload.get("sub", 0)))
+    if not account_is_authenticatable(user):
         return None
+    assert user is not None
     if user.session_valid_after is not None:
         cutoff = int(user.session_valid_after.replace(tzinfo=UTC).timestamp())
         if int(payload.get("iat", 0)) <= cutoff:
             return None
-    if active_session(db, payload.get("jti", ""), user.id) is None:  # per-device revocation
+    now = datetime.now(UTC).replace(tzinfo=None)
+    session_id = db.scalar(
+        select(UserSession.id)
+        .where(
+            UserSession.jti == payload.get("jti", ""),
+            UserSession.user_id == user.id,
+            UserSession.revoked_at.is_(None),
+            UserSession.expires_at > now,
+        )
+        .with_for_update()
+    )
+    if session_id is None:  # per-device revocation
         return None
     return user
 

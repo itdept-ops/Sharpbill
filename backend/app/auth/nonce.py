@@ -16,13 +16,13 @@ from datetime import UTC, datetime, timedelta
 from sqlalchemy import delete, func, select
 from sqlalchemy.orm import Session
 
+from app.config import settings
 from app.db import SessionLocal
 from app.models import LoginNonce
 
 # How long a user has to complete a sign-in after the nonce is issued.
 _NONCE_TTL_SECONDS = 600
 _MAX_OUTSTANDING_NONCES = 5_000
-_PRUNE_BATCH_SIZE = 500
 _issue_lock = threading.Lock()
 _security_log = logging.getLogger("app.security")
 
@@ -47,19 +47,24 @@ def _record_lifecycle(event: str, outcome: str, **details: int | str) -> None:
     )
 
 
-def _prune_expired(db: Session, now: datetime, limit: int = _PRUNE_BATCH_SIZE) -> int:
-    """Delete at most ``limit`` expired rows so request latency remains bounded."""
+def prune_expired_nonces(
+    db: Session, *, now: datetime | None = None, limit: int | None = None
+) -> int:
+    """Delete a bounded expired-nonce batch, independently of evidence legal holds."""
+    current = now or _now()
+    batch_size = limit or settings.nonce_prune_batch_size
     expired = list(
         db.scalars(
             select(LoginNonce.nonce)
-            .where(LoginNonce.expires_at <= now)
-            .order_by(LoginNonce.expires_at)
-            .limit(limit)
+            .where(LoginNonce.expires_at <= current)
+            .order_by(LoginNonce.expires_at, LoginNonce.nonce)
+            .limit(batch_size)
         )
     )
     if expired:
-        db.execute(delete(LoginNonce).where(LoginNonce.nonce.in_(expired)))
-    return len(expired)
+        result = db.execute(delete(LoginNonce).where(LoginNonce.nonce.in_(expired)))
+        return result.rowcount or 0
+    return 0
 
 
 def issue_nonce() -> str:
@@ -68,7 +73,7 @@ def issue_nonce() -> str:
     # Shared rate/state infrastructure must replace it before horizontal scaling.
     with _issue_lock, SessionLocal() as db:
         now = _now()
-        pruned = _prune_expired(db, now)
+        pruned = prune_expired_nonces(db, now=now)
         outstanding = (
             db.scalar(
                 select(func.count()).select_from(LoginNonce).where(LoginNonce.expires_at > now)
@@ -104,7 +109,7 @@ def consume_nonce(nonce: str) -> bool:
         return False
     now = _now()
     with SessionLocal() as db:
-        pruned = _prune_expired(db, now)
+        pruned = prune_expired_nonces(db, now=now)
         result = db.execute(
             delete(LoginNonce).where(LoginNonce.nonce == nonce, LoginNonce.expires_at > now)
         )

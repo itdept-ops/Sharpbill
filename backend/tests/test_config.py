@@ -9,7 +9,6 @@ from app.config import Settings
 
 _GOOD_SECRET = "test-secret-0123456789abcdef0123456789abcdef"
 _TENANT_ID = "11111111-2222-4333-8444-555555555555"
-_OTHER_TENANT_ID = "aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee"
 _OBJECT_ID = "99999999-8888-4777-8666-555555555555"
 _AZURE_CLIENT_ID = "22222222-3333-4444-8555-666666666666"
 _GOOGLE_CLIENT_ID = "123456789012-abcdefghijklmnopqrstuvwxyz012345.apps.googleusercontent.com"
@@ -22,11 +21,8 @@ def _base(**over):
         "app_env": "local",
         "cookie_secure": True,
         # Isolate constructor tests from the integration-suite environment installed by conftest.
-        "allow_public_signup": False,
         "google_client_id": "",
         "azure_client_id": "",
-        "allowed_email_domains": "",
-        "allowed_azure_tenants": "",
         "admin_emails": "",
         "azure_admin_tenant_id": "",
         "azure_admin_object_ids": "",
@@ -81,7 +77,6 @@ def test_production_requires_database_tls():
                 cookie_secure=True,
                 db_require_tls=False,
                 google_client_id=_GOOGLE_CLIENT_ID,
-                allowed_email_domains="example.com",
             )
         )
 
@@ -100,7 +95,6 @@ def test_production_requires_canonical_https_public_origin():
                 db_require_tls=True,
                 public_origin="http://crm.example.com/path",
                 google_client_id=_GOOGLE_CLIENT_ID,
-                allowed_email_domains="example.com",
             )
         )
 
@@ -117,7 +111,6 @@ def test_production_requires_canonical_https_public_origin():
                     db_require_tls=True,
                     public_origin=malformed,
                     google_client_id=_GOOGLE_CLIENT_ID,
-                    allowed_email_domains="example.com",
                 )
             )
 
@@ -128,7 +121,6 @@ def test_production_requires_canonical_https_public_origin():
             db_require_tls=True,
             public_origin="https://CRM.EXAMPLE.COM:443/",
             google_client_id=_GOOGLE_CLIENT_ID,
-            allowed_email_domains="example.com",
         )
     )
     assert normalized.public_origin == "https://crm.example.com"
@@ -148,7 +140,6 @@ def test_validation_errors_never_echo_secret_inputs():
                 session_jwt_secret=jwt_sentinel,
                 dev_auth_secret=dev_sentinel,
                 google_client_id=_GOOGLE_CLIENT_ID,
-                allowed_email_domains="example.com",
             )
         )
     rendered = str(caught.value)
@@ -157,37 +148,37 @@ def test_validation_errors_never_echo_secret_inputs():
     assert password_sentinel not in rendered
 
 
-def test_production_rejects_public_signup_and_unbounded_configured_providers():
-    prod = {
-        "app_env": "production",
-        "cookie_secure": True,
-        "db_require_tls": True,
-        "google_client_id": _GOOGLE_CLIENT_ID,
-        "allowed_email_domains": "example.com",
-    }
-    with pytest.raises(ValidationError, match="ALLOW_PUBLIC_SIGNUP"):
-        Settings(**_base(**prod, allow_public_signup=True))
-    with pytest.raises(ValidationError, match="ALLOWED_EMAIL_DOMAINS"):
-        Settings(**_base(**(prod | {"allowed_email_domains": ""})))
-    with pytest.raises(ValidationError, match="ALLOWED_AZURE_TENANTS"):
-        Settings(**_base(**prod, azure_client_id=_AZURE_CLIENT_ID))
-
-
-def test_production_accepts_tenant_bound_provider_configuration():
+def test_production_accepts_setting_driven_providers_without_directory_allowlists():
     configured = Settings(
         **_base(
             app_env="production",
             cookie_secure=True,
             db_require_tls=True,
             google_client_id=_GOOGLE_CLIENT_ID,
-            allowed_email_domains="example.com",
             azure_client_id=_AZURE_CLIENT_ID,
-            allowed_azure_tenants=_TENANT_ID,
         )
     )
-    assert configured.allowed_email_domain_set == {"example.com"}
-    assert configured.allowed_azure_tenant_set == {_TENANT_ID}
+    assert configured.google_provider_configured is True
+    assert configured.microsoft_provider_configured is True
     assert configured.session_cookie_name == "__Host-session"
+
+
+def test_privacy_retention_defaults_are_conservative_and_bounded():
+    configured = Settings(**_base())
+    assert configured.precise_location_retention_hours == 24
+    assert configured.pending_account_retention_days == 30
+    assert configured.session_retention_days == 30
+    assert configured.request_log_retention_days == 90
+    assert configured.account_erasure_grace_days == 30
+    assert configured.disabled_account_retention_days == 365
+    assert configured.security_event_retention_days == 400
+
+    with pytest.raises(ValidationError):
+        Settings(**_base(precise_location_retention_hours=0))
+    with pytest.raises(ValidationError):
+        Settings(**_base(account_erasure_grace_days=91))
+    with pytest.raises(ValidationError):
+        Settings(**_base(account_retention_prune_batch_size=1))
 
 
 def test_production_rejects_mutable_or_misbound_admin_bootstrap():
@@ -196,50 +187,29 @@ def test_production_rejects_mutable_or_misbound_admin_bootstrap():
         "cookie_secure": True,
         "db_require_tls": True,
         "google_client_id": _GOOGLE_CLIENT_ID,
-        "allowed_email_domains": "example.com",
     }
     with pytest.raises(ValidationError, match="ADMIN_EMAILS is local-only"):
         Settings(**_base(**prod, admin_emails="admin@example.com"))
     with pytest.raises(ValidationError, match="AZURE_ADMIN_TENANT_ID is required"):
         Settings(**_base(**prod, azure_admin_object_ids=_OBJECT_ID))
-    with pytest.raises(ValidationError, match="must be included"):
-        Settings(
-            **_base(
-                **prod,
-                azure_admin_tenant_id=_TENANT_ID,
-                allowed_azure_tenants=_OTHER_TENANT_ID,
-            )
-        )
 
 
-def test_microsoft_ids_are_validated_normalized_and_single_tenant():
+def test_microsoft_bootstrap_ids_are_validated_and_normalized():
     configured = Settings(
         **_base(
             app_env="production",
             cookie_secure=True,
             db_require_tls=True,
             azure_client_id=_AZURE_CLIENT_ID,
-            allowed_azure_tenants=_TENANT_ID.upper(),
             azure_admin_tenant_id=_TENANT_ID.upper(),
             azure_admin_object_ids=_OBJECT_ID.upper(),
         )
     )
-    assert configured.allowed_azure_tenant_set == {_TENANT_ID}
     assert configured.azure_admin_tenant_id == _TENANT_ID
     assert configured.azure_admin_object_id_set == {_OBJECT_ID}
 
     with pytest.raises(ValidationError, match="must be UUIDs"):
-        Settings(**_base(allowed_azure_tenants="tenant-typo"))
-    with pytest.raises(ValidationError, match="Exactly one"):
-        Settings(
-            **_base(
-                app_env="production",
-                cookie_secure=True,
-                db_require_tls=True,
-                azure_client_id=_AZURE_CLIENT_ID,
-                allowed_azure_tenants=f"{_TENANT_ID},{_OTHER_TENANT_ID}",
-            )
-        )
+        Settings(**_base(azure_admin_object_ids="object-id-typo"))
 
 
 def test_oauth_client_ids_are_trimmed_and_azure_client_id_must_be_a_uuid():
@@ -272,7 +242,6 @@ def test_production_rejects_malformed_google_client_ids(client_id):
                 cookie_secure=True,
                 db_require_tls=True,
                 google_client_id=client_id,
-                allowed_email_domains="example.com",
             )
         )
 
@@ -299,7 +268,6 @@ def test_production_rejects_world_wide_proxy_trust(world):
                 cookie_secure=True,
                 db_require_tls=True,
                 google_client_id=_GOOGLE_CLIENT_ID,
-                allowed_email_domains="example.com",
                 trusted_proxy_ips=world,
             )
         )
@@ -336,7 +304,6 @@ def test_dev_auth_never_enabled_outside_local():
             db_require_tls=True,
             dev_auth_enabled=True,
             google_client_id=_GOOGLE_CLIENT_ID,
-            allowed_email_domains="example.com",
         )
     )
     assert prod.is_dev_auth_enabled is False

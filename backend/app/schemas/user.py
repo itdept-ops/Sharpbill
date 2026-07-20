@@ -1,15 +1,16 @@
 from datetime import datetime
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from app.models import User
 
 
 class IdentityOut(BaseModel):
     provider: str
-    # The immutable provider subject id (Google `sub` / Microsoft `oid`). Identity is keyed
-    # on this, never on email, so a changed provider email can't impersonate another account.
+    namespace: str | None
+    # The immutable provider subject id. Google keys on global `sub`; Microsoft additionally
+    # namespaces `oid` by signed `tid`. Email is never an association key.
     subject: str
 
 
@@ -81,7 +82,11 @@ class UserOut(BaseModel):
             status=user.status,
             identities=(
                 [
-                    IdentityOut(provider=i.provider, subject=i.provider_subject)
+                    IdentityOut(
+                        provider=i.provider,
+                        namespace=i.provider_namespace or None,
+                        subject=i.provider_subject,
+                    )
                     for i in user.identities
                 ]
                 if include_identity_subjects
@@ -128,6 +133,14 @@ class BulkActionRequest(BaseModel):
     ids: list[int] = Field(min_length=1, max_length=500)
     action: Literal["activate", "deactivate", "approve", "assign_role"]
     role_id: int | None = None
+
+    @field_validator("ids")
+    @classmethod
+    def ids_must_be_unique(cls, ids: list[int]) -> list[int]:
+        """Reject ambiguous repeated mutations instead of applying an item more than once."""
+        if len(ids) != len(set(ids)):
+            raise ValueError("ids must not contain duplicates")
+        return ids
 
 
 class UiPrefs(BaseModel):

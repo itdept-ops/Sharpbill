@@ -6,6 +6,7 @@ the test database. Schema is created by running the real migrations (never creat
 """
 
 import os
+from datetime import UTC, datetime
 
 from sqlalchemy import create_engine, select, text
 from sqlalchemy.engine import URL, make_url
@@ -47,7 +48,6 @@ os.environ["DATABASE_URL"] = _test_url.render_as_string(hide_password=False)
 os.environ.setdefault("APP_ENV", "local")
 os.environ["DEV_AUTH_ENABLED"] = "true"  # exercise the HTTP stack via /api/auth/dev
 os.environ["DEV_AUTH_SECRET"] = "test-dev-auth-secret-0123456789abcdef-EXPLICIT"
-os.environ["ALLOW_PUBLIC_SIGNUP"] = "true"
 os.environ["GOOGLE_CLIENT_ID"] = "test-google-client-id"
 os.environ["AZURE_CLIENT_ID"] = "22222222-3333-4444-8555-666666666666"
 os.environ["TRUSTED_PROXY_IPS"] = "127.0.0.1"
@@ -143,7 +143,8 @@ def _clean_tables():
         conn.execute(
             text(
                 "UPDATE site_settings SET signup_mode='open', allow_google=1, allow_microsoft=1, "
-                "calm_mode=0, default_role_id=(SELECT id FROM roles WHERE name='user') WHERE id=1"
+                "calm_mode=0, retention_hold=0, retention_hold_reference=NULL, "
+                "default_role_id=(SELECT id FROM roles WHERE name='user') WHERE id=1"
             )
         )
         conn.execute(text("DELETE FROM login_nonces"))
@@ -195,6 +196,7 @@ def make_user(db, *, email="user@example.com", role="user", is_active=True, prov
         display_name=email.split("@")[0],
         role=role_obj,
         is_active=is_active,
+        deactivated_at=None if is_active else datetime.now(UTC).replace(tzinfo=None),
     )
     db.add(user)
     db.flush()
@@ -203,7 +205,6 @@ def make_user(db, *, email="user@example.com", role="user", is_active=True, prov
             user=user,
             provider=provider,
             provider_subject=email.lower(),
-            provider_email=email.lower(),
         )
     )
     db.commit()

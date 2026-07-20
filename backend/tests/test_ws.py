@@ -4,11 +4,18 @@ Covers FND-025 (the subsystem previously had zero tests) and exercises the FND-0
 """
 
 import asyncio
+import threading
+import time
+from concurrent.futures import ThreadPoolExecutor
 
 import pytest
 from starlette.websockets import WebSocketDisconnect
 
+from app.auth.jwt import COOKIE_NAME
+from app.db import SessionLocal
 from app.main import app
+from app.models import User
+from app.privacy_lifecycle import anonymize_user
 from app.routers import ws as ws_router
 from app.routers.ws import Conn, PresenceHub, _wait_for_client_activity
 from tests.client import TestClient
@@ -68,6 +75,46 @@ def test_ws_accepts_exact_canonical_origin(client):
         "/api/ws/presence", headers={"origin": "http://testserver"}
     ) as websocket:
         assert websocket.receive_json()["type"] == "presence"
+
+
+def test_ws_presence_touch_serializes_with_account_erasure(client):
+    login = client.post(
+        "/api/auth/dev", json={"email": "ws-erasure-race@example.com", "role": "user"}
+    )
+    assert login.status_code == 200
+    token = client.cookies.get(COOKIE_NAME)
+    assert token is not None
+
+    controller = SessionLocal()
+    erasure_started = threading.Event()
+
+    def erase_account() -> None:
+        with SessionLocal() as eraser:
+            target = eraser.get(User, login.json()["id"])
+            assert target is not None
+            erasure_started.set()
+            anonymize_user(eraser, target, policy_trigger="websocket_touch_race_test")
+            eraser.commit()
+
+    try:
+        user = ws_router._authenticate(controller, token)
+        assert user is not None
+        with ThreadPoolExecutor(max_workers=1) as executor:
+            future = executor.submit(erase_account)
+            assert erasure_started.wait(timeout=2)
+            time.sleep(0.1)
+            assert not future.done()  # account/session locks are held through the WS touch
+            ws_router._touch(controller, user)
+            controller.commit()  # release unchanged-timestamp locks, as _auth_snapshot close does
+            future.result(timeout=5)
+
+        with SessionLocal() as verifier:
+            erased = verifier.get(User, user.id)
+            assert erased is not None and erased.erased_at is not None
+            assert erased.last_seen_at is None
+        assert ws_router._auth_snapshot(token) is None
+    finally:
+        controller.close()
 
 
 def test_broadcast_is_concurrent_and_drops_a_stuck_client(monkeypatch):

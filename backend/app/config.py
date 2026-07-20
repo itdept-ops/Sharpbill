@@ -72,6 +72,16 @@ class Settings(BaseSettings):
     retention_worker_max_batches_per_cycle: int = Field(default=10, ge=1, le=100)
     retention_worker_shutdown_timeout_seconds: int = Field(default=10, ge=1, le=60)
     security_event_retention_days: int = Field(default=400, ge=30, le=2555)
+    # Privacy lifecycle defaults. Every cleanup is independently bounded so one high-volume
+    # category cannot monopolize the maintenance worker or a database transaction.
+    precise_location_retention_hours: int = Field(default=24, ge=1, le=720)
+    pending_account_retention_days: int = Field(default=30, ge=1, le=365)
+    disabled_account_retention_days: int = Field(default=365, ge=30, le=2555)
+    account_erasure_grace_days: int = Field(default=30, ge=1, le=90)
+    nonce_prune_batch_size: int = Field(default=500, ge=100, le=10_000)
+    precise_location_prune_batch_size: int = Field(default=500, ge=10, le=10_000)
+    account_retention_prune_batch_size: int = Field(default=100, ge=10, le=1_000)
+    security_event_prune_batch_size: int = Field(default=500, ge=10, le=10_000)
 
     # Provider verification is intentionally bounded independently of the API worker pool. A
     # burst of attacker-supplied tokens must not consume every AnyIO worker while an upstream
@@ -98,13 +108,6 @@ class Settings(BaseSettings):
     # bootstrap remains a local-development convenience only.
     google_admin_subjects: str = ""
     admin_emails: str = ""
-
-    # Optional provisioning allowlists (empty = allow any verified account). When set, a
-    # provider login is rejected unless it matches — closes "any internet account can sign up".
-    allowed_email_domains: str = ""  # ALLOWED_EMAIL_DOMAINS, comma-separated (Google)
-    allowed_azure_tenants: str = ""  # ALLOWED_AZURE_TENANTS, comma-separated tenant ids
-    # Empty allowlists require an explicit acknowledgement before new public accounts provision.
-    allow_public_signup: bool = False
 
     log_level: str = "INFO"
 
@@ -176,7 +179,7 @@ class Settings(BaseSettings):
                 normalized.append(canonical)
         return ",".join(normalized)
 
-    @field_validator("allowed_azure_tenants", "azure_admin_object_ids")
+    @field_validator("azure_admin_object_ids")
     @classmethod
     def _uuid_lists_are_canonical(cls, value: str) -> str:
         normalized: list[str] = []
@@ -297,23 +300,9 @@ class Settings(BaseSettings):
     def _validate_provider_admission(self) -> None:
         if not (self.google_provider_configured or self.microsoft_provider_configured):
             raise ValueError("At least one identity provider must be configured in production")
-        if self.allow_public_signup:
-            raise ValueError("ALLOW_PUBLIC_SIGNUP cannot be true when APP_ENV=production")
         if self.admin_email_set:
             raise ValueError(
                 "ADMIN_EMAILS is local-only; use immutable GOOGLE_ADMIN_SUBJECTS in production"
-            )
-        if self.google_provider_configured and not self.allowed_email_domain_set:
-            raise ValueError(
-                "ALLOWED_EMAIL_DOMAINS is required for Google in a production deployment"
-            )
-        if self.microsoft_provider_configured and not self.allowed_azure_tenant_set:
-            raise ValueError(
-                "ALLOWED_AZURE_TENANTS is required for Microsoft in a production deployment"
-            )
-        if self.microsoft_provider_configured and len(self.allowed_azure_tenant_set) != 1:
-            raise ValueError(
-                "Exactly one ALLOWED_AZURE_TENANTS value is required by the single-tenant model"
             )
 
     def _validate_admin_bootstrap_config(self) -> None:
@@ -321,23 +310,10 @@ class Settings(BaseSettings):
             raise ValueError(
                 "AZURE_ADMIN_TENANT_ID is required with AZURE_ADMIN_OBJECT_IDS in production"
             )
-        if (
-            self.azure_admin_tenant_id.strip()
-            and self.azure_admin_tenant_id not in self.allowed_azure_tenant_set
-        ):
-            raise ValueError("AZURE_ADMIN_TENANT_ID must be included in ALLOWED_AZURE_TENANTS")
 
     @property
     def admin_email_set(self) -> set[str]:
         return {e.strip().lower() for e in self.admin_emails.split(",") if e.strip()}
-
-    @property
-    def allowed_email_domain_set(self) -> set[str]:
-        return {d.strip().lower() for d in self.allowed_email_domains.split(",") if d.strip()}
-
-    @property
-    def allowed_azure_tenant_set(self) -> set[str]:
-        return {t.strip() for t in self.allowed_azure_tenants.split(",") if t.strip()}
 
     @property
     def azure_admin_object_id_set(self) -> set[str]:

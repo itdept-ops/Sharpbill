@@ -1,9 +1,17 @@
 """HTTP-level tests for user management, RBAC, presence, and kick — via dev login."""
 
+import pytest
 from sqlalchemy import select
+from starlette.requests import Request
 
+from app.account_lifecycle import lock_current_user, refresh_locked_user_access
+from app.db import SessionLocal
+from app.errors import ApiError
 from app.main import app
-from app.models import SecurityEvent
+from app.models import Permission, Role, SecurityEvent, User
+from app.privacy_lifecycle import anonymize_user
+from app.routers import users as users_router
+from app.schemas.user import StatusUpdateRequest
 from tests.client import TestClient
 
 
@@ -184,6 +192,154 @@ def test_bulk_assign_role(client):
     )
     assert resp.status_code == 200
     assert resp.json()["applied"] == 1
+
+
+def test_bulk_rejects_duplicate_ids_before_any_mutation(client):
+    target_client = TestClient(app)
+    target = _login(target_client, "bulk-duplicate-target@example.com")
+    _login(client, "bulk-duplicate-admin@example.com", role="admin")
+
+    response = client.post(
+        "/api/users/bulk",
+        json={"ids": [target["id"], target["id"]], "action": "deactivate"},
+    )
+    assert response.status_code == 422
+    with SessionLocal() as verifier:
+        stored = verifier.get(User, target["id"])
+        assert stored is not None and stored.is_active
+
+
+def test_bulk_reauthorizes_current_role_permissions_after_each_commit(client, monkeypatch):
+    _login(client, "bulk-refresh-admin@example.com", role="admin")
+    created_role = client.post(
+        "/api/roles",
+        json={"name": "BulkLifecycleManager", "permission_keys": ["users.manage"]},
+    )
+    assert created_role.status_code == 201, created_role.text
+
+    delegate = TestClient(app)
+    _login(delegate, "bulk-refresh-delegate@example.com", role="BulkLifecycleManager")
+    first_client = TestClient(app)
+    second_client = TestClient(app)
+    first = _login(first_client, "bulk-refresh-first@example.com")
+    second = _login(second_client, "bulk-refresh-second@example.com")
+
+    original = users_router._apply_bulk_user
+    applied = 0
+
+    def apply_then_revoke_role_permission(*args, **kwargs):
+        nonlocal applied
+        result = original(*args, **kwargs)
+        applied += 1
+        if applied == 1:
+            with SessionLocal() as concurrent:
+                role = concurrent.scalar(select(Role).where(Role.name == "BulkLifecycleManager"))
+                assert role is not None
+                role.permissions = [p for p in role.permissions if p.key != "users.manage"]
+                role.version += 1
+                concurrent.commit()
+        return result
+
+    monkeypatch.setattr(users_router, "_apply_bulk_user", apply_then_revoke_role_permission)
+    response = delegate.post(
+        "/api/users/bulk",
+        json={"ids": [first["id"], second["id"]], "action": "deactivate"},
+    )
+    assert response.status_code == 200, response.text
+    assert response.json()["results"] == [
+        {"id": first["id"], "ok": True},
+        {"id": second["id"], "ok": False, "error": "FORBIDDEN"},
+    ]
+    with SessionLocal() as verifier:
+        first_row = verifier.get(User, first["id"])
+        second_row = verifier.get(User, second["id"])
+        assert first_row is not None and not first_row.is_active
+        assert second_row is not None and second_row.is_active
+
+
+def test_current_access_refresh_replaces_stale_direct_grants(client):
+    user = _login(client, "direct-grant-refresh@example.com")
+    with SessionLocal() as setup:
+        target = setup.get(User, user["id"])
+        permission = setup.scalar(select(Permission).where(Permission.key == "users.manage"))
+        assert target is not None and permission is not None
+        target.granted_permissions = [permission]
+        target.access_version += 1
+        setup.commit()
+
+    stale = SessionLocal()
+    try:
+        cached = stale.get(User, user["id"])
+        assert cached is not None and "users.manage" in cached.permission_keys
+
+        with SessionLocal() as concurrent:
+            current = concurrent.get(User, user["id"])
+            assert current is not None
+            current.granted_permissions = []
+            current.access_version += 1
+            concurrent.commit()
+
+        locked = lock_current_user(stale, user["id"])
+        assert locked is not None
+        assert refresh_locked_user_access(stale, locked) is not None
+        assert "users.manage" not in locked.permission_keys
+        stale.rollback()
+    finally:
+        stale.close()
+
+
+def test_stale_status_and_approval_mutations_cannot_restore_erased_account(client):
+    admin = _login(client, "lifecycle-race-admin@example.com", role="admin")
+    target_client = TestClient(app)
+    target = _login(target_client, "lifecycle-race-target@example.com")
+    status_db = SessionLocal()
+    approval_db = SessionLocal()
+    try:
+        status_actor = status_db.get(User, admin["id"])
+        status_target = status_db.get(User, target["id"])
+        approval_actor = approval_db.get(User, admin["id"])
+        approval_target = approval_db.get(User, target["id"])
+        assert status_actor is not None and status_target is not None
+        assert approval_actor is not None and approval_target is not None
+
+        with SessionLocal() as eraser:
+            current_target = eraser.get(User, target["id"])
+            assert current_target is not None
+            anonymize_user(eraser, current_target, policy_trigger="admin_mutation_race_test")
+            eraser.commit()
+
+        request = Request(
+            {
+                "type": "http",
+                "method": "PATCH",
+                "path": f"/api/users/{target['id']}/status",
+                "headers": [],
+                "client": ("127.0.0.1", 12345),
+            }
+        )
+        with pytest.raises(ApiError) as status_error:
+            users_router.update_status(
+                target["id"],
+                StatusUpdateRequest(is_active=True),
+                request,
+                db=status_db,
+                actor=status_actor,
+            )
+        assert status_error.value.code == "ACCOUNT_ERASED"
+        status_db.rollback()
+
+        with pytest.raises(ApiError) as approval_error:
+            users_router.approve_user(target["id"], request, db=approval_db, actor=approval_actor)
+        assert approval_error.value.code == "ACCOUNT_ERASED"
+
+        with SessionLocal() as verifier:
+            erased = verifier.get(User, target["id"])
+            assert erased is not None and erased.erased_at is not None
+            assert not erased.is_active
+            assert not erased.is_approved
+    finally:
+        status_db.close()
+        approval_db.close()
 
 
 def test_role_assignment_requires_roles_manage_for_single_and_bulk(client):
