@@ -2,7 +2,7 @@ name: kingfisher
 
 services:
   mysql:
-    image: mysql:8.0
+    image: mysql:8.4.10@sha256:c592c15aaf4a1961e15d82eb31ea5987dda862d1c4b1e93424438c0e91dc1f8d
     command: --character-set-server=utf8mb4 --collation-server=utf8mb4_0900_ai_ci
     environment:
       MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
@@ -10,11 +10,13 @@ services:
       MYSQL_USER: ${MYSQL_USER}
       MYSQL_PASSWORD: ${MYSQL_PASSWORD}
     volumes:
+      # MYSQL_DATA_VOLUME is deliberately required. An operator must choose a fresh or
+      # restore-verified MySQL 8.4 volume instead of silently attaching an 8.0 data directory.
       - mysql_data:/var/lib/mysql
     ports:
       - "127.0.0.1:${MYSQL_HOST_PORT:-3306}:3306"   # loopback-only, for GUI clients
     healthcheck:
-      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -uroot -p$$MYSQL_ROOT_PASSWORD --silent"]
+      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -uroot --password=\"$$MYSQL_ROOT_PASSWORD\" --silent"]
       interval: 5s
       timeout: 5s
       retries: 12
@@ -24,16 +26,79 @@ services:
     build:
       context: ./backend
       target: dev
-    env_file: .env
     environment:
       # Inside the compose network the DB host is the service name "mysql", never localhost.
-      DATABASE_URL: mysql+pymysql://${MYSQL_USER}:${MYSQL_PASSWORD}@mysql:3306/${MYSQL_DATABASE}?charset=utf8mb4
+      # Keep the API's environment allowlisted: in particular, do not expose MYSQL_ROOT_PASSWORD.
+      APP_ENV: ${APP_ENV:-local}
+      DB_HOST: mysql
+      DB_PORT: "3306"
+      DB_NAME: ${MYSQL_DATABASE}
+      DB_USER: ${MYSQL_USER}
+      DB_PASSWORD: ${MYSQL_PASSWORD}
+      DB_REQUIRE_TLS: ${DB_REQUIRE_TLS:-false}
+      DB_TLS_CA_PATH: ${DB_TLS_CA_PATH:-/opt/kingfisher/certs/rds-global-bundle.pem}
+      DB_POOL_SIZE: ${DB_POOL_SIZE:-5}
+      DB_MAX_OVERFLOW: ${DB_MAX_OVERFLOW:-5}
+      DB_POOL_TIMEOUT_SECONDS: ${DB_POOL_TIMEOUT_SECONDS:-10}
+      DB_POOL_RECYCLE_SECONDS: ${DB_POOL_RECYCLE_SECONDS:-280}
+      DB_CONNECT_TIMEOUT_SECONDS: ${DB_CONNECT_TIMEOUT_SECONDS:-5}
+      DB_READ_TIMEOUT_SECONDS: ${DB_READ_TIMEOUT_SECONDS:-30}
+      DB_WRITE_TIMEOUT_SECONDS: ${DB_WRITE_TIMEOUT_SECONDS:-30}
+      SESSION_JWT_SECRET: ${SESSION_JWT_SECRET}
+      SESSION_JWT_PREVIOUS_SECRETS: ${SESSION_JWT_PREVIOUS_SECRETS:-}
+      SESSION_JWT_ISSUER: ${SESSION_JWT_ISSUER:-kingfisher-crm}
+      SESSION_JWT_AUDIENCE: ${SESSION_JWT_AUDIENCE:-kingfisher-crm-web}
+      SESSION_TTL_HOURS: ${SESSION_TTL_HOURS:-8}
+      COOKIE_SECURE: ${COOKIE_SECURE:-false}
+      MAX_ACTIVE_SESSIONS_PER_USER: ${MAX_ACTIVE_SESSIONS_PER_USER:-20}
+      SESSION_RETENTION_DAYS: ${SESSION_RETENTION_DAYS:-30}
+      SESSION_PRUNE_BATCH_SIZE: ${SESSION_PRUNE_BATCH_SIZE:-500}
+      REQUEST_BODY_MAX_BYTES: ${REQUEST_BODY_MAX_BYTES:-1048576}
+      REQUEST_LOG_QUEUE_CAPACITY: ${REQUEST_LOG_QUEUE_CAPACITY:-2048}
+      REQUEST_LOG_RETENTION_DAYS: ${REQUEST_LOG_RETENTION_DAYS:-90}
+      REQUEST_LOG_PRUNE_BATCH_SIZE: ${REQUEST_LOG_PRUNE_BATCH_SIZE:-2000}
+      REQUEST_LOG_SHUTDOWN_TIMEOUT_SECONDS: ${REQUEST_LOG_SHUTDOWN_TIMEOUT_SECONDS:-5}
+      RETENTION_WORKER_INTERVAL_SECONDS: ${RETENTION_WORKER_INTERVAL_SECONDS:-3600}
+      RETENTION_WORKER_MAX_BATCHES_PER_CYCLE: ${RETENTION_WORKER_MAX_BATCHES_PER_CYCLE:-10}
+      RETENTION_WORKER_SHUTDOWN_TIMEOUT_SECONDS: ${RETENTION_WORKER_SHUTDOWN_TIMEOUT_SECONDS:-10}
+      SECURITY_EVENT_RETENTION_DAYS: ${SECURITY_EVENT_RETENTION_DAYS:-400}
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
+      AZURE_CLIENT_ID: ${AZURE_CLIENT_ID:-}
+      IDP_VERIFICATION_MAX_CONCURRENCY: ${IDP_VERIFICATION_MAX_CONCURRENCY:-8}
+      IDP_NETWORK_MAX_CONCURRENCY: ${IDP_NETWORK_MAX_CONCURRENCY:-2}
+      IDP_HTTP_CONNECT_TIMEOUT_SECONDS: ${IDP_HTTP_CONNECT_TIMEOUT_SECONDS:-2}
+      IDP_HTTP_READ_TIMEOUT_SECONDS: ${IDP_HTTP_READ_TIMEOUT_SECONDS:-3}
+      IDP_KEY_CACHE_TTL_SECONDS: ${IDP_KEY_CACHE_TTL_SECONDS:-3600}
+      IDP_KEY_CACHE_STALE_SECONDS: ${IDP_KEY_CACHE_STALE_SECONDS:-86400}
+      IDP_KEY_REFRESH_WAIT_SECONDS: ${IDP_KEY_REFRESH_WAIT_SECONDS:-6}
+      IDP_UNKNOWN_KID_BACKOFF_SECONDS: ${IDP_UNKNOWN_KID_BACKOFF_SECONDS:-10}
+      IDP_OUTAGE_BACKOFF_INITIAL_SECONDS: ${IDP_OUTAGE_BACKOFF_INITIAL_SECONDS:-2}
+      IDP_OUTAGE_BACKOFF_MAX_SECONDS: ${IDP_OUTAGE_BACKOFF_MAX_SECONDS:-60}
+      IDP_KEY_DOCUMENT_MAX_BYTES: ${IDP_KEY_DOCUMENT_MAX_BYTES:-1048576}
+      AZURE_ADMIN_TENANT_ID: ${AZURE_ADMIN_TENANT_ID:-}
+      AZURE_ADMIN_OBJECT_IDS: ${AZURE_ADMIN_OBJECT_IDS:-}
+      GOOGLE_ADMIN_SUBJECTS: ${GOOGLE_ADMIN_SUBJECTS:-}
+      ADMIN_EMAILS: ${ADMIN_EMAILS:-}
+      ALLOWED_EMAIL_DOMAINS: ${ALLOWED_EMAIL_DOMAINS:-}
+      ALLOWED_AZURE_TENANTS: ${ALLOWED_AZURE_TENANTS:-}
+      ALLOW_PUBLIC_SIGNUP: ${ALLOW_PUBLIC_SIGNUP:-false}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      TRUSTED_PROXY_IPS: ${TRUSTED_PROXY_IPS:-}
+      PUBLIC_ORIGIN: ${PUBLIC_ORIGIN:-}
+      DEV_AUTH_ENABLED: ${DEV_AUTH_ENABLED:-false}
+      DEV_AUTH_SECRET: ${DEV_AUTH_SECRET:-}
     volumes:
       - ./backend:/app
     ports:
       - "127.0.0.1:${API_HOST_PORT:-8000}:8000"
     healthcheck:
-      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:8000/api/health || exit 1"]
+      # Container health is process liveness. Traffic readiness remains available at
+      # /api/health/ready and includes database + exact schema-head validation.
+      test:
+        - CMD
+        - python
+        - -c
+        - "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/health/live', timeout=3).read()"
       interval: 10s
       timeout: 5s
       retries: 6
@@ -47,8 +112,6 @@ services:
       context: ./frontend
       target: dev
     environment:
-      VITE_GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID}
-      VITE_AZURE_CLIENT_ID: ${AZURE_CLIENT_ID}
       VITE_API_PROXY_TARGET: http://api:8000
       CHOKIDAR_USEPOLLING: "true"
       # So Vite's HMR websocket targets the published host port (not its internal 5173).
@@ -64,4 +127,5 @@ services:
 
 volumes:
   mysql_data:
+    name: ${MYSQL_DATA_VOLUME:?Set MYSQL_DATA_VOLUME to a validated MySQL 8.4 volume name}
   web_node_modules:
