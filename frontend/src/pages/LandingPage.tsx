@@ -1,6 +1,7 @@
 import { Link } from "react-router-dom";
 
 import { useAuth } from "../auth/AuthContext";
+import { LegalNav } from "../components/LegalNav";
 import { MatrixRain } from "../components/MatrixRain";
 
 const FEATURES = [
@@ -81,7 +82,7 @@ export function LandingPage() {
       <footer className="landing-footer">
         <span>KINGFISHER // ACCESS CONTROL</span>
         <span className="spacer" />
-        <span>Local-first · Dockerized · Open</span>
+        <LegalNav className="footer-legal-nav" />
       </footer>
     </div>
   );

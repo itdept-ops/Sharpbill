@@ -1,5 +1,7 @@
 import { test, expect, type Page } from "@playwright/test";
 
+import { LEGAL_BUNDLE_VERSION } from "../src/legal";
+
 // Sign in through the local-only dev-login (no OAuth keys needed) — a deterministic seam that
 // still exercises the real session cookie + per-request authorization the app enforces.
 async function devLogin(page: Page, email: string, role: string): Promise<void> {
@@ -10,18 +12,23 @@ async function devLogin(page: Page, email: string, role: string): Promise<void> 
 
   await page.goto("/login");
   const status = await page.evaluate(
-    async ({ email, role, devAuthSecret }) => {
+    async ({ email, role, devAuthSecret, legalBundleVersion }) => {
       const r = await fetch("/api/auth/dev", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
           "X-Dev-Auth-Secret": devAuthSecret,
         },
-        body: JSON.stringify({ email, role }),
+        body: JSON.stringify({
+          email,
+          role,
+          legal_accepted: true,
+          legal_bundle_version: legalBundleVersion,
+        }),
       });
       return r.status;
     },
-    { email, role, devAuthSecret },
+    { email, role, devAuthSecret, legalBundleVersion: LEGAL_BUNDLE_VERSION },
   );
   expect(status).toBe(200);
 }

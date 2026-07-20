@@ -13,6 +13,7 @@ const AboutPage = lazy(() => named(import("./pages/AboutPage"), "AboutPage"));
 const TechnologyPage = lazy(() => named(import("./pages/TechnologyPage"), "TechnologyPage"));
 const SecurityPage = lazy(() => named(import("./pages/SecurityPage"), "SecurityPage"));
 const LoginPage = lazy(() => named(import("./pages/LoginPage"), "LoginPage"));
+const LegalPage = lazy(() => named(import("./pages/LegalPage"), "LegalPage"));
 const DashboardPage = lazy(() => named(import("./pages/DashboardPage"), "DashboardPage"));
 const ProfilePage = lazy(() => named(import("./pages/ProfilePage"), "ProfilePage"));
 const AdminUsersPage = lazy(() => named(import("./pages/AdminUsersPage"), "AdminUsersPage"));
@@ -31,6 +32,10 @@ export default function App() {
       <Route path="/technology" element={<TechnologyPage />} />
       <Route path="/security" element={<SecurityPage />} />
       <Route path="/login" element={<LoginPage />} />
+      <Route path="/legal/terms-of-service.html" element={<LegalPage documentKey="terms" />} />
+      <Route path="/legal/eula.html" element={<LegalPage documentKey="eula" />} />
+      <Route path="/legal/privacy-notice.html" element={<LegalPage documentKey="privacy" />} />
+      <Route path="/legal/acceptable-use-policy.html" element={<LegalPage documentKey="aup" />} />
 
       {/* authenticated (behind the app shell) */}
       <Route element={<ProtectedRoute />}>

@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 
+import { LEGAL_BUNDLE_VERSION, LEGAL_DOCUMENT_SHA256, type LegalManifest } from "../legal";
 import type { AuthConfig } from "../types";
 
 const mocks = vi.hoisted(() => ({
@@ -13,6 +14,47 @@ const mocks = vi.hoisted(() => ({
     dev: false,
     calm: false,
   } as AuthConfig,
+  legalManifest: {
+    bundle_version: "2026-07-20-v1",
+    effective_date: "2026-07-20",
+    required_at_login: true,
+    acceptance_label:
+      "I agree to the Terms of Service, EULA, and Acceptable Use Policy, and acknowledge the Privacy Notice.",
+    documents: [
+      {
+        key: "terms",
+        title: "Terms of Service",
+        version: "2026-07-20-v1",
+        sha256: "0000000000000000000000000000000000000000000000000000000000000000",
+        url: "/legal/terms-of-service.html",
+        acceptance: "agreement",
+      },
+      {
+        key: "eula",
+        title: "End User License Agreement",
+        version: "2026-07-20-v1",
+        sha256: "0000000000000000000000000000000000000000000000000000000000000000",
+        url: "/legal/eula.html",
+        acceptance: "agreement",
+      },
+      {
+        key: "acceptable_use",
+        title: "Acceptable Use Policy",
+        version: "2026-07-20-v1",
+        sha256: "0000000000000000000000000000000000000000000000000000000000000000",
+        url: "/legal/acceptable-use-policy.html",
+        acceptance: "agreement",
+      },
+      {
+        key: "privacy",
+        title: "Privacy Notice",
+        version: "2026-07-20-v1",
+        sha256: "0000000000000000000000000000000000000000000000000000000000000000",
+        url: "/legal/privacy-notice.html",
+        acceptance: "acknowledgement",
+      },
+    ],
+  } as LegalManifest,
   get: vi.fn(),
   post: vi.fn(),
   setUser: vi.fn(),
@@ -66,8 +108,22 @@ beforeEach(() => {
     dev: false,
     calm: false,
   };
+  mocks.legalManifest = {
+    bundle_version: LEGAL_BUNDLE_VERSION,
+    effective_date: "2026-07-20",
+    required_at_login: true,
+    acceptance_label:
+      "I agree to the Terms of Service, EULA, and Acceptable Use Policy, and acknowledge the Privacy Notice.",
+    documents: [
+      { key: "terms", title: "Terms of Service", version: LEGAL_BUNDLE_VERSION, sha256: LEGAL_DOCUMENT_SHA256.terms, url: "/legal/terms-of-service.html", acceptance: "agreement" },
+      { key: "eula", title: "End User License Agreement", version: LEGAL_BUNDLE_VERSION, sha256: LEGAL_DOCUMENT_SHA256.eula, url: "/legal/eula.html", acceptance: "agreement" },
+      { key: "acceptable_use", title: "Acceptable Use Policy", version: LEGAL_BUNDLE_VERSION, sha256: LEGAL_DOCUMENT_SHA256.aup, url: "/legal/acceptable-use-policy.html", acceptance: "agreement" },
+      { key: "privacy", title: "Privacy Notice", version: LEGAL_BUNDLE_VERSION, sha256: LEGAL_DOCUMENT_SHA256.privacy, url: "/legal/privacy-notice.html", acceptance: "acknowledgement" },
+    ],
+  };
   mocks.get.mockReset().mockImplementation((path: string) => {
     if (path === "/api/auth/config") return Promise.resolve(mocks.config);
+    if (path === "/api/legal/manifest") return Promise.resolve(mocks.legalManifest);
     return Promise.reject(new Error(`Unexpected GET ${path}`));
   });
   mocks.post.mockReset().mockImplementation((path: string) => {
@@ -103,12 +159,30 @@ function googleInitialization(index: number): GoogleInitialization {
   return mocks.googleInitialize.mock.calls[index][0] as GoogleInitialization;
 }
 
+async function acceptanceCheckbox(): Promise<HTMLInputElement> {
+  return screen.findByRole("checkbox", {
+    name: /I agree to the Terms of Service.*EULA.*Acceptable Use Policy.*acknowledge the Privacy Notice/i,
+  });
+}
+
+async function acceptLegalBundle(): Promise<void> {
+  await flushEffects(2);
+  fireEvent.click(
+    screen.getByRole("checkbox", {
+      name: /I agree to the Terms of Service.*EULA.*Acceptable Use Policy.*acknowledge the Privacy Notice/i,
+    }),
+  );
+}
+
 describe("LoginPage provider matrix", () => {
   it("offers Microsoft when it is the only effective provider and completes the nonce-bound flow", async () => {
     renderLogin();
     const button = await screen.findByRole("button", { name: /continue with microsoft/i });
     expect(document.querySelector(".google-slot")).not.toBeInTheDocument();
+    expect(button).toBeDisabled();
 
+    await acceptLegalBundle();
+    expect(button).toBeEnabled();
     fireEvent.click(button);
     await waitFor(() =>
       expect(mocks.microsoftLogin).toHaveBeenCalledWith(
@@ -119,7 +193,141 @@ describe("LoginPage provider matrix", () => {
     expect(mocks.post).toHaveBeenCalledWith("/api/auth/nonce");
     expect(mocks.post).toHaveBeenCalledWith("/api/auth/microsoft", {
       id_token: "microsoft-id-token",
+      legal_accepted: true,
+      legal_bundle_version: LEGAL_BUNDLE_VERSION,
     });
+  });
+
+  it("requires one unchecked agreement and exposes every legal document without losing login state", async () => {
+    renderLogin();
+
+    const checkbox = await acceptanceCheckbox();
+    expect(checkbox).not.toBeChecked();
+    expect(checkbox).toBeRequired();
+    expect(checkbox).toBeEnabled();
+    expect(screen.getByText(/Draft bundle — counsel review required before production/i)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /continue with microsoft/i })).toBeDisabled();
+    expect(mocks.post).not.toHaveBeenCalledWith("/api/auth/nonce");
+
+    const agreementLabel = screen.getByText("I agree to the");
+    fireEvent.click(agreementLabel);
+    expect(checkbox).toBeChecked();
+    fireEvent.click(agreementLabel);
+    expect(checkbox).not.toBeChecked();
+
+    const expectedLinks = [
+      ["Terms of Service", "/legal/terms-of-service.html"],
+      ["EULA", "/legal/eula.html"],
+      ["Acceptable Use Policy", "/legal/acceptable-use-policy.html"],
+      ["Privacy Notice", "/legal/privacy-notice.html"],
+    ];
+    for (const [name, href] of expectedLinks) {
+      const link = screen.getByRole("link", { name: new RegExp(`${name}.*opens in a new tab`, "i") });
+      expect(link).toHaveAttribute("href", href);
+      expect(link).toHaveAttribute("target", "_blank");
+      expect(link).toHaveAttribute("rel", expect.stringContaining("noopener"));
+      expect(link).toHaveAttribute("rel", expect.stringContaining("noreferrer"));
+    }
+  });
+
+  it("fails closed when the legal manifest cannot load", async () => {
+    mocks.get.mockImplementation((path: string) => {
+      if (path === "/api/auth/config") return Promise.resolve(mocks.config);
+      if (path === "/api/legal/manifest") return Promise.reject(new Error("offline"));
+      return Promise.reject(new Error(`Unexpected GET ${path}`));
+    });
+
+    renderLogin();
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(/could not load the current legal bundle/i);
+    expect(await acceptanceCheckbox()).toBeDisabled();
+    expect(screen.getByRole("button", { name: /continue with microsoft/i })).toBeDisabled();
+    expect(mocks.post).not.toHaveBeenCalledWith("/api/auth/nonce");
+  });
+
+  it("fails closed when the server legal bundle is newer than this web build", async () => {
+    mocks.legalManifest = { ...mocks.legalManifest, bundle_version: "2026-08-01-v2" };
+
+    renderLogin();
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(/web build does not match/i);
+    expect(await acceptanceCheckbox()).toBeDisabled();
+    expect(screen.getByRole("button", { name: /continue with microsoft/i })).toBeDisabled();
+  });
+
+  it("fails closed when a manifest document digest does not match the rendered text", async () => {
+    mocks.legalManifest = {
+      ...mocks.legalManifest,
+      documents: mocks.legalManifest.documents.map((document) =>
+        document.key === "privacy" ? { ...document, sha256: "f".repeat(64) } : document,
+      ),
+    };
+
+    renderLogin();
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(/web build does not match/i);
+    expect(await acceptanceCheckbox()).toBeDisabled();
+    expect(screen.getByRole("button", { name: /continue with microsoft/i })).toBeDisabled();
+  });
+
+  it.each([
+    [428, "LEGAL_ACCEPTANCE_REQUIRED"],
+    [409, "LEGAL_BUNDLE_STALE"],
+  ])("clears acceptance and blocks retry for backend legal error %s %s", async (status, code) => {
+    mocks.post.mockImplementation((path: string) => {
+      if (path === "/api/auth/nonce") return Promise.resolve({ nonce: "server-nonce" });
+      if (path === "/api/auth/microsoft") {
+        return Promise.reject(new ApiError(status, code, "Legal bundle changed"));
+      }
+      return Promise.reject(new Error(`Unexpected POST ${path}`));
+    });
+
+    renderLogin();
+    await acceptLegalBundle();
+    fireEvent.click(await screen.findByRole("button", { name: /continue with microsoft/i }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      code === "LEGAL_BUNDLE_STALE"
+        ? /legal terms changed.*page refresh or updated web release may be required/i
+        : /legal acceptance could not be verified/i,
+    );
+    expect(await acceptanceCheckbox()).not.toBeChecked();
+    expect(screen.getByRole("button", { name: /continue with microsoft/i })).toBeDisabled();
+    const manifestRequests = () =>
+      mocks.get.mock.calls.filter(([path]) => path === "/api/legal/manifest");
+    if (code === "LEGAL_BUNDLE_STALE") {
+      await waitFor(() => expect(manifestRequests()).toHaveLength(2));
+    } else {
+      expect(manifestRequests()).toHaveLength(1);
+    }
+  });
+
+  it("keeps acceptance immutable while a Microsoft popup is in flight", async () => {
+    let resolveMicrosoftLogin!: (token: string) => void;
+    mocks.microsoftLogin.mockReturnValue(
+      new Promise<string>((resolve) => {
+        resolveMicrosoftLogin = resolve;
+      }),
+    );
+
+    renderLogin();
+    await acceptLegalBundle();
+    fireEvent.click(await screen.findByRole("button", { name: /continue with microsoft/i }));
+    await waitFor(() => expect(mocks.microsoftLogin).toHaveBeenCalledTimes(1));
+
+    const checkbox = await acceptanceCheckbox();
+    expect(checkbox).toBeChecked();
+    expect(checkbox).toBeDisabled();
+    expect(screen.getByRole("button", { name: /opening microsoft/i })).toBeDisabled();
+
+    await act(async () => resolveMicrosoftLogin("deferred-microsoft-token"));
+    await waitFor(() =>
+      expect(mocks.post).toHaveBeenCalledWith("/api/auth/microsoft", {
+        id_token: "deferred-microsoft-token",
+        legal_accepted: true,
+        legal_bundle_version: LEGAL_BUNDLE_VERSION,
+      }),
+    );
   });
 
   it("does not offer a disabled Microsoft provider", async () => {
@@ -132,6 +340,9 @@ describe("LoginPage provider matrix", () => {
     };
     renderLogin();
     expect(await screen.findByText(/Sign in with Google to continue/i)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /continue with google/i })).toBeDisabled();
+    expect(mocks.googleInitialize).not.toHaveBeenCalled();
+    expect(mocks.post).not.toHaveBeenCalledWith("/api/auth/nonce", undefined, expect.anything());
     expect(screen.queryByRole("button", { name: /microsoft/i })).not.toBeInTheDocument();
   });
 
@@ -176,6 +387,7 @@ describe("LoginPage provider matrix", () => {
     });
 
     renderLogin();
+    await acceptLegalBundle();
     await flushEffects();
     expect(mocks.googleInitialize).toHaveBeenCalledTimes(1);
     expect(googleInitialization(0)).toMatchObject({
@@ -217,6 +429,7 @@ describe("LoginPage provider matrix", () => {
     });
 
     renderLogin();
+    await acceptLegalBundle();
     await flushEffects();
     const staleInitialization = googleInitialization(0);
 
@@ -228,7 +441,11 @@ describe("LoginPage provider matrix", () => {
     expect(googleInitialization(1).nonce).toBe("server-nonce-2");
     expect(mocks.post).toHaveBeenCalledWith(
       "/api/auth/google",
-      { id_token: "google-id-token" },
+      {
+        id_token: "google-id-token",
+        legal_accepted: true,
+        legal_bundle_version: LEGAL_BUNDLE_VERSION,
+      },
       expect.objectContaining({ signal: expect.any(AbortSignal) }),
     );
 
