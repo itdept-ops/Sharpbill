@@ -101,7 +101,11 @@ export function UserEditModal({
     setSavingPermissions(true);
     try {
       await action(
-        () => api.put<User>(`/api/users/${user.id}/permissions`, { permission_keys: [...next] }),
+        () =>
+          api.put<User>(`/api/users/${user.id}/permissions`, {
+            permission_keys: [...next],
+            expected_version: user.access_version,
+          }),
         "Permissions updated.",
       );
     } finally {
@@ -221,6 +225,7 @@ export function UserEditModal({
                             () =>
                               api.patch<User>(`/api/users/${user.id}/role`, {
                                 role_id: Number(e.target.value),
+                                expected_version: user.access_version,
                               }),
                             "Role updated.",
                           )

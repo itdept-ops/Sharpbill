@@ -4,12 +4,12 @@ import { useAuth } from "../auth/AuthContext";
 import { MatrixRain } from "../components/MatrixRain";
 
 const FEATURES = [
-  ["// IDENTITY", "Sign in with Google or Microsoft. Tokens are verified server-side and keyed to the provider's immutable id — not an email that can be changed."],
+  ["// IDENTITY", "When configured and enabled, Google and Microsoft tokens are verified server-side and keyed to the provider's immutable id — not an email that can be changed."],
   ["// ROLES & ACCESS", "A real permission system. Define roles, mint new permissions, and assign them — enforced from the database on every request."],
   ["// LIVE PRESENCE", "See who is online in real time. Presence rides the session, so the roster reflects who is actually at the console."],
   ["// KILL-SWITCH", "Kick any user in one click. Their session is revoked on the next request — no waiting for a token to expire."],
-  ["// DOCKERIZED", "The whole stack — API, database, and web — comes up with one command. Hot reload in dev, reproducible everywhere."],
-  ["// AUDIT-READY", "Every login records the verified provider id. Deactivate, reassign, or revoke — the trail is in the data."],
+  ["// LOCAL STACK", "API, database, and web run together through loopback-only Docker Compose. Production infrastructure and recovery controls are separate."],
+  ["// REQUEST TRACE", "Permission-gated request activity supports investigation. Production audit evidence still requires restricted, append-only export."],
 ];
 
 export function LandingPage() {

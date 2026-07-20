@@ -3,31 +3,10 @@ import { Link, Navigate, useLocation, useNavigate } from "react-router-dom";
 
 import { api, ApiError } from "../api/client";
 import { useAuth } from "../auth/AuthContext";
+import { GOOGLE_NONCE_REFRESH_MS, loadGoogleIdentityServices } from "../auth/google";
 import { MatrixRain } from "../components/MatrixRain";
 import type { AuthConfig, User } from "../types";
 import { captureLocation } from "../util/location";
-
-let googleScriptPromise: Promise<void> | null = null;
-
-function loadGoogleIdentityServices(): Promise<void> {
-  if (window.google) return Promise.resolve();
-  if (googleScriptPromise) return googleScriptPromise;
-  googleScriptPromise = new Promise((resolve, reject) => {
-    const script = document.createElement("script");
-    script.src = "https://accounts.google.com/gsi/client";
-    script.async = true;
-    script.defer = true;
-    script.dataset.kingfisherGoogleIdentity = "true";
-    script.onload = () => resolve();
-    script.onerror = () => {
-      googleScriptPromise = null;
-      script.remove();
-      reject(new Error("Google Identity Services failed to load"));
-    };
-    document.head.appendChild(script);
-  });
-  return googleScriptPromise;
-}
 
 function isAbort(error: unknown): boolean {
   return error instanceof DOMException && error.name === "AbortError";
@@ -44,10 +23,15 @@ export function LoginPage() {
   const [error, setError] = useState<string | null>(null);
   const [gsiFailed, setGsiFailed] = useState(false);
   const [gsiAttempt, setGsiAttempt] = useState(0);
-  const [signingIn, setSigningIn] = useState<"microsoft" | null>(null);
+  const [signingIn, setSigningIn] = useState<"google" | "microsoft" | null>(null);
   const [shareLocation, setShareLocation] = useState(false);
   const shareLocationRef = useRef(false);
   const googleBtnRef = useRef<HTMLDivElement>(null);
+  const signInInFlightRef = useRef(false);
+  // Provider booleans are meaningful only with the corresponding runtime public client ID. Treat
+  // an inconsistent response as unavailable instead of rendering a button that cannot work.
+  const googleClientId = config?.google ? config.google_client_id : null;
+  const microsoftClientId = config?.microsoft ? config.microsoft_client_id : null;
 
   const loadConfig = useCallback((signal?: AbortSignal) => {
     setConfigFailed(false);
@@ -77,10 +61,12 @@ export function LoginPage() {
   );
 
   useEffect(() => {
-    if (!config?.google) return;
+    if (!googleClientId) return;
     setGsiFailed(false);
     const controller = new AbortController();
     let cancelled = false;
+    let credentialHandled = false;
+    let refreshTimer: number | null = null;
 
     (async () => {
       try {
@@ -97,14 +83,33 @@ export function LoginPage() {
         const parent = googleBtnRef.current;
         parent.replaceChildren();
         window.google.accounts.id.initialize({
-          client_id: import.meta.env.VITE_GOOGLE_CLIENT_ID,
+          client_id: googleClientId,
           nonce,
           callback: async (resp) => {
+            // A rendered GSI button and its nonce are one-shot. Ignore duplicate/stale callbacks;
+            // the next usable button is always initialized with fresh backend state.
+            if (cancelled || credentialHandled || signInInFlightRef.current) return;
+            credentialHandled = true;
+            if (refreshTimer !== null) window.clearTimeout(refreshTimer);
+            signInInFlightRef.current = true;
+            setSigningIn("google");
             setError(null);
+            googleBtnRef.current?.replaceChildren();
             try {
-              onSuccess(await api.post<User>("/api/auth/google", { id_token: resp.credential }));
+              const authenticatedUser = await api.post<User>(
+                "/api/auth/google",
+                { id_token: resp.credential },
+                { signal: controller.signal },
+              );
+              if (cancelled) return;
+              setSigningIn(null);
+              onSuccess(authenticatedUser);
             } catch (e) {
+              if (cancelled || isAbort(e)) return;
               setError(e instanceof ApiError ? e.message : "Google sign-in failed");
+              signInInFlightRef.current = false;
+              setSigningIn(null);
+              setGsiAttempt((attempt) => attempt + 1);
             }
           },
         });
@@ -113,6 +118,13 @@ export function LoginPage() {
           size: "large",
           width: Math.min(320, Math.max(200, Math.floor(parent.clientWidth || 320))),
         });
+        refreshTimer = window.setTimeout(() => {
+          if (cancelled || credentialHandled) return;
+          // Invalidate this callback before scheduling the replacement to close the small gap
+          // between an expired timer firing and React running the effect cleanup.
+          credentialHandled = true;
+          setGsiAttempt((attempt) => attempt + 1);
+        }, GOOGLE_NONCE_REFRESH_MS);
       } catch (e) {
         if (!cancelled && !isAbort(e)) setGsiFailed(true);
       }
@@ -120,18 +132,21 @@ export function LoginPage() {
 
     return () => {
       cancelled = true;
+      if (refreshTimer !== null) window.clearTimeout(refreshTimer);
       controller.abort();
     };
-  }, [config?.google, gsiAttempt, onSuccess]);
+  }, [googleClientId, gsiAttempt, onSuccess]);
 
   const signInWithMicrosoft = async () => {
-    if (signingIn) return;
+    if (signInInFlightRef.current) return;
+    signInInFlightRef.current = true;
     setSigningIn("microsoft");
     setError(null);
     try {
       const nonce = (await api.post<{ nonce: string }>("/api/auth/nonce")).nonce;
       const { microsoftLogin } = await import("../auth/msal");
-      const idToken = await microsoftLogin(nonce);
+      if (!microsoftClientId) throw new Error("Microsoft sign-in is unavailable");
+      const idToken = await microsoftLogin(nonce, microsoftClientId);
       onSuccess(await api.post<User>("/api/auth/microsoft", { id_token: idToken }));
     } catch (e) {
       const cancelled = e instanceof Error && /cancel|popup_window_error/i.test(`${e.name} ${e.message}`);
@@ -143,17 +158,18 @@ export function LoginPage() {
             : "Microsoft sign-in failed. Please try again.",
       );
     } finally {
+      signInInFlightRef.current = false;
       setSigningIn(null);
     }
   };
 
   if (user) return <Navigate to={from} replace />;
 
-  const providerLabel = config?.google && config.microsoft
+  const providerLabel = googleClientId && microsoftClientId
     ? "Google or Microsoft"
-    : config?.google
+    : googleClientId
       ? "Google"
-      : config?.microsoft
+      : microsoftClientId
         ? "Microsoft"
         : null;
 
@@ -199,9 +215,14 @@ export function LoginPage() {
 
           {error && <div className="auth-error" role="alert">ERR: {error}</div>}
 
-          {config?.google && !gsiFailed && <div className="google-slot" ref={googleBtnRef} />}
+          {googleClientId && !gsiFailed && <div className="google-slot" ref={googleBtnRef} />}
+          {signingIn === "google" && (
+            <p className="muted small" role="status" aria-live="polite" style={{ margin: 0 }}>
+              Completing Google sign-in...
+            </p>
+          )}
 
-          {config?.google && gsiFailed && (
+          {googleClientId && gsiFailed && (
             <div className="auth-error" role="alert" style={{ display: "flex", alignItems: "center", gap: 10 }}>
               <span>ERR: Google sign-in couldn&apos;t load. Check your connection or blockers.</span>
               <span className="spacer" />
@@ -217,9 +238,9 @@ export function LoginPage() {
             </div>
           )}
 
-          {config?.google && config.microsoft && <div className="auth-divider">OR</div>}
+          {googleClientId && microsoftClientId && <div className="auth-divider">OR</div>}
 
-          {config?.microsoft && (
+          {microsoftClientId && (
             <button
               className="sso-btn"
               type="button"
@@ -234,7 +255,7 @@ export function LoginPage() {
             </button>
           )}
 
-          {config && !config.google && !config.microsoft && !configFailed && (
+          {config && !googleClientId && !microsoftClientId && !configFailed && (
             <p className="auth-error" role="alert">
               No sign-in provider is currently available. Contact an administrator.
             </p>

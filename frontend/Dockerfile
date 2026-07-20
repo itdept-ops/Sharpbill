@@ -9,13 +9,9 @@ FROM base AS dev
 EXPOSE 5173
 CMD ["npm", "run", "dev", "--", "--host", "0.0.0.0"]
 
-# ---- build: static assets; VITE_* baked in at BUILD time ----
+# ---- build: static assets; public OAuth IDs are loaded from the API at runtime ----
 FROM base AS build
 COPY . .
-ARG VITE_GOOGLE_CLIENT_ID
-ARG VITE_AZURE_CLIENT_ID
-ENV VITE_GOOGLE_CLIENT_ID=$VITE_GOOGLE_CLIENT_ID \
-    VITE_AZURE_CLIENT_ID=$VITE_AZURE_CLIENT_ID
 RUN npm run build
 
 # ---- prod: nginx serves the SPA with a history fallback ----

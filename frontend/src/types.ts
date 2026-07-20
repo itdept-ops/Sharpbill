@@ -48,6 +48,7 @@ export interface User {
   permissions: string[]; // effective = role ∪ direct grants
   role_permissions: string[]; // inherited from the role
   direct_permissions: string[]; // granted directly to this user
+  access_version: number;
   is_active: boolean;
   is_approved: boolean;
   status: UserStatus;
@@ -83,6 +84,8 @@ export interface ProfileUpdate {
 export interface AuthConfig {
   google: boolean;
   microsoft: boolean;
+  google_client_id: string | null;
+  microsoft_client_id: string | null;
   dev: boolean;
   calm: boolean;
 }
@@ -112,6 +115,7 @@ export interface Role {
   is_system: boolean;
   permissions: Permission[];
   user_count: number;
+  version: number;
 }
 
 export interface PresenceUser {
@@ -125,6 +129,8 @@ export interface Presence {
   online: PresenceUser[];
   count: number;
   window_seconds: number;
+  truncated: boolean;
+  roster_limit: number;
 }
 
 export interface SiteSettings {
@@ -160,4 +166,5 @@ export interface RequestLog {
 export interface RequestLogList {
   items: RequestLog[];
   total: number;
+  next_cursor: number | null;
 }

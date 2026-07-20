@@ -202,7 +202,11 @@ export function UserProfile({ user: initial }: { user: User }) {
                       value={user.role_id}
                       onChange={(e) =>
                         adminAction(
-                          () => api.patch<User>(`/api/users/${user.id}/role`, { role_id: Number(e.target.value) }),
+                          () =>
+                            api.patch<User>(`/api/users/${user.id}/role`, {
+                              role_id: Number(e.target.value),
+                              expected_version: user.access_version,
+                            }),
                           "Role updated.",
                         )
                       }

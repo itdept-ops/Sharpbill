@@ -37,7 +37,7 @@ const SIGN_IN: [string, string, string][] = [
   ],
   [
     "The app mints its own session",
-    "A short-lived app JWT (HS256) is set in an HttpOnly, SameSite=Lax, Secure-in-prod cookie. The provider token is discarded and never stored.",
+    "A short-lived app JWT (HS256) with issuer, audience, token type, subject, jti, expiry, and a rotation key id is set in an HttpOnly, SameSite=Lax, __Host- Secure production cookie. The provider token is discarded and never stored.",
     "SESSION COOKIE",
   ],
 ];
@@ -45,7 +45,7 @@ const SIGN_IN: [string, string, string][] = [
 const EVERY_REQUEST: [string, string, string][] = [
   [
     "Decode the session cookie",
-    "The app JWT is verified with the pinned HS256 algorithm; exp/iat/sub are required. No cookie or a bad one → 401.",
+    "The app JWT is verified with the pinned HS256 algorithm and configured rotation keyring; iss, aud, type, exp, iat, sub, and jti are required. No cookie or a bad one → 401.",
     "VERIFY",
   ],
   [
@@ -55,20 +55,20 @@ const EVERY_REQUEST: [string, string, string][] = [
   ],
   [
     "Apply the lifecycle + kill-switch gate",
-    "Deactivated, unapproved, or a token minted at/before a kick or logout (the session_valid_after epoch) → 401. Revocation is immediate on the next request.",
+    "Deactivated or unapproved accounts fail closed. Logout revokes that device's persisted session row; kick/all-device actions also advance the account epoch. Revocation is enforced on the next request.",
     "REVOCABLE",
   ],
   [
     "Check the required permission",
-    "require_permission(\"users.manage\") asserts the freshly-read role grants that key. Missing → 403. The check is data, not code — no redeploy to change access.",
+    "require_permission(\"users.manage\") checks the freshly-read union of role and direct grants. Missing → 403. The check is data, not a stale token claim.",
     "AUTHORIZE",
   ],
 ];
 
 const RBAC: [string, string][] = [
-  ["Model", "Each user has one role; a role holds many permissions; both live in the database."],
-  ["Runtime editable", "Admins mint new permissions and roles and assign them through the roles builder — enforced on the next request."],
-  ["No amplification", "You can only grant a role/permission you already hold — a delegate can't mint a role more powerful than itself."],
+  ["Model", "Each user has one role plus optional direct grants; effective permissions are their union and live in the database."],
+  ["Runtime editable", "Administrators and authorized roles.manage delegates can maintain the RBAC catalog; changes are enforced on the next request."],
+  ["No delegate amplification", "A non-admin delegate can grant only permissions it already holds and cannot mutate a principal whose effective access outranks it. Administrators retain full catalog authority."],
   ["Protected floor", "System roles can't be rewritten, the admin role is locked, and the last active admin can't be demoted or deactivated."],
 ];
 

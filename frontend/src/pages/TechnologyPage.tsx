@@ -13,25 +13,25 @@ const STACK = [
   {
     head: "// BACKEND",
     badge: "API",
-    items: ["Python 3.12 · FastAPI", "SQLAlchemy 2.x ORM", "Alembic migrations", "Pydantic v2 validation", "PyMySQL driver"],
+    items: ["Python 3.13 · FastAPI", "Digest-pinned Wolfi runtime", "SQLAlchemy 2.x ORM", "Alembic migrations", "Pydantic v2 validation", "PyMySQL driver"],
   },
   {
     head: "// DATA",
     badge: "RDBMS",
-    items: ["MySQL 8.0 · utf8mb4", "Roles / permissions / identities", "Per-request authorization reads", "Versioned, seeded migrations"],
+    items: ["MySQL 8.4 LTS · utf8mb4", "Roles / permissions / identities", "Per-request authorization reads", "Versioned, seeded migrations"],
   },
   {
     head: "// PLATFORM",
     badge: "DEVOPS",
-    items: ["Docker Compose (one command)", "GitHub Actions CI", "Caddy + Let's Encrypt (prod)", "OIDC-federated deploys (planned)"],
+    items: ["Loopback-only Docker Compose", "GitHub Actions test workflow", "Digest-pinned runtime images", "Caddy topology (reference only)"],
   },
 ];
 
 const FLOW = [
   ["Browser", "React SPA, cookie-only session"],
-  ["Edge", "Vite proxy (dev) / Caddy TLS (prod)"],
+  ["Edge", "Vite proxy (dev) / Caddy reference (not wired)"],
   ["API", "FastAPI · verify · authorize · serve"],
-  ["Data", "MySQL 8 · roles read every request"],
+  ["Data", "MySQL 8.4 LTS · roles read every request"],
 ];
 
 export function TechnologyPage() {
@@ -58,10 +58,10 @@ export function TechnologyPage() {
             Built the modern way — <span className="lit">agentically.</span>
           </h1>
           <p>
-            Kingfisher is a full-stack access-control console designed, built, reviewed, and
-            shipped through a multi-agent workflow: models handle the grind — code, tests, docs,
+            Kingfisher is a full-stack access-control console designed, built, and reviewed through
+            a multi-agent workflow: models handle the grind — code, tests, docs,
             adversarial review — while the architect steers intent. What follows is the actual
-            stack under this running system.
+            repository baseline, not a claim of production deployment.
           </p>
         </header>
 
@@ -98,14 +98,14 @@ export function TechnologyPage() {
               <li>Design: a judged panel of art directions → one build-ready system</li>
               <li>Build: parallel section drafters, integrated by hand</li>
               <li>Review: adversarial security agents that try to break the auth</li>
-              <li>Verify: real tests + a live browser drive before every commit</li>
+              <li>Verify: automated checks plus selected local browser flows</li>
             </ul>
           </div>
           <div className="panel panel--brackets tech-card">
-            <div className="tc-head"><span>// PROOF</span><span className="badge">SHIPPING</span></div>
+            <div className="tc-head"><span>// PROOF</span><span className="badge">EVIDENCE</span></div>
             <div className="kv-inline">
               The adversarial review isn't decoration: it caught real privilege-escalation bugs in
-              this very RBAC and forced fixes — <b>the proof is running software, not slideware.</b>
+              this very RBAC and forced fixes — <b>the evidence is in regression tests and history.</b>
             </div>
           </div>
         </div>
@@ -128,8 +128,8 @@ export function TechnologyPage() {
           <div className="panel panel--brackets tech-card">
             <div className="tc-head"><span>// IDENTITY</span></div>
             <div className="kv-inline">
-              Sign-in via Google/Microsoft OIDC, verified server-side and keyed to the provider's
-              <b> immutable id</b> — never a mutable email.
+              When configured and enabled, Google/Microsoft OIDC is verified server-side and keyed
+              to the provider's <b>immutable id</b> — never a mutable email.
             </div>
           </div>
           <div className="panel panel--brackets tech-card">

@@ -48,6 +48,7 @@ export function AdminUsersPage() {
 
   const canManage = !!me?.permissions.includes("users.manage");
   const canManageRoles = !!me?.permissions.includes("roles.manage");
+  const canExport = !!me?.permissions.includes("users.export");
   const canEditRole = canManage && canManageRoles;
 
   const query = useCallback(() => {
@@ -209,9 +210,11 @@ export function AdminUsersPage() {
           online only
         </label>
         <span className="spacer" />
-        <button className="icon-btn" onClick={exportCsv}>
-          ⭳ Export CSV
-        </button>
+        {canExport && (
+          <button className="icon-btn" onClick={exportCsv}>
+            ⭳ Export CSV
+          </button>
+        )}
       </div>
 
       {canManage && selected.size > 0 && (
@@ -299,7 +302,14 @@ export function AdminUsersPage() {
                           className="field-input"
                           value={u.role_id}
                           onChange={(e) =>
-                            act(() => api.patch<User>(`/api/users/${u.id}/role`, { role_id: Number(e.target.value) }), u)
+                            act(
+                              () =>
+                                api.patch<User>(`/api/users/${u.id}/role`, {
+                                  role_id: Number(e.target.value),
+                                  expected_version: u.access_version,
+                                }),
+                              u,
+                            )
                           }
                         >
                           {roles.map((r) => <option key={r.id} value={r.id}>{r.name}</option>)}

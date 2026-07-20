@@ -12,6 +12,7 @@ interface RoleDraft {
   description: string;
   isSystem: boolean;
   keys: string[];
+  version?: number;
 }
 
 export function AdminRolesPage() {
@@ -41,7 +42,10 @@ export function AdminRolesPage() {
     setBanner(null);
     setBusyRoles((current) => new Set(current).add(role.id));
     try {
-      const updated = await api.patch<Role>(`/api/roles/${role.id}`, { permission_keys: keys });
+      const updated = await api.patch<Role>(`/api/roles/${role.id}`, {
+        permission_keys: keys,
+        expected_version: role.version,
+      });
       setRoles((rs) => rs.map((r) => (r.id === updated.id ? updated : r)));
     } catch (e) {
       fail(e, "update role");
@@ -70,6 +74,7 @@ export function AdminRolesPage() {
           name: roleDraft.isSystem ? undefined : roleDraft.name,
           description: roleDraft.description,
           permission_keys: roleDraft.keys,
+          expected_version: roleDraft.version,
         });
       }
       setRoleDraft(null);
@@ -85,7 +90,7 @@ export function AdminRolesPage() {
   const deleteRole = async (role: Role) => {
     setBanner(null);
     try {
-      await api.del(`/api/roles/${role.id}`);
+      await api.del(`/api/roles/${role.id}?expected_version=${role.version}`);
       setRoles((rs) => rs.filter((r) => r.id !== role.id));
       setBanner({ msg: `Deleted role "${role.name}".`, ok: true });
     } catch (e) {
@@ -196,6 +201,7 @@ export function AdminRolesPage() {
                         description: role.description ?? "",
                         isSystem: role.is_system,
                         keys: role.permissions.map((p) => p.key),
+                        version: role.version,
                       })
                     }
                   >

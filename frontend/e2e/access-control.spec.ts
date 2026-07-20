@@ -3,17 +3,25 @@ import { test, expect, type Page } from "@playwright/test";
 // Sign in through the local-only dev-login (no OAuth keys needed) — a deterministic seam that
 // still exercises the real session cookie + per-request authorization the app enforces.
 async function devLogin(page: Page, email: string, role: string): Promise<void> {
+  const devAuthSecret = process.env.E2E_DEV_AUTH_SECRET;
+  if (!devAuthSecret) {
+    throw new Error("E2E_DEV_AUTH_SECRET is required for the local-only dev login");
+  }
+
   await page.goto("/login");
   const status = await page.evaluate(
-    async ({ email, role }) => {
+    async ({ email, role, devAuthSecret }) => {
       const r = await fetch("/api/auth/dev", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          "X-Dev-Auth-Secret": devAuthSecret,
+        },
         body: JSON.stringify({ email, role }),
       });
       return r.status;
     },
-    { email, role },
+    { email, role, devAuthSecret },
   );
   expect(status).toBe(200);
 }
