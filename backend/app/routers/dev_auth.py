@@ -12,6 +12,7 @@ from app.auth.sessions import SessionPrincipalUnavailable, start_session
 from app.config import settings
 from app.db import get_db
 from app.errors import ApiError
+from app.legal_acceptance import require_current_legal_acceptance
 from app.models import Role
 from app.schemas.auth import DevLoginRequest
 from app.schemas.user import UserOut
@@ -37,6 +38,10 @@ def dev_login(
     _: None = Depends(require_dev_auth_secret),
     db: Session = Depends(get_db),
 ) -> UserOut:
+    require_current_legal_acceptance(
+        accepted=body.legal_accepted,
+        bundle_version=body.legal_bundle_version,
+    )
     user = dev_upsert_user(db, str(body.email), body.role, body.display_name)
     if user.erased_at is not None:
         raise ApiError(403, "ACCOUNT_ERASED", "This account has been erased")
@@ -56,7 +61,13 @@ def dev_login(
         metadata={"provider": "dev"},
     )
     try:
-        token = start_session(db, user.id, request)
+        token = start_session(
+            db,
+            user.id,
+            request,
+            legal_accepted=body.legal_accepted,
+            legal_bundle_version=body.legal_bundle_version,
+        )
     except SessionPrincipalUnavailable as exc:
         db.rollback()
         commit_security_event(

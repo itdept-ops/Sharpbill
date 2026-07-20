@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from pydantic import BaseModel, ConfigDict, EmailStr, Field, FiniteFloat
+from pydantic import BaseModel, ConfigDict, EmailStr, Field, FiniteFloat, StrictBool
 
 from app.models import UserSession
 
@@ -8,6 +8,8 @@ from app.models import UserSession
 class TokenLoginRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
     id_token: str = Field(min_length=1, max_length=16_384)
+    legal_accepted: StrictBool
+    legal_bundle_version: str = Field(min_length=1, max_length=64)
 
 
 class DevLoginRequest(BaseModel):
@@ -17,6 +19,8 @@ class DevLoginRequest(BaseModel):
     email: EmailStr
     role: str | None = Field(default=None, min_length=1, max_length=49)
     display_name: str | None = Field(default=None, max_length=255)
+    legal_accepted: StrictBool
+    legal_bundle_version: str = Field(min_length=1, max_length=64)
 
 
 class AuthConfig(BaseModel):

@@ -1,4 +1,5 @@
 from app.models.base import Base
+from app.models.legal_acceptance import LegalAcceptance
 from app.models.login_nonce import LoginNonce
 from app.models.permission import Permission
 from app.models.request_log import RequestLog
@@ -13,6 +14,7 @@ from app.models.user_session import UserSession
 
 __all__ = [
     "Base",
+    "LegalAcceptance",
     "LoginNonce",
     "Permission",
     "RequestLog",

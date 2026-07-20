@@ -34,6 +34,7 @@ def test_privacy_status_exposes_enforced_policy_and_self_service_erasure(client,
         "erasure_grace_days": settings.account_erasure_grace_days,
         "disabled_accounts_days": settings.disabled_account_retention_days,
         "security_events_days": settings.security_event_retention_days,
+        "legal_acceptances_days": settings.legal_acceptance_retention_days,
         "generated_exports_retained": False,
     }
 

@@ -18,6 +18,7 @@ from sqlalchemy.orm import Session, selectinload
 from app.auth.sessions import prune_stale_sessions
 from app.config import settings
 from app.models import (
+    LegalAcceptance,
     RequestLog,
     Role,
     SecurityEvent,
@@ -194,6 +195,23 @@ def anonymize_user(
     # immutable provider key and signed authority so the erased identity cannot reprovision or
     # become an "unclaimed" administrator bootstrap subject.
     db.execute(delete(UserSession).where(UserSession.user_id == user.id))
+    # Contract versions and time remain for the configured legal-evidence period, but request
+    # metadata no longer has a product purpose after erasure. Core is intentional: ordinary ORM
+    # mutation/deletion is blocked by LegalAcceptance's append-only mapper guard.
+    acceptance_table = cast(Table, LegalAcceptance.__table__)
+    db.execute(
+        acceptance_table.update()
+        .where(
+            acceptance_table.c.user_id == user.id,
+            acceptance_table.c.personal_data_erased_at.is_(None),
+        )
+        .values(
+            source_ip=None,
+            user_agent=None,
+            request_id=None,
+            personal_data_erased_at=current,
+        )
+    )
     add_security_event(
         db,
         event_type="privacy.account.erased",
@@ -345,4 +363,44 @@ def prune_security_events_governed(db: Session, limit: int, *, now: datetime | N
         # policy-governed expiry boundary.
         security_event_table = cast(Table, SecurityEvent.__table__)
         db.execute(security_event_table.delete().where(security_event_table.c.id.in_(stale_ids)))
+    return len(stale_ids)
+
+
+def prune_legal_acceptances_governed(
+    db: Session, limit: int, *, now: datetime | None = None
+) -> int:
+    """Delete expired evidence under the earlier of cohort and current policy deadlines.
+
+    ``retention_until`` preserves the deadline in force when the evidence was created. A later
+    policy reduction is also applied to existing cohorts through the indexed ``accepted_at``
+    cutoff. A policy increase can therefore never silently extend an already-stored deadline.
+    """
+    if retention_hold_active(db):
+        return 0
+    current = now or _now()
+    stale_ids = list(
+        db.scalars(
+            select(LegalAcceptance.id)
+            .where(LegalAcceptance.retention_until <= current)
+            .order_by(LegalAcceptance.retention_until, LegalAcceptance.id)
+            .limit(limit)
+            .with_for_update(skip_locked=True)
+        )
+    )
+    remaining = limit - len(stale_ids)
+    if remaining > 0:
+        policy_cutoff = current - timedelta(days=settings.legal_acceptance_retention_days)
+        policy_query = (
+            select(LegalAcceptance.id)
+            .where(LegalAcceptance.accepted_at <= policy_cutoff)
+            .order_by(LegalAcceptance.accepted_at, LegalAcceptance.id)
+            .limit(remaining)
+            .with_for_update(skip_locked=True)
+        )
+        if stale_ids:
+            policy_query = policy_query.where(LegalAcceptance.id.not_in(stale_ids))
+        stale_ids.extend(db.scalars(policy_query))
+    if stale_ids:
+        acceptance_table = cast(Table, LegalAcceptance.__table__)
+        db.execute(acceptance_table.delete().where(acceptance_table.c.id.in_(stale_ids)))
     return len(stale_ids)

@@ -19,6 +19,7 @@ from app.db import SessionLocal
 from app.privacy_lifecycle import (
     anonymize_due_accounts,
     clear_stale_precise_locations,
+    prune_legal_acceptances_governed,
     prune_request_logs_governed,
     prune_security_events_governed,
     prune_sessions_governed,
@@ -44,6 +45,8 @@ class RetentionResult:
     account_batches: int
     security_events_deleted: int
     security_event_batches: int
+    legal_acceptances_deleted: int
+    legal_acceptance_batches: int
 
 
 def _drain_bounded(
@@ -76,6 +79,7 @@ def run_retention_cycle(
     precise_location_batch_size: int | None = None,
     account_batch_size: int | None = None,
     security_event_batch_size: int | None = None,
+    legal_acceptance_batch_size: int | None = None,
     max_batches: int | None = None,
 ) -> RetentionResult:
     """Apply every lifecycle rule in independently committed, strictly bounded batches."""
@@ -106,6 +110,11 @@ def run_retention_cycle(
         if security_event_batch_size is None
         else security_event_batch_size
     )
+    acceptance_batch_size = (
+        settings.legal_acceptance_prune_batch_size
+        if legal_acceptance_batch_size is None
+        else legal_acceptance_batch_size
+    )
     cycle_batch_limit = (
         settings.retention_worker_max_batches_per_cycle if max_batches is None else max_batches
     )
@@ -117,6 +126,7 @@ def run_retention_cycle(
             location_batch_size,
             user_account_batch_size,
             event_batch_size,
+            acceptance_batch_size,
             cycle_batch_limit,
         )
         < 1
@@ -169,6 +179,12 @@ def run_retention_cycle(
         batch_size=event_batch_size,
         max_batches=cycle_batch_limit,
     )
+    acceptances_deleted, acceptance_batches = _drain_bounded(
+        factory,
+        prune_legal_acceptances_governed,
+        batch_size=acceptance_batch_size,
+        max_batches=cycle_batch_limit,
+    )
     result = RetentionResult(
         nonces_deleted=nonces_deleted,
         nonce_batches=nonce_batches,
@@ -182,6 +198,8 @@ def run_retention_cycle(
         account_batches=account_batches,
         security_events_deleted=events_deleted,
         security_event_batches=event_batches,
+        legal_acceptances_deleted=acceptances_deleted,
+        legal_acceptance_batches=acceptance_batches,
     )
     _log.info(
         "%s",

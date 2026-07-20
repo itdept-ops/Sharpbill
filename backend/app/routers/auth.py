@@ -20,6 +20,7 @@ from app.config import settings
 from app.db import get_db
 from app.errors import ApiError
 from app.geo import place_for, timezone_for
+from app.legal_acceptance import require_current_legal_acceptance
 from app.models import SiteSettings, User, UserSession
 from app.schemas.auth import AuthConfig, LocationUpdate, SessionOut, TokenLoginRequest
 from app.schemas.user import UserOut
@@ -141,6 +142,10 @@ def auth_nonce() -> dict:
 def login_google(
     body: TokenLoginRequest, request: Request, response: Response, db: Session = Depends(get_db)
 ) -> UserOut:
+    require_current_legal_acceptance(
+        accepted=body.legal_accepted,
+        bundle_version=body.legal_bundle_version,
+    )
     _assert_provider_login_enabled(db, request, "google")
     try:
         ident = verify_google_id_token(body.id_token)
@@ -171,7 +176,13 @@ def login_google(
         metadata={"provider": "google"},
     )
     try:
-        token = start_session(db, user.id, request)
+        token = start_session(
+            db,
+            user.id,
+            request,
+            legal_accepted=body.legal_accepted,
+            legal_bundle_version=body.legal_bundle_version,
+        )
     except SessionPrincipalUnavailable as exc:
         _audit_login_failure(db, request, provider="google", reason=exc.code)
         raise ApiError(403, exc.code, exc.message) from None
@@ -183,6 +194,10 @@ def login_google(
 def login_microsoft(
     body: TokenLoginRequest, request: Request, response: Response, db: Session = Depends(get_db)
 ) -> UserOut:
+    require_current_legal_acceptance(
+        accepted=body.legal_accepted,
+        bundle_version=body.legal_bundle_version,
+    )
     _assert_provider_login_enabled(db, request, "microsoft")
     try:
         ident = verify_microsoft_id_token(body.id_token)
@@ -213,7 +228,13 @@ def login_microsoft(
         metadata={"provider": "microsoft"},
     )
     try:
-        token = start_session(db, user.id, request)
+        token = start_session(
+            db,
+            user.id,
+            request,
+            legal_accepted=body.legal_accepted,
+            legal_bundle_version=body.legal_bundle_version,
+        )
     except SessionPrincipalUnavailable as exc:
         _audit_login_failure(db, request, provider="microsoft", reason=exc.code)
         raise ApiError(403, exc.code, exc.message) from None

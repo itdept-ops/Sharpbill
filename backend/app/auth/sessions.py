@@ -14,6 +14,7 @@ from sqlalchemy.orm import Session
 
 from app.auth.jwt import create_session_token
 from app.config import settings
+from app.legal_acceptance import add_legal_acceptance, require_current_legal_acceptance
 from app.models import User, UserSession
 
 _CLEANUP_BATCH_SIZE = 500
@@ -96,8 +97,21 @@ def _enforce_concurrent_session_cap(db: Session, user_id: int, now: datetime) ->
         db.execute(update(UserSession).where(UserSession.id.in_(oldest_ids)).values(revoked_at=now))
 
 
-def start_session(db: Session, user_id: int, request: Request) -> str:
-    """Create a session row for a fresh login and return the cookie token bound to it."""
+def start_session(
+    db: Session,
+    user_id: int,
+    request: Request,
+    *,
+    legal_accepted: bool,
+    legal_bundle_version: str,
+) -> str:
+    """Atomically record current legal acceptance and issue a fresh device session."""
+    # Keep this check at the issuance boundary even though HTTP routes reject stale bundles before
+    # provider work. Any future/internal session issuer must satisfy the same invariant.
+    require_current_legal_acceptance(
+        accepted=legal_accepted,
+        bundle_version=legal_bundle_version,
+    )
     now = _now()
     # Serialize concurrent logins for one account so two requests cannot both observe spare
     # capacity and exceed the per-user ceiling.
@@ -116,6 +130,10 @@ def start_session(db: Session, user_id: int, request: Request) -> str:
         )
     if not principal.is_active:
         raise SessionPrincipalUnavailable("ACCOUNT_DISABLED", "This account has been deactivated")
+    # Record only after the current locking read passes every lifecycle gate. The acceptance,
+    # immutable security event, and session row share the commit below; no orphaned evidence can
+    # survive a session-issuance failure.
+    add_legal_acceptance(db, user_id=user_id, request=request, accepted_at=now)
     _enforce_concurrent_session_cap(db, user_id, now)
     jti = uuid.uuid4().hex
     ua = request.headers.get("user-agent")

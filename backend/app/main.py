@@ -20,6 +20,7 @@ from app.routers import (
     auth,
     dashboard,
     health,
+    legal,
     logs,
     presence,
     privacy,
@@ -383,6 +384,7 @@ if settings.trusted_proxy_ip_list:
 
 
 app.include_router(health.router, prefix="/api")
+app.include_router(legal.router, prefix="/api/legal", tags=["legal"])
 app.include_router(auth.router, prefix="/api/auth", tags=["auth"])
 app.include_router(privacy.router, prefix="/api/privacy", tags=["privacy"])
 app.include_router(users.router, prefix="/api/users", tags=["users"])

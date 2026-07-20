@@ -11,6 +11,7 @@ class RetentionPolicyOut(BaseModel):
     erasure_grace_days: int
     disabled_accounts_days: int
     security_events_days: int
+    legal_acceptances_days: int
     generated_exports_retained: bool = False
 
 

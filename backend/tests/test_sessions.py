@@ -216,7 +216,13 @@ def test_session_issuance_rechecks_lifecycle_after_a_stale_login_read(client):
             }
         )
         with pytest.raises(SessionPrincipalUnavailable) as caught:
-            start_session(stale_session, user["id"], request)
+            start_session(
+                stale_session,
+                user["id"],
+                request,
+                legal_accepted=True,
+                legal_bundle_version="2026-07-20-v1",
+            )
         assert caught.value.code == "ACCOUNT_ERASED"
         stale_session.rollback()
 

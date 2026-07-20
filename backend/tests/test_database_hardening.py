@@ -624,5 +624,66 @@ def test_0019_refuses_to_discard_privacy_lifecycle_evidence_and_round_trips():
         engine.dispose()
 
 
+def test_0020_refuses_to_discard_legal_acceptance_evidence_and_round_trips():
+    engine.dispose()
+    try:
+        with engine.begin() as connection:
+            role_id = connection.scalar(text("SELECT id FROM roles WHERE name='user'"))
+            user_id = connection.execute(
+                text(
+                    "INSERT INTO users (email, display_name, role_id) "
+                    "VALUES ('legal-migration@example.com', 'Legal migration', :role_id)"
+                ),
+                {"role_id": role_id},
+            ).lastrowid
+            connection.execute(
+                text(
+                    "INSERT INTO legal_acceptances "
+                    "(user_id, bundle_version, terms_version, eula_version, "
+                    "acceptable_use_version, privacy_version, terms_sha256, eula_sha256, "
+                    "acceptable_use_sha256, privacy_sha256, accepted_at, retention_until) "
+                    "VALUES (:user_id, 'migration-v1', 'terms-v1', 'eula-v1', 'aup-v1', "
+                    "'privacy-v1', :digest, :digest, :digest, :digest, CURRENT_TIMESTAMP(6), "
+                    "DATE_ADD(CURRENT_TIMESTAMP(6), INTERVAL 2555 DAY))"
+                ),
+                {"user_id": user_id, "digest": "a" * 64},
+            )
+
+        with pytest.raises(RuntimeError, match="legal acceptance evidence would be lost"):
+            command.downgrade(_alembic_config(), "0019")
+
+        with engine.connect() as connection:
+            assert connection.scalar(text("SELECT version_num FROM alembic_version")) == "0020"
+            columns = {
+                item["name"] for item in inspect(connection).get_columns("legal_acceptances")
+            }
+            assert {
+                "bundle_version",
+                "terms_version",
+                "eula_version",
+                "acceptable_use_version",
+                "privacy_version",
+                "terms_sha256",
+                "eula_sha256",
+                "acceptable_use_sha256",
+                "privacy_sha256",
+                "personal_data_erased_at",
+            } <= columns
+
+        with engine.begin() as connection:
+            connection.execute(text("DELETE FROM legal_acceptances"))
+        command.downgrade(_alembic_config(), "0019")
+        with engine.connect() as connection:
+            assert connection.scalar(text("SELECT version_num FROM alembic_version")) == "0019"
+            assert "legal_acceptances" not in inspect(connection).get_table_names()
+        command.upgrade(_alembic_config(), "head")
+        with engine.connect() as connection:
+            assert connection.scalar(text("SELECT version_num FROM alembic_version")) == "0020"
+            assert "legal_acceptances" in inspect(connection).get_table_names()
+    finally:
+        command.upgrade(_alembic_config(), "head")
+        engine.dispose()
+
+
 def test_alembic_reports_no_model_drift_on_real_mysql():
     command.check(_alembic_config())

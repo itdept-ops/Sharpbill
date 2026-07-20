@@ -1,6 +1,8 @@
 """Unit tests for the security-critical config guards (FND-026): secret strength, the prod
 secure-cookie invariant, and the local-only dev-auth gate."""
 
+from pathlib import Path
+
 import pytest
 from pydantic import ValidationError
 from sqlalchemy.engine import make_url
@@ -172,6 +174,7 @@ def test_privacy_retention_defaults_are_conservative_and_bounded():
     assert configured.account_erasure_grace_days == 30
     assert configured.disabled_account_retention_days == 365
     assert configured.security_event_retention_days == 400
+    assert configured.legal_acceptance_retention_days == 2555
 
     with pytest.raises(ValidationError):
         Settings(**_base(precise_location_retention_hours=0))
@@ -179,6 +182,35 @@ def test_privacy_retention_defaults_are_conservative_and_bounded():
         Settings(**_base(account_erasure_grace_days=91))
     with pytest.raises(ValidationError):
         Settings(**_base(account_retention_prune_batch_size=1))
+    with pytest.raises(ValidationError):
+        Settings(**_base(legal_acceptance_retention_days=0))
+
+
+def test_legal_acceptance_retention_environment_surfaces_match_settings():
+    configured = Settings(
+        **_base(
+            legal_acceptance_retention_days=1825,
+            legal_acceptance_prune_batch_size=750,
+        )
+    )
+    assert configured.legal_acceptance_retention_days == 1825
+    assert configured.legal_acceptance_prune_batch_size == 750
+
+    repository = Path(__file__).resolve().parents[2]
+    compose_path = repository / "docker-compose.yml"
+    env_path = repository / ".env.example"
+    # The normal CI checkout exposes the repository root. The local dev API container mounts only
+    # ``backend`` at /app; its focused test runs still exercise the Settings fields above.
+    if not compose_path.is_file() or not env_path.is_file():
+        return
+    compose = compose_path.read_text(encoding="utf-8")
+    env_example = env_path.read_text(encoding="utf-8")
+    for variable in (
+        "LEGAL_ACCEPTANCE_RETENTION_DAYS",
+        "LEGAL_ACCEPTANCE_PRUNE_BATCH_SIZE",
+    ):
+        assert f"{variable}: ${{{variable}:-" in compose
+        assert f"{variable}=" in env_example
 
 
 def test_production_rejects_mutable_or_misbound_admin_bootstrap():

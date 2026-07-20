@@ -38,6 +38,7 @@ def _policy() -> RetentionPolicyOut:
         erasure_grace_days=settings.account_erasure_grace_days,
         disabled_accounts_days=settings.disabled_account_retention_days,
         security_events_days=settings.security_event_retention_days,
+        legal_acceptances_days=settings.legal_acceptance_retention_days,
     )
 
 

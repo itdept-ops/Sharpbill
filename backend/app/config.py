@@ -72,6 +72,10 @@ class Settings(BaseSettings):
     retention_worker_max_batches_per_cycle: int = Field(default=10, ge=1, le=100)
     retention_worker_shutdown_timeout_seconds: int = Field(default=10, ge=1, le=60)
     security_event_retention_days: int = Field(default=400, ge=30, le=2555)
+    # Provisional seven-year contract-evidence period, pending jurisdiction-specific counsel
+    # approval before production. Cleanup is bounded/hold-aware; direct request metadata is
+    # scrubbed earlier on account erasure.
+    legal_acceptance_retention_days: int = Field(default=2555, ge=1, le=3650)
     # Privacy lifecycle defaults. Every cleanup is independently bounded so one high-volume
     # category cannot monopolize the maintenance worker or a database transaction.
     precise_location_retention_hours: int = Field(default=24, ge=1, le=720)
@@ -82,6 +86,7 @@ class Settings(BaseSettings):
     precise_location_prune_batch_size: int = Field(default=500, ge=10, le=10_000)
     account_retention_prune_batch_size: int = Field(default=100, ge=10, le=1_000)
     security_event_prune_batch_size: int = Field(default=500, ge=10, le=10_000)
+    legal_acceptance_prune_batch_size: int = Field(default=500, ge=10, le=10_000)
 
     # Provider verification is intentionally bounded independently of the API worker pool. A
     # burst of attacker-supplied tokens must not consume every AnyIO worker while an upstream
