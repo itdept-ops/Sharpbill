@@ -1,4 +1,4 @@
-import { PublicClientApplication } from "@azure/msal-browser";
+import { BrowserCacheLocation, PublicClientApplication } from "@azure/msal-browser";
 
 let instance: PublicClientApplication | null = null;
 let ready: Promise<void> | null = null;
@@ -12,7 +12,9 @@ function getMsal(clientId: string): PublicClientApplication {
         authority: "https://login.microsoftonline.com/common", // multi-tenant + personal
         redirectUri: window.location.origin,
       },
-      cache: { cacheLocation: "sessionStorage" },
+      // Keep Microsoft tokens in this page's memory only. The backend session cookie is the
+      // durable application session, so browser storage does not need a second token copy.
+      cache: { cacheLocation: BrowserCacheLocation.MemoryStorage },
     });
     configuredClientId = clientId;
     ready = instance.initialize();

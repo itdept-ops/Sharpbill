@@ -4,7 +4,7 @@ import { api, ApiError } from "../api/client";
 import { useAuth } from "../auth/AuthContext";
 import { Panel } from "../components/Panel";
 import { ProviderBadge, RoleBadge, StatusPill } from "../components/badges";
-import type { ProfileUpdate, Role, User } from "../types";
+import type { PrivacyStatus, ProfileUpdate, Role, User } from "../types";
 
 const FIELDS: [keyof ProfileUpdate, string][] = [
   ["display_name", "Display name"],
@@ -20,6 +20,12 @@ function initials(u: User): string {
   return base.slice(0, 2).toUpperCase();
 }
 
+function formatUtcDateTime(value: string): string {
+  // API timestamps are UTC, while database-backed datetimes may serialize without a zone suffix.
+  const normalized = /(?:Z|[+-]\d{2}:\d{2})$/i.test(value) ? value : `${value}Z`;
+  return new Date(normalized).toLocaleString();
+}
+
 function StatusChip({ status }: { status: string }) {
   const cls = status === "active" ? "ok" : status === "pending" ? "info" : "off";
   const glyph = status === "active" ? "●" : status === "pending" ? "◆" : "✕";
@@ -33,6 +39,9 @@ export function UserProfile({ user: initial }: { user: User }) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState<ProfileUpdate>({});
   const [roles, setRoles] = useState<Role[]>([]);
+  const [privacy, setPrivacy] = useState<PrivacyStatus | null>(null);
+  const [privacyError, setPrivacyError] = useState<string | null>(null);
+  const [privacyAction, setPrivacyAction] = useState<"location" | "request" | "cancel" | null>(null);
 
   useEffect(() => setLocal(initial), [initial]);
 
@@ -46,6 +55,27 @@ export function UserProfile({ user: initial }: { user: User }) {
   useEffect(() => {
     if (canPickRole) api.get<Role[]>("/api/roles").then(setRoles).catch(() => setRoles([]));
   }, [canPickRole]);
+
+  useEffect(() => {
+    if (!isSelf) {
+      setPrivacy(null);
+      setPrivacyError(null);
+      return;
+    }
+    let active = true;
+    setPrivacyError(null);
+    api
+      .get<PrivacyStatus>("/api/privacy")
+      .then((status) => {
+        if (active) setPrivacy(status);
+      })
+      .catch((error) => {
+        if (active) setPrivacyError(error instanceof ApiError ? error.message : "Privacy settings failed to load");
+      });
+    return () => {
+      active = false;
+    };
+  }, [isSelf]);
 
   const apply = (u: User) => {
     setLocal(u);
@@ -83,6 +113,70 @@ export function UserProfile({ user: initial }: { user: User }) {
       setBanner({ msg: ok, ok: true });
     } catch (e) {
       setBanner({ msg: e instanceof ApiError ? e.message : "Action failed" });
+    }
+  };
+
+  const clearSavedLocation = async () => {
+    if (
+      !window.confirm(
+        "Clear your saved location and timezone now? This removes the stored values immediately and cannot be undone.",
+      )
+    ) {
+      return;
+    }
+    setPrivacyAction("location");
+    setBanner(null);
+    try {
+      await api.del<void>("/api/privacy/location");
+      apply({
+        ...user,
+        location: null,
+        timezone: null,
+        last_latitude: null,
+        last_longitude: null,
+        last_location_accuracy: null,
+        last_location_at: null,
+      });
+      setBanner({ msg: "Saved location and timezone cleared.", ok: true });
+    } catch (error) {
+      setBanner({ msg: error instanceof ApiError ? error.message : "Location could not be cleared" });
+    } finally {
+      setPrivacyAction(null);
+    }
+  };
+
+  const requestErasure = async () => {
+    if (!privacy) return;
+    if (
+      !window.confirm(
+        `Schedule account erasure in ${privacy.policy.erasure_grace_days} days? Your profile and personal data will be anonymized. You can cancel before the due date.`,
+      )
+    ) {
+      return;
+    }
+    setPrivacyAction("request");
+    setBanner(null);
+    try {
+      setPrivacy(await api.post<PrivacyStatus>("/api/privacy/erasure-request"));
+      setBanner({ msg: "Account erasure scheduled. You can cancel before the due date.", ok: true });
+    } catch (error) {
+      setBanner({ msg: error instanceof ApiError ? error.message : "Erasure request failed" });
+    } finally {
+      setPrivacyAction(null);
+    }
+  };
+
+  const cancelErasure = async () => {
+    if (!window.confirm("Cancel the scheduled account erasure and keep this account?")) return;
+    setPrivacyAction("cancel");
+    setBanner(null);
+    try {
+      setPrivacy(await api.del<PrivacyStatus>("/api/privacy/erasure-request"));
+      setBanner({ msg: "Account erasure cancelled.", ok: true });
+    } catch (error) {
+      setBanner({ msg: error instanceof ApiError ? error.message : "Erasure cancellation failed" });
+    } finally {
+      setPrivacyAction(null);
     }
   };
 
@@ -188,6 +282,86 @@ export function UserProfile({ user: initial }: { user: User }) {
             </>
           )}
         </Panel>
+
+        {isSelf && (
+          <Panel title="// PRIVACY">
+            {privacyError ? (
+              <div className="auth-error" role="alert">ERR: {privacyError}</div>
+            ) : !privacy ? (
+              <div className="muted" role="status">Loading privacy settingsâ€¦</div>
+            ) : (
+              <>
+                {privacy.retention_hold && (
+                  <div className="permission-note" role="status">
+                    A retention hold is active. Location deletion and new erasure requests are
+                    suspended; an existing erasure request can still be cancelled.
+                  </div>
+                )}
+                <div className="kv">
+                  <div className="kv-row">
+                    <span className="k">Saved location</span>
+                    <span className="v">
+                      {user.last_location_at || user.location || user.timezone
+                        ? `Stored; precise coordinates expire within ${privacy.policy.precise_location_hours} hours.`
+                        : "No location or timezone is saved."}
+                    </span>
+                  </div>
+                  <div className="kv-row">
+                    <span className="k">Account erasure</span>
+                    <span className="v">
+                      {privacy.erasure_due_at ? (
+                        <>
+                          Scheduled for{" "}
+                          <time dateTime={privacy.erasure_due_at}>
+                            {formatUtcDateTime(privacy.erasure_due_at)}
+                          </time>
+                          .
+                        </>
+                      ) : user.role === "admin" ? (
+                        "Administrator accounts cannot be scheduled for erasure."
+                      ) : (
+                        `Not scheduled; requests have a ${privacy.policy.erasure_grace_days}-day cancellation window.`
+                      )}
+                    </span>
+                  </div>
+                </div>
+                <div className="profile-actions">
+                  <button
+                    type="button"
+                    className="btn btn-ghost btn-sm"
+                    disabled={
+                      privacyAction !== null ||
+                      privacy.retention_hold ||
+                      !(user.last_location_at || user.location || user.timezone)
+                    }
+                    onClick={clearSavedLocation}
+                  >
+                    {privacyAction === "location" ? "Clearingâ€¦" : "Clear saved location"}
+                  </button>
+                  {privacy.erasure_due_at ? (
+                    <button
+                      type="button"
+                      className="btn btn-ghost btn-sm"
+                      disabled={privacyAction !== null}
+                      onClick={cancelErasure}
+                    >
+                      {privacyAction === "cancel" ? "Cancellingâ€¦" : "Cancel account erasure"}
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      className="btn btn-danger btn-sm"
+                      disabled={privacyAction !== null || privacy.retention_hold || user.role === "admin"}
+                      onClick={requestErasure}
+                    >
+                      {privacyAction === "request" ? "Schedulingâ€¦" : "Request account erasure"}
+                    </button>
+                  )}
+                </div>
+              </>
+            )}
+          </Panel>
+        )}
 
         {canAdmin && (
           <Panel title="// ADMIN CONTROLS">

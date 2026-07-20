@@ -4,6 +4,7 @@ export type SignupMode = "open" | "approval" | "closed";
 
 export interface Identity {
   provider: Provider;
+  namespace: string | null; // Microsoft signed tenant id; null for globally scoped providers
   subject: string; // immutable provider id (Google sub / Microsoft oid)
 }
 
@@ -141,6 +142,30 @@ export interface SiteSettings {
   default_role_name: string;
   calm_mode: boolean;
   updated_at: string;
+}
+
+export interface RetentionPolicy {
+  precise_location_hours: number;
+  pending_accounts_days: number;
+  sessions_after_expiry_or_revocation_days: number;
+  request_activity_days: number;
+  erasure_grace_days: number;
+  disabled_accounts_days: number;
+  security_events_days: number;
+  generated_exports_retained: boolean;
+}
+
+export interface PrivacyStatus {
+  policy: RetentionPolicy;
+  retention_hold: boolean;
+  erasure_requested_at: string | null;
+  erasure_due_at: string | null;
+}
+
+export interface PrivacyAdminStatus {
+  policy: RetentionPolicy;
+  retention_hold: boolean;
+  retention_hold_reference: string | null;
 }
 
 export interface SessionInfo {
