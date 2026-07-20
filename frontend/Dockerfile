@@ -18,8 +18,8 @@ ENV VITE_GOOGLE_CLIENT_ID=$VITE_GOOGLE_CLIENT_ID \
 RUN npm run build
 
 # ---- prod: nginx serves the SPA with a history fallback ----
-# Pinned to a specific nginx version (was the floating `nginx:alpine`). The master binds :80 as
-# root and drops workers to the unprivileged `nginx` user, per the official image.
-FROM nginx:1.27-alpine AS prod
+# Digest-pinned Alpine 3.24 image verified with Docker Scout on 2026-07-20.
+# The master binds :80 as root and drops workers to the unprivileged `nginx` user.
+FROM nginx:1.31.3-alpine-slim@sha256:45b82ed5f285b90d63df07ba70430fdd8f25624b416617d9e6dc93412b2006dc AS prod
 COPY nginx.conf /etc/nginx/conf.d/default.conf
 COPY --from=build /app/dist /usr/share/nginx/html
