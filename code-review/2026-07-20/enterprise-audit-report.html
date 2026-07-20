@@ -1,0 +1,727 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light dark">
+  <title>Kingfisher Enterprise Readiness Audit — 2026-07-20</title>
+  <style>
+    :root {
+      --bg:#f5f7fa; --surface:#ffffff; --surface-2:#eef3f7; --ink:#15202b; --muted:#526373;
+      --line:#d7e0e7; --navy:#102a43; --blue:#1769aa; --teal:#087f8c; --green:#177245;
+      --amber:#9a6700; --orange:#b54708; --red:#b42318; --red-bg:#fff0ed; --amber-bg:#fff8e6;
+      --green-bg:#eaf8f0; --blue-bg:#edf6ff; --shadow:0 10px 28px rgba(16,42,67,.08);
+      --radius:14px; --mono:"Cascadia Code","SFMono-Regular",Consolas,monospace;
+      --sans:Inter,ui-sans-serif,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+    }
+    [data-theme="dark"] {
+      --bg:#0b1219; --surface:#111c26; --surface-2:#182632; --ink:#e8f0f5; --muted:#a6b7c5;
+      --line:#2b3b48; --navy:#d7ebff; --blue:#70b9ed; --teal:#61d2d6; --green:#6fd49a;
+      --amber:#f2c45e; --orange:#ff9b66; --red:#ff8277; --red-bg:#321a1c; --amber-bg:#322812;
+      --green-bg:#113021; --blue-bg:#10283c; --shadow:0 14px 34px rgba(0,0,0,.28);
+    }
+    * { box-sizing:border-box; }
+    html { scroll-behavior:smooth; }
+    body { margin:0; background:var(--bg); color:var(--ink); font-family:var(--sans); line-height:1.55; }
+    a { color:var(--blue); text-underline-offset:2px; }
+    a:hover { text-decoration-thickness:2px; }
+    code,.mono { font-family:var(--mono); font-size:.92em; }
+    code { background:var(--surface-2); border:1px solid var(--line); border-radius:5px; padding:.08rem .3rem; }
+    .skip { position:absolute; top:-60px; left:12px; background:var(--surface); padding:10px 14px; z-index:20; }
+    .skip:focus { top:12px; }
+    .wrap { width:min(1220px,calc(100% - 36px)); margin-inline:auto; }
+    .topbar { position:sticky; top:0; z-index:12; border-bottom:1px solid var(--line); background:color-mix(in srgb,var(--surface) 92%,transparent); backdrop-filter:blur(12px); }
+    .topbar-inner { min-height:58px; display:flex; align-items:center; gap:18px; }
+    .brand { color:var(--navy); font-weight:800; letter-spacing:.08em; font-size:.82rem; white-space:nowrap; }
+    .topnav { display:flex; gap:14px; overflow:auto; flex:1; }
+    .topnav a { color:var(--muted); font-size:.82rem; text-decoration:none; white-space:nowrap; }
+    .topnav a:hover { color:var(--ink); }
+    button,select,input { font:inherit; }
+    .icon-btn { border:1px solid var(--line); background:var(--surface); color:var(--ink); border-radius:9px; min-width:38px; min-height:36px; cursor:pointer; }
+    .hero { padding:56px 0 30px; border-bottom:1px solid var(--line); background:linear-gradient(135deg,color-mix(in srgb,var(--blue-bg) 72%,var(--surface)),var(--surface)); }
+    .eyebrow { color:var(--teal); font:700 .76rem/1 var(--mono); letter-spacing:.13em; text-transform:uppercase; }
+    h1 { color:var(--navy); font-size:clamp(2rem,5vw,4.2rem); line-height:1.03; letter-spacing:-.045em; max-width:950px; margin:.75rem 0 1rem; }
+    .lede { max-width:850px; font-size:clamp(1rem,2vw,1.25rem); color:var(--muted); margin:0; }
+    .meta { display:flex; flex-wrap:wrap; gap:8px; margin-top:24px; }
+    .tag { display:inline-flex; align-items:center; gap:6px; border:1px solid var(--line); border-radius:999px; background:var(--surface); padding:6px 10px; font-size:.76rem; }
+    .decision { margin-top:28px; display:grid; grid-template-columns:auto 1fr; gap:18px; align-items:start; background:var(--red-bg); border:1px solid color-mix(in srgb,var(--red) 32%,var(--line)); border-left:6px solid var(--red); padding:20px; border-radius:var(--radius); }
+    .decision strong { color:var(--red); font:800 .82rem/1.2 var(--mono); letter-spacing:.08em; text-transform:uppercase; }
+    .decision p { margin:0; }
+    main section { scroll-margin-top:72px; padding:46px 0; }
+    main section + section { border-top:1px solid var(--line); }
+    h2 { color:var(--navy); font-size:clamp(1.55rem,3vw,2.25rem); letter-spacing:-.025em; margin:0 0 8px; }
+    h3 { color:var(--navy); margin:0 0 8px; }
+    .section-lede { color:var(--muted); max-width:850px; margin:0 0 26px; }
+    .cards { display:grid; grid-template-columns:repeat(12,1fr); gap:14px; }
+    .card { grid-column:span 3; min-width:0; overflow-x:auto; background:var(--surface); border:1px solid var(--line); border-radius:var(--radius); padding:18px; box-shadow:var(--shadow); }
+    .card.wide { grid-column:span 6; }
+    .card.full { grid-column:1/-1; }
+    .metric-label { color:var(--muted); font:700 .72rem/1.2 var(--mono); text-transform:uppercase; letter-spacing:.08em; }
+    .metric { color:var(--navy); font-size:2.25rem; line-height:1.1; font-weight:800; margin:.35rem 0; }
+    .metric-sub { color:var(--muted); font-size:.84rem; }
+    .sev-high .metric { color:var(--red); } .sev-med .metric { color:var(--orange); } .sev-low .metric { color:var(--blue); }
+    .score-layout { display:grid; grid-template-columns:minmax(0,1.25fr) minmax(280px,.75fr); gap:18px; }
+    .score-layout > *,.cards > *,.deep-grid > * { min-width:0; }
+    .score-list,.evidence-table,.roadmap { width:100%; border-collapse:collapse; }
+    .score-list th,.score-list td,.evidence-table th,.evidence-table td,.roadmap th,.roadmap td { padding:10px 12px; border-bottom:1px solid var(--line); vertical-align:top; text-align:left; }
+    .score-list th,.evidence-table th,.roadmap th { color:var(--muted); font:700 .7rem/1.2 var(--mono); letter-spacing:.07em; text-transform:uppercase; }
+    .bar { height:9px; border-radius:999px; background:var(--surface-2); overflow:hidden; min-width:120px; }
+    .bar > span { display:block; height:100%; width:var(--w); background:var(--bar,var(--teal)); border-radius:inherit; }
+    .grade { font-weight:800; color:var(--navy); white-space:nowrap; }
+    .callout { background:var(--blue-bg); border:1px solid color-mix(in srgb,var(--blue) 25%,var(--line)); border-radius:var(--radius); padding:18px; }
+    .callout.warning { background:var(--amber-bg); border-color:color-mix(in srgb,var(--amber) 32%,var(--line)); }
+    .callout p:last-child,.callout ul:last-child { margin-bottom:0; }
+    .architecture { display:grid; grid-template-columns:1fr auto 1.1fr auto 1.1fr auto 1fr; align-items:stretch; gap:10px; margin:26px 0; }
+    .node { border:1px solid var(--line); background:var(--surface); border-radius:12px; padding:16px; min-height:128px; }
+    .node b { display:block; color:var(--navy); margin-bottom:7px; }
+    .node small { color:var(--muted); display:block; }
+    .node.risk { border-top:4px solid var(--red); }
+    .node.warn { border-top:4px solid var(--amber); }
+    .node.good { border-top:4px solid var(--green); }
+    .arrow { display:grid; place-items:center; color:var(--muted); font-size:1.25rem; }
+    .risk-bars { display:grid; gap:12px; }
+    .risk-row { display:grid; grid-template-columns:140px minmax(100px,1fr) 54px; align-items:center; gap:10px; }
+    .risk-row .bar { height:14px; }
+    .risk-row strong { text-align:right; font:700 .8rem var(--mono); }
+    .filters { position:sticky; top:58px; z-index:8; display:flex; flex-wrap:wrap; gap:8px; background:color-mix(in srgb,var(--bg) 92%,transparent); backdrop-filter:blur(9px); padding:12px 0; border-bottom:1px solid var(--line); margin-bottom:14px; }
+    .filter-btn { border:1px solid var(--line); border-radius:999px; padding:7px 12px; background:var(--surface); color:var(--muted); cursor:pointer; }
+    .filter-btn[aria-pressed="true"] { color:var(--surface); background:var(--navy); border-color:var(--navy); }
+    .filter-search { flex:1 1 230px; min-width:180px; border:1px solid var(--line); border-radius:999px; padding:7px 13px; background:var(--surface); color:var(--ink); }
+    .finding { background:var(--surface); border:1px solid var(--line); border-left:5px solid var(--blue); border-radius:12px; margin:10px 0; overflow:hidden; }
+    .finding[data-severity="High"] { border-left-color:var(--red); }
+    .finding[data-severity="Medium"] { border-left-color:var(--orange); }
+    .finding[data-severity="Low"] { border-left-color:var(--blue); }
+    .finding[data-severity="Decision"] { border-left-color:var(--amber); }
+    .finding summary { display:grid; grid-template-columns:auto 1fr auto; align-items:center; gap:12px; padding:15px 17px; cursor:pointer; list-style:none; }
+    .finding summary::-webkit-details-marker { display:none; }
+    .finding summary::after { content:"＋"; color:var(--muted); font-weight:700; }
+    .finding[open] summary::after { content:"−"; }
+    .finding-title { font-weight:750; color:var(--navy); }
+    .finding-id { font:700 .72rem var(--mono); color:var(--muted); white-space:nowrap; }
+    .severity { border-radius:999px; padding:4px 8px; font:800 .67rem var(--mono); letter-spacing:.04em; text-transform:uppercase; }
+    .severity.High { background:var(--red-bg); color:var(--red); }
+    .severity.Medium { background:var(--amber-bg); color:var(--orange); }
+    .severity.Low { background:var(--blue-bg); color:var(--blue); }
+    .severity.Decision { background:var(--amber-bg); color:var(--amber); }
+    .finding-body { border-top:1px solid var(--line); padding:18px; display:grid; grid-template-columns:1.1fr .9fr; gap:18px; }
+    .finding-body p { margin:.2rem 0 .75rem; }
+    .finding-body h4 { color:var(--muted); font:800 .7rem/1.2 var(--mono); letter-spacing:.08em; text-transform:uppercase; margin:0 0 7px; }
+    .evidence { margin:.2rem 0 .75rem; padding-left:1.2rem; }
+    .evidence li { margin:.24rem 0; }
+    .path { font-family:var(--mono); font-size:.83rem; overflow-wrap:anywhere; }
+    .finding[hidden] { display:none; }
+    .statusline { color:var(--muted); font:.8rem var(--mono); margin-left:auto; padding:7px 0; }
+    .deep-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:14px; }
+    .deep { background:var(--surface); border:1px solid var(--line); border-radius:var(--radius); padding:20px; }
+    .deep ul { margin:.5rem 0 0; padding-left:1.2rem; }
+    .deep li { margin:.38rem 0; }
+    .pass { color:var(--green); font-weight:700; } .fail { color:var(--red); font-weight:700; } .partial { color:var(--amber); font-weight:700; }
+    .roadmap td:first-child { width:130px; font-weight:800; color:var(--navy); }
+    .roadmap ul { margin:0; padding-left:1.1rem; }
+    .exit-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:10px; }
+    .exit { display:flex; align-items:flex-start; gap:10px; border:1px solid var(--line); background:var(--surface); border-radius:10px; padding:12px; }
+    .exit::before { content:"☐"; color:var(--red); font-weight:800; }
+    .sources { columns:2; column-gap:36px; }
+    .sources li { break-inside:avoid; margin:.35rem 0; }
+    footer { color:var(--muted); border-top:1px solid var(--line); padding:30px 0 48px; font-size:.84rem; }
+    .print-only { display:none; }
+    :focus-visible { outline:3px solid color-mix(in srgb,var(--blue) 55%,transparent); outline-offset:3px; }
+    @media (max-width:980px) {
+      .card { grid-column:span 6; } .score-layout { grid-template-columns:1fr; }
+      .architecture { grid-template-columns:1fr; } .arrow { transform:rotate(90deg); min-height:24px; }
+    }
+    @media (max-width:680px) {
+      html,body { overflow-x:hidden; }
+      .wrap { width:min(100% - 22px,1220px); } .topnav { display:none; } .hero { padding-top:36px; }
+      .decision { grid-template-columns:1fr; } .card,.card.wide { grid-column:1/-1; }
+      .finding summary { grid-template-columns:auto 1fr; } .finding summary::after { grid-column:2; justify-self:end; }
+      .finding-body,.deep-grid,.exit-grid { grid-template-columns:1fr; } .risk-row { grid-template-columns:105px 1fr 42px; }
+      .sources { columns:1; } .score-list,.evidence-table,.roadmap { display:block; max-width:100%; overflow-x:auto; }
+    }
+    @media print {
+      :root { --bg:#fff; --surface:#fff; --surface-2:#f4f5f6; --ink:#111; --muted:#444; --line:#bbb; --navy:#111; --blue:#145d91; }
+      .topbar,.filters,.no-print { display:none!important; } body { font-size:10pt; } .hero { padding:24px 0; }
+      main section { padding:24px 0; } .finding { break-inside:avoid; } .finding:not([open]) .finding-body { display:grid; }
+      .card { box-shadow:none; } .print-only { display:block; }
+    }
+  </style>
+</head>
+<body>
+  <a class="skip" href="#main">Skip to report</a>
+  <header class="topbar no-print">
+    <div class="wrap topbar-inner">
+      <div class="brand">KINGFISHER / AUDIT</div>
+      <nav class="topnav" aria-label="Report sections">
+        <a href="#verdict">Verdict</a><a href="#scorecard">Scorecard</a><a href="#architecture">Architecture</a>
+        <a href="#evidence">Verification</a><a href="#findings">Findings</a><a href="#roadmap">Roadmap</a><a href="#sources">Sources</a>
+      </nav>
+      <button class="icon-btn" id="themeToggle" type="button" aria-label="Toggle color theme" title="Toggle color theme">◐</button>
+    </div>
+  </header>
+
+  <div class="hero" id="verdict">
+    <div class="wrap">
+      <div class="eyebrow">Enterprise readiness review · Evidence baseline 23343f9</div>
+      <h1>Strong application core.<br>Pre-production enterprise posture.</h1>
+      <p class="lede">A source, runtime, database, container, browser, dependency, and GitHub-control audit of Kingfisher CRM. The code is compact and testable; identity integration, data operations, delivery governance, and production resilience are not yet safe enough for an enterprise launch.</p>
+      <div class="meta" aria-label="Audit metadata">
+        <span class="tag">2026-07-20</span><span class="tag">Branch <span class="mono">main</span></span>
+        <span class="tag">HEAD = origin/main</span><span class="tag">131 source/config files · 12,116 raw lines</span>
+        <span class="tag">FastAPI · React 18 · MySQL 8 · Docker</span>
+      </div>
+      <div class="decision" role="note" aria-label="Release recommendation">
+        <strong>Conditional no-go</strong>
+        <p>Do not expose the current development stack to an untrusted network, and do not promote the reference production topology. Release approval should wait for the active dev-auth exposure, Microsoft/provider lockout path, admission controls, MySQL 8.4 migration, database TLS, container vulnerabilities, audit-event architecture, protected-branch controls, and recovery design to be closed and retested.</p>
+      </div>
+    </div>
+  </div>
+
+  <main id="main">
+    <section id="scorecard">
+      <div class="wrap">
+        <h2>Executive scorecard</h2>
+        <p class="section-lede">Scores are risk-weighted engineering judgments, not a certification. “Core engineering” measures the application as a local product; “enterprise controls” includes deployment, recovery, governance, observability, and operational ownership.</p>
+        <div class="cards" style="margin-bottom:18px">
+          <div class="card"><div class="metric-label">Overall</div><div class="metric">C−</div><div class="metric-sub">58 / 100 · material production blockers</div></div>
+          <div class="card"><div class="metric-label">Core engineering</div><div class="metric">B</div><div class="metric-sub">76 / 100 · clean tests, compact design</div></div>
+          <div class="card"><div class="metric-label">Enterprise controls</div><div class="metric">D+</div><div class="metric-sub">46 / 100 · deployment and governance debt</div></div>
+          <div class="card"><div class="metric-label">Decision</div><div class="metric" style="font-size:1.55rem;color:var(--red)">NO-GO</div><div class="metric-sub">until Phase 0 exit criteria pass</div></div>
+          <div class="card sev-high"><div class="metric-label">High</div><div class="metric">14</div><div class="metric-sub">verified blockers / material exposures</div></div>
+          <div class="card sev-med"><div class="metric-label">Medium</div><div class="metric">20</div><div class="metric-sub">meaningful reliability and control gaps</div></div>
+          <div class="card sev-low"><div class="metric-label">Low</div><div class="metric">7</div><div class="metric-sub">hardening and maintainability debt</div></div>
+          <div class="card"><div class="metric-label">Architecture decision</div><div class="metric">1</div><div class="metric-sub">single-tenant product or tenant-aware SaaS</div></div>
+        </div>
+        <div class="score-layout">
+          <div class="card full">
+            <table class="score-list" aria-label="Domain scores">
+              <thead><tr><th>Domain</th><th>Score</th><th>Grade</th><th>Basis</th></tr></thead>
+              <tbody>
+                <tr><td>Python / FastAPI</td><td><div class="bar"><span style="--w:78%;--bar:var(--green)"></span></div></td><td class="grade">78 · B+</td><td>137 tests, low average complexity, strong auth primitives; safety and API-contract gaps remain.</td></tr>
+                <tr><td>React / TypeScript</td><td><div class="bar"><span style="--w:68%;--bar:var(--teal)"></span></div></td><td class="grade">68 · C+</td><td>Strict types and lean bundles; broken Microsoft flow, mobile navigation, a11y, and thin tests.</td></tr>
+                <tr><td>Database architecture</td><td><div class="bar"><span style="--w:55%;--bar:var(--amber)"></span></div></td><td class="grade">55 · C−</td><td>Sound relational core; EOL engine, unsafe collations, drift noise, retention, scale, and DR gaps.</td></tr>
+                <tr><td>Authentication / security</td><td><div class="bar"><span style="--w:53%;--bar:var(--orange)"></span></div></td><td class="grade">53 · C−</td><td>Good token verification and live RBAC; active bypass exposure and admission/control-plane defects.</td></tr>
+                <tr><td>Testing / quality</td><td><div class="bar"><span style="--w:72%;--bar:var(--teal)"></span></div></td><td class="grade">72 · B−</td><td>Real MySQL and browser CI; no coverage floor, typing gate, a11y suite, or provider matrix.</td></tr>
+                <tr><td>Supply chain</td><td><div class="bar"><span style="--w:48%;--bar:var(--orange)"></span></div></td><td class="grade">48 · D+</td><td>App dependencies scan clean; stale Nginx OS image and development-tool advisories remain.</td></tr>
+                <tr><td>Operations / resilience</td><td><div class="bar"><span style="--w:36%;--bar:var(--red)"></span></div></td><td class="grade">36 · F</td><td>No implemented deployment, restore proof, HA, telemetry, SLO, or safe migration orchestration.</td></tr>
+                <tr><td>SDLC / governance</td><td><div class="bar"><span style="--w:38%;--bar:var(--red)"></span></div></td><td class="grade">38 · F</td><td>Unprotected main, no rulesets/PR history, and key GitHub security services disabled.</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <aside class="callout warning">
+            <h3>What is already good</h3>
+            <ul>
+              <li>Origin is synchronized and the reviewed source baseline was clean.</li>
+              <li>137 backend tests, 11 frontend unit tests, lint, formatting, builds, and recent CI pass.</li>
+              <li>Provider signatures, audience/issuer, JWT claims, per-device sessions, live RBAC, and last-admin locking are thoughtfully implemented.</li>
+              <li>SQLAlchemy uses UTC sessions, pre-ping/recycle, and real Alembic migrations against MySQL.</li>
+              <li>Strict TypeScript, route chunking, reduced-motion handling, server-authoritative authorization, and security headers are solid foundations.</li>
+              <li>Production npm dependencies, full Python dependency graph, Bandit, and pip integrity checks are clean.</li>
+            </ul>
+          </aside>
+        </div>
+      </div>
+    </section>
+
+    <section id="architecture">
+      <div class="wrap">
+        <h2>Architecture and control boundaries</h2>
+        <p class="section-lede">The application is a single-organization access-control console: a React SPA uses same-origin HTTP/WebSocket routes to FastAPI; FastAPI verifies provider tokens, issues its own cookie session, evaluates database-backed RBAC, and writes to MySQL. The main risks sit at the seams.</p>
+        <div class="architecture" role="img" aria-label="Kingfisher application architecture from browser through web tier, API, and MySQL">
+          <div class="node warn"><b>Identity providers</b><small>Google is wired with a DB nonce. Microsoft verification exists, but the browser path and CSP do not.</small></div>
+          <div class="arrow" aria-hidden="true">→</div>
+          <div class="node warn"><b>React SPA</b><small>Vite in development; Nginx in production. Strict TypeScript, browser cookie session, WebSocket presence.</small></div>
+          <div class="arrow" aria-hidden="true">→</div>
+          <div class="node risk"><b>FastAPI service</b><small>OIDC verification, JWT/session rows, RBAC, settings, logs, presence. Production starts two isolated workers.</small></div>
+          <div class="arrow" aria-hidden="true">→</div>
+          <div class="node risk"><b>MySQL 8.0</b><small>12 linear migrations, global roles/settings, no tenant key, no production backup/restore implementation.</small></div>
+        </div>
+        <div class="deep-grid">
+          <div class="deep"><h3>Trust boundary strengths</h3><ul><li>Provider tokens are verified server-side; app tokens stay in HttpOnly cookies.</li><li>Authorization is recalculated from current database permissions on every API request.</li><li>Mutation DTOs generally reject unknown fields; LIKE and CSV formula inputs are escaped.</li><li>WebSocket origin, session status, and permissions are periodically revalidated.</li></ul></div>
+          <div class="deep"><h3>Trust boundary failures</h3><ul><li>Current dev bypass is reachable on all host interfaces and can select the admin role.</li><li>Google organization admission uses email suffix rather than the signed hosted-domain claim.</li><li>Proxy IP resolution happens after rate limiting; workers do not share limits or presence state.</li><li>Request logs are not durable, attributable security/audit events.</li></ul></div>
+        </div>
+      </div>
+    </section>
+
+    <section id="evidence">
+      <div class="wrap">
+        <h2>Verification evidence</h2>
+        <p class="section-lede">Results below were reproduced against commit <code>23343f9</code> and the running Docker stack. E2E was inspected and confirmed by the latest successful GitHub run but not rerun locally because its scenarios intentionally mutate the persistent development database.</p>
+        <div class="card full" style="overflow:auto">
+          <table class="evidence-table" aria-label="Audit command and result matrix">
+            <thead><tr><th>Control</th><th>Result</th><th>Evidence</th></tr></thead>
+            <tbody>
+              <tr><td>Git synchronization</td><td class="pass">PASS</td><td><code>HEAD...origin/main = 0 / 0</code>; branch <code>main</code> at <code>23343f9</code>.</td></tr>
+              <tr><td>Docker runtime</td><td class="pass">RUNNING</td><td>MySQL healthy on loopback <code>3307</code>; API healthy on <code>8010</code>; web running on <code>5174</code>.</td></tr>
+              <tr><td>Backend tests</td><td class="pass">137 passed</td><td>8.30 s against migrated MySQL; Ruff check passed; 83 Python files formatted; <code>pip check</code> clean.</td></tr>
+              <tr><td>Frontend tests/build</td><td class="pass">11 passed</td><td>3 Vitest files; TypeScript/ESLint pass; Vite production build passes, 63 modules.</td></tr>
+              <tr><td>Frontend bundle</td><td class="pass">LEAN</td><td>React vendor 53.53 kB gzip; app entry 7.62 kB; CSS 7.07 kB.</td></tr>
+              <tr><td>Python known vulnerabilities</td><td class="pass">0</td><td>Full transitive <code>pip-audit</code> over production and development requirements; Bandit medium/high: 0.</td></tr>
+              <tr><td>npm production vulnerabilities</td><td class="pass">0</td><td><code>npm audit --omit=dev</code> reports none.</td></tr>
+              <tr><td>npm development vulnerabilities</td><td class="fail">5 packages</td><td>1 critical, 1 high, 3 moderate across Vite/Vitest toolchains; critical Vitest UI path is not invoked here.</td></tr>
+              <tr><td>Production web image</td><td class="fail">4 critical / 26 high</td><td>Docker Scout on <code>nginx:1.27-alpine</code>; fixed versions are available in a current Nginx/Alpine base.</td></tr>
+              <tr><td>Production API image</td><td class="partial">1 critical / 2 high</td><td>Docker Scout; Perl base packages, no Debian fix at scan time, likely outside the Python request path.</td></tr>
+              <tr><td>Secret history scan</td><td class="pass">0 verified</td><td>Gitleaks scanned 48 commits; two redacted hits were deterministic test constants and triaged false-positive.</td></tr>
+              <tr><td>Alembic</td><td class="partial">Head, drift gate fails</td><td><code>current = heads = 0012</code>; <code>alembic check</code> reports 7 normalized timestamp-default diffs.</td></tr>
+              <tr><td>Database live checks</td><td class="partial">Structural risks</td><td>MySQL 8.0.46, InnoDB/strict mode/UTC app session; no CHECK constraints; OIDC fields use case-insensitive collation.</td></tr>
+              <tr><td>Browser accessibility</td><td class="fail">Serious + reflow</td><td>Axe 4.12 found one serious link-distinguishability defect; 320/375 px checks found overflow and missing mobile app navigation.</td></tr>
+              <tr><td>Python complexity</td><td class="pass">Average A</td><td>Radon average 3.16; one D-rated hotspot: <code>users.bulk_action</code> at complexity 23.</td></tr>
+              <tr><td>GitHub controls</td><td class="fail">Not protected</td><td>No branch protection/rulesets/PRs/releases; Dependabot alerts, code scanning, and secret scanning disabled; last 10 CI runs passed.</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p class="print-only">Interactive filters are omitted in print; all findings are expanded by print CSS.</p>
+      </div>
+    </section>
+
+    <section id="findings">
+      <div class="wrap">
+        <h2>Finding register</h2>
+        <p class="section-lede">Each item is grouped to one remediation owner and acceptance test. “High” includes verified enterprise release blockers and material current exposures; “Decision” is conditional on product intent. Expand a row for evidence, impact, and closure criteria.</p>
+        <div class="filters no-print" aria-label="Finding filters">
+          <button class="filter-btn" type="button" data-filter="All" aria-pressed="true">All</button>
+          <button class="filter-btn" type="button" data-filter="High" aria-pressed="false">High</button>
+          <button class="filter-btn" type="button" data-filter="Medium" aria-pressed="false">Medium</button>
+          <button class="filter-btn" type="button" data-filter="Low" aria-pressed="false">Low</button>
+          <button class="filter-btn" type="button" data-filter="Decision" aria-pressed="false">Decision</button>
+          <input class="filter-search" id="findingSearch" type="search" placeholder="Search ID, title, evidence, domain…" aria-label="Search findings">
+          <span class="statusline" id="findingCount" aria-live="polite">42 shown</span>
+        </div>
+
+        <details class="finding" data-severity="High" data-domain="Security Local development Authentication">
+          <summary><span class="severity High">High</span><span class="finding-title"><span class="finding-id">KF-H01 · </span>Active dev-auth is published on every host interface</span></summary>
+          <div class="finding-body"><div><h4>Verified evidence</h4><ul class="evidence">
+            <li>Runtime advertises <code>dev:true</code>; anonymous role enumeration includes <code>admin</code>.</li>
+            <li><a class="path" href="../../docker-compose.yml">docker-compose.yml:33-34,59-60</a> publishes API and web as <code>0.0.0.0</code>/<code>[::]</code>.</li>
+            <li><a class="path" href="../../backend/app/routers/dev_auth.py">backend/app/routers/dev_auth.py:21-29</a> accepts arbitrary email/role without authentication; <a class="path" href="../../backend/app/auth/service.py">service.py:164-203</a> can also change an existing user’s role and approval.</li>
+          </ul><h4>Impact</h4><p>Any party that can reach ports 8010/5174 can mint an administrator session or impersonate/modify an account. Production defaults are safe; the current explicit local configuration is not.</p></div><div><h4>Required remediation</h4><p>Bind API/web host ports to <code>127.0.0.1</code>, put dev auth in an explicit Compose profile, require a developer secret or loopback source backstop, and remove arbitrary role selection from any network-reachable bypass.</p><h4>Close when</h4><p>An off-host probe cannot reach either port; a regression test proves dev auth never mounts outside the isolated profile and cannot assign admin without the backstop.</p></div></div>
+        </details>
+
+        <details class="finding" data-severity="High" data-domain="Identity React Authentication Configuration">
+          <summary><span class="severity High">High</span><span class="finding-title"><span class="finding-id">KF-H02 · </span>Microsoft sign-in and provider failover are not operational</span></summary>
+          <div class="finding-body"><div><h4>Verified evidence</h4><ul class="evidence">
+            <li><a class="path" href="../../frontend/src/pages/LoginPage.tsx">LoginPage.tsx:42-92,121-142</a> renders only Google; the dormant <a class="path" href="../../frontend/src/auth/msal.ts">msal.ts:21-28</a> neither fetches the server nonce nor posts its token.</li>
+            <li><a class="path" href="../../backend/app/auth/microsoft.py">microsoft.py:52-55</a> requires the DB-issued nonce. <a class="path" href="../../frontend/nginx.conf">nginx.conf:15</a> allowlists Google endpoints only.</li>
+            <li><a class="path" href="../../backend/app/routers/auth.py">auth.py:39-47</a> reports configured client IDs, not effective site toggles; <a class="path" href="../../backend/app/routers/settings.py">settings.py:55-62</a> permits Microsoft-only even if Azure is unconfigured.</li>
+          </ul><h4>Impact</h4><p>A supported settings state (<code>Google=false, Microsoft=true</code>) locks every browser user out. The public site advertises a flow that cannot complete.</p></div><div><h4>Required remediation</h4><p>Return <code>configured AND enabled</code> provider state, implement a provider-supported nonce/state flow and Microsoft UI, post the token, update CSP, and add controlled break-glass recovery. Prefer an authorization-code + PKCE/BFF design for the final enterprise flow.</p><h4>Close when</h4><p>Google-only, Microsoft-only, dual-provider, provider-outage, and toggle/failover E2E scenarios all pass in the production image.</p></div></div>
+        </details>
+
+        <details class="finding" data-severity="High" data-domain="Identity Admission Google Security">
+          <summary><span class="severity High">High</span><span class="finding-title"><span class="finding-id">KF-H03 · </span>Enterprise admission control fails open and checks the wrong Google claim</span></summary>
+          <div class="finding-body"><div><h4>Verified evidence</h4><ul class="evidence">
+            <li>Current runtime is <code>signup_mode=open</code>, Google enabled, with no allowed Google domains; any verified Google account can provision a standard user.</li>
+            <li><a class="path" href="../../backend/app/config.py">config.py:28-31</a> and <a class="path" href="../../backend/app/auth/service.py">service.py:58-67,112-124</a> define empty allowlists as allow-all.</li>
+            <li>When a domain is configured, <a class="path" href="../../backend/app/auth/service.py">service.py:60-63</a> checks the email suffix; <a class="path" href="../../backend/app/auth/google.py">google.py:51-56</a> discards Google’s signed <code>hd</code> claim.</li>
+          </ul><h4>Impact</h4><p>Current onboarding is broader than an enterprise directory. A matching email suffix is not proof of Workspace organization membership, so the intended domain restriction is not authoritative.</p></div><div><h4>Required remediation</h4><p>Default enterprise deployments to approval/closed, require explicit public-signup acknowledgement, validate the exact signed <code>hd</code> claim, persist organization context, and integrate authoritative group/SCIM policy where required. See <a href="https://developers.google.com/identity/openid-connect/reference">Google’s OIDC claim reference</a>.</p><h4>Close when</h4><p>Tests reject a verified matching-email-domain account without the required <code>hd</code>, and production startup fails without an explicit admission policy.</p></div></div>
+        </details>
+
+        <details class="finding" data-severity="High" data-domain="Authentication Database Availability Abuse">
+          <summary><span class="severity High">High</span><span class="finding-title"><span class="finding-id">KF-H04 · </span>Unauthenticated nonce issuance enables database amplification</span></summary>
+          <div class="finding-body"><div><h4>Verified evidence</h4><ul class="evidence">
+            <li><a class="path" href="../../backend/app/routers/auth.py">auth.py:50-54</a> exposes state-changing <code>GET /api/auth/nonce</code>.</li>
+            <li><a class="path" href="../../backend/app/auth/nonce.py">nonce.py:26-50</a> inserts/commits per request; expired rows prune only during consume.</li>
+            <li><a class="path" href="../../backend/app/request_logging.py">request_logging.py:20-30</a> skips the endpoint; it receives the loose 600/minute per-process bucket. Live read-only inspection found expired residue.</li>
+          </ul><h4>Impact</h4><p>Cross-origin loads or scripted callers can grow shared storage, exhaust the general API bucket, and make the next legitimate consume perform an oversized delete.</p></div><div><h4>Required remediation</h4><p>Use POST, <code>Cache-Control: no-store</code>, a tight distributed limiter, per-client/outstanding caps, bounded scheduled TTL deletion, and observability for issue/consume ratios.</p><h4>Close when</h4><p>Load tests demonstrate bounded rows and cleanup work under abuse, and issuance is separately rate-limited and auditable across all workers.</p></div></div>
+        </details>
+
+        <details class="finding" data-severity="High" data-domain="FastAPI Rate limiting WebSocket Deployment">
+          <summary><span class="severity High">High</span><span class="finding-title"><span class="finding-id">KF-H05 · </span>Production topology breaks rate limiting and live presence</span></summary>
+          <div class="finding-body"><div><h4>Verified evidence</h4><ul class="evidence">
+            <li>Middleware reconstruction proved <a class="path" href="../../backend/app/main.py">main.py:26-31,83-109</a> executes rate limiting before trusted proxy headers rewrite the client address; proxied users share the proxy socket bucket.</li>
+            <li><a class="path" href="../../backend/Dockerfile">backend/Dockerfile:27-31</a> documents process-local limits/presence, then starts two workers.</li>
+            <li><a class="path" href="../../backend/app/ratelimit.py">ratelimit.py:1-29</a> and <a class="path" href="../../backend/app/routers/ws.py">ws.py:40-50,84-101</a> hold module-local state.</li>
+          </ul><h4>Impact</h4><p>Behind Caddy, one user can exhaust the shared proxy bucket; across workers, attackers get independent buckets while rosters, caps, and broadcasts split unpredictably.</p></div><div><h4>Required remediation</h4><p>Resolve trusted client IP at the server/edge before app middleware, enforce edge/Redis limits, use shared presence/pub-sub, and run one worker until coordination is externalized. FastAPI notes that <a href="https://fastapi.tiangolo.com/deployment/concepts/">workers do not share memory</a>.</p><h4>Close when</h4><p>A proxy-topology test identifies distinct clients safely, multi-instance load tests enforce one global policy, and presence convergence meets a stated SLO.</p></div></div>
+        </details>
+
+        <details class="finding" data-severity="High" data-domain="Testing Database Safety">
+          <summary><span class="severity High">High</span><span class="finding-title"><span class="finding-id">KF-H06 · </span>The test harness can erase any configured database</span></summary>
+          <div class="finding-body"><div><h4>Verified evidence</h4><ul class="evidence">
+            <li><a class="path" href="../../backend/tests/conftest.py">backend/tests/conftest.py:14-22</a> trusts arbitrary <code>TEST_DATABASE_URL</code> without asserting it differs from the main URL or has a test-only name.</li>
+            <li>The autouse fixture at <a class="path" href="../../backend/tests/conftest.py">conftest.py:68-105</a> deletes data from every application table before every test.</li>
+          </ul><h4>Impact</h4><p>A mistyped or injected URL can turn a routine <code>pytest</code> invocation into destructive production-data loss.</p></div><div><h4>Required remediation</h4><p>Create a random ephemeral database, assert strict test naming plus inequality to every non-test URL and environment, deny non-local hosts/accounts, and require a second explicit destructive-test acknowledgment.</p><h4>Close when</h4><p>Tests deliberately pointed at the main/prod URL abort before opening a transaction or issuing DDL/DML, and CI provisions/disposes an isolated database.</p></div></div>
+        </details>
+
+        <details class="finding" data-severity="High" data-domain="Database Lifecycle MySQL">
+          <summary><span class="severity High">High</span><span class="finding-title"><span class="finding-id">KF-H07 · </span>MySQL 8.0 is past end of life</span></summary>
+          <div class="finding-body"><div><h4>Verified evidence</h4><ul class="evidence">
+            <li>Live server reports <code>8.0.46</code>; <a class="path" href="../../docker-compose.yml">docker-compose.yml:5-6</a> and <a class="path" href="../../.github/workflows/ci.yml">ci.yml:13-20</a> pin MySQL 8.0.</li>
+            <li>Oracle identifies 8.0.46 as the final 8.0 release and April 2026 as EOL, recommending 8.4 LTS in the <a href="https://dev.mysql.com/doc/relnotes/mysql/8.0/en/">official release notes</a>.</li>
+          </ul><h4>Impact</h4><p>The database baseline no longer receives normal community maintenance and cannot be approved as a new enterprise platform.</p></div><div><h4>Required remediation</h4><p>Move development and CI to an exact MySQL 8.4 LTS patch/digest, run Upgrade Checker, rehearse upgrade and rollback-by-restore on a clone, and validate all migrations, collations, query plans, and backups.</p><h4>Close when</h4><p>8.4 LTS is the tested baseline and a timed restore/rollback rehearsal meets approved RPO/RTO. Do not repoint the current volume blindly.</p></div></div>
+        </details>
+
+        <details class="finding" data-severity="High" data-domain="Database OIDC Authentication Collation">
+          <summary><span class="severity High">High</span><span class="finding-title"><span class="finding-id">KF-H08 · </span>OIDC subjects and nonces compare case-insensitively</span></summary>
+          <div class="finding-body"><div><h4>Verified evidence</h4><ul class="evidence">
+            <li><a class="path" href="../../backend/app/models/user_identity.py">user_identity.py:11-25</a> and <a class="path" href="../../backend/app/models/login_nonce.py">login_nonce.py:8-26</a> inherit <code>utf8mb4_0900_ai_ci</code>.</li>
+            <li>Live DDL and a read-only comparison confirmed mixed-case strings compare equal. Lookups/unique keys therefore normalize standards-distinct values.</li>
+            <li>OIDC defines <code>sub</code> and <code>nonce</code> as case-sensitive; MySQL documents the chosen collation as case-insensitive. See <a href="https://openid.net/specs/openid-connect-core-1_0.html#IDToken">OIDC Core</a> and <a href="https://dev.mysql.com/doc/refman/8.0/en/case-sensitivity.html">MySQL comparison rules</a>.</li>
+          </ul><h4>Impact</h4><p>A case-modified nonce can satisfy equality, and standards-distinct provider subjects can collide. Current Google/Microsoft identifiers reduce practical collision likelihood but do not make the schema contract correct.</p></div><div><h4>Required remediation</h4><p>Migrate opaque values to <code>VARBINARY</code>, ASCII binary, or explicit binary/case-sensitive column collations; preserve canonical issuer/tenant context.</p><h4>Close when</h4><p>Real-MySQL tests prove <code>AbC != abc</code> for both uniqueness and consume queries, including forward/backward migration verification.</p></div></div>
+        </details>
+
+        <details class="finding" data-severity="High" data-domain="Database Concurrency Authentication Settings">
+          <summary><span class="severity High">High</span><span class="finding-title"><span class="finding-id">KF-H09 · </span>Concurrent settings updates can disable every provider</span></summary>
+          <div class="finding-body"><div><h4>Verified evidence</h4><ul class="evidence">
+            <li><a class="path" href="../../backend/app/routers/settings.py">settings.py:41-66</a> performs an unlocked singleton read, validates each request’s in-memory merged state, then commits only supplied columns.</li>
+            <li><a class="path" href="../../backend/app/models/site_settings.py">site_settings.py:22-30</a> has no database constraint; live metadata confirms zero CHECK constraints.</li>
+          </ul><h4>Impact</h4><p>Two transactions can each disable one currently-enabled provider, both validate successfully, and leave Google=false/Microsoft=false after existing sessions expire.</p></div><div><h4>Required remediation</h4><p>Lock the singleton row with <code>SELECT … FOR UPDATE</code>, validate effective/configured providers inside the lock, and add an enforced database CHECK preserving at least one enabled provider.</p><h4>Close when</h4><p>A two-connection race test cannot reach a zero-provider state and the constraint rejects direct SQL that violates the invariant.</p></div></div>
+        </details>
+
+        <details class="finding" data-severity="High" data-domain="Database TLS Alembic Security">
+          <summary><span class="severity High">High</span><span class="finding-title"><span class="finding-id">KF-H10 · </span>Production database TLS is optional and migrations bypass connection policy</span></summary>
+          <div class="finding-body"><div><h4>Verified evidence</h4><ul class="evidence">
+            <li><a class="path" href="../../backend/app/config.py">config.py:12-15,52-56</a> rejects insecure production cookies but allows <code>DB_REQUIRE_TLS=false</code>.</li>
+            <li><a class="path" href="../../backend/app/db.py">db.py:8-24</a> applies verified TLS/UTC only to app connections; <a class="path" href="../../backend/alembic/env.py">alembic/env.py:31-43</a> creates a separate engine without either policy.</li>
+          </ul><h4>Impact</h4><p>Production can start with plaintext database transport. A TLS-required database can also reject Alembic, or migrations can use different security/time semantics from runtime writes.</p></div><div><h4>Required remediation</h4><p>Fail production startup unless verified DB TLS is on, enforce <code>require_secure_transport</code> server-side, share one connection factory/policy between app and Alembic, use separate runtime/migrator principals, and verify the negotiated cipher.</p><h4>Close when</h4><p>Negative tests reject plaintext and bad CA/hostname connections for both runtime and migrations; readiness reports secure transport without leaking details.</p></div></div>
+        </details>
+
+        <details class="finding" data-severity="High" data-domain="Audit Logging Compliance Security">
+          <summary><span class="severity High">High</span><span class="finding-title"><span class="finding-id">KF-H11 · </span>Request logs are not an enterprise audit trail</span></summary>
+          <div class="finding-body"><div><h4>Verified evidence</h4><ul class="evidence">
+            <li><a class="path" href="../../backend/app/models/request_log.py">request_log.py:15-30</a> stores only method/path/user/IP/status/time; no action, target, before/after, reason, request/trace ID, actor snapshot, provider, or event version.</li>
+            <li><a class="path" href="../../backend/app/request_logging.py">request_logging.py:47-95</a> is best-effort and mutable; live aggregation found all 15 successful Google login rows unattributed.</li>
+            <li>Product copy claims “AUDIT-READY” and provider identity in the trail, but <a class="path" href="../../frontend/src/pages/LandingPage.tsx">LandingPage.tsx:12</a> exceeds what the data records.</li>
+          </ul><h4>Impact</h4><p>Security incidents, privileged changes, access reviews, and compliance evidence cannot be reconstructed reliably; login attribution may be null or identify the old cookie principal.</p></div><div><h4>Required remediation</h4><p>Define structured immutable security events; capture when/where/who/what/outcome, actor/target, provider/tenant, correlation ID and before/after summary; write via transactional outbox and ship to restricted append-only/SIEM storage. Follow <a href="https://cheatsheetseries.owasp.org/cheatsheets/Logging_Cheat_Sheet.html">OWASP logging guidance</a>.</p><h4>Close when</h4><p>Authentication and every privileged mutation produce attributable, versioned, tamper-monitored events and loss/lag alerts under failure injection.</p></div></div>
+        </details>
+
+        <details class="finding" data-severity="High" data-domain="Operations Database Deployment Recovery">
+          <summary><span class="severity High">High</span><span class="finding-title"><span class="finding-id">KF-H12 · </span>Production database, migration, HA, backup, and restore controls are not implemented</span></summary>
+          <div class="finding-body"><div><h4>Verified evidence</h4><ul class="evidence">
+            <li><a class="path" href="../../deploy/docker-compose.prod.yml">deploy/docker-compose.prod.yml:1-37</a> is reference-only, has no database or migration job, and is not connected to CI/CD.</li>
+            <li><a class="path" href="../../backend/app/routers/health.py">health.py:11-18</a> combines liveness/readiness and checks only <code>SELECT 1</code>, not Alembic revision.</li>
+            <li>Repository search found no IaC, PITR/snapshot policy, restore test, RPO/RTO, Multi-AZ, migration lock, secrets rotation, or rollback automation.</li>
+          </ul><h4>Impact</h4><p>There is no reproducible evidence that production data survives operator error, engine failure, regional loss, or a bad schema change.</p></div><div><h4>Required remediation</h4><p>Implement IaC-managed MySQL 8.4 LTS/RDS, KMS encryption, private networking, Multi-AZ, PITR, cross-account/region protection as required, Secrets Manager, separate principals, serial migration job, schema-aware readiness, and quarterly restore drills. See official <a href="https://docs.aws.amazon.com/AmazonRDS/latest/gettingstartedguide/managing-backup-restore.html">RDS backup/restore guidance</a>.</p><h4>Close when</h4><p>A production-like deployment and destructive restore game day demonstrate approved RPO/RTO, schema gating, rollout, and rollback-by-restore.</p></div></div>
+        </details>
+
+        <details class="finding" data-severity="High" data-domain="Supply chain Docker Nginx Vulnerabilities">
+          <summary><span class="severity High">High</span><span class="finding-title"><span class="finding-id">KF-H13 · </span>Production web image carries fixable critical/high OS vulnerabilities</span></summary>
+          <div class="finding-body"><div><h4>Verified evidence</h4><ul class="evidence">
+            <li><a class="path" href="../../frontend/Dockerfile">frontend/Dockerfile:21-25</a> uses <code>nginx:1.27-alpine</code> (Alpine 3.21 generation).</li>
+            <li>Docker Scout found 4 Critical and 26 High findings, including fixed-version libxml2, expat, OpenSSL, curl, musl, libpng, and nghttp2 packages.</li>
+            <li>A current Nginx Alpine/slim base recommendation scanned with no Critical/High findings at audit time.</li>
+          </ul><h4>Impact</h4><p>The internet-facing static/reverse-proxy artifact ships known vulnerable OS components. Reachability differs by library, but a clean maintained base is readily available.</p></div><div><h4>Required remediation</h4><p>Upgrade and digest-pin a supported Nginx/Alpine image, rebuild without cache, rescan, publish an SBOM and signed provenance, define SLA-based image refresh, and validate Nginx configuration/headers after the major bump. See <a href="https://docs.docker.com/scout/">Docker Scout</a>.</p><h4>Close when</h4><p>The deployable digest has zero Critical/High findings or documented time-bound risk acceptances with reachability evidence and compensating controls.</p></div></div>
+        </details>
+
+        <details class="finding" data-severity="High" data-domain="GitHub Governance SDLC Supply chain">
+          <summary><span class="severity High">High</span><span class="finding-title"><span class="finding-id">KF-H14 · </span>Main can bypass review and key GitHub security controls are disabled</span></summary>
+          <div class="finding-body"><div><h4>Verified evidence</h4><ul class="evidence">
+            <li>GitHub snapshot: private repo, no branch protection, no rulesets, no PR history, no releases/tags, and direct commits on <code>main</code>.</li>
+            <li>Dependabot alerts, code scanning, and secret scanning are disabled. Actions allow all actions and do not require SHA pinning.</li>
+            <li><a class="path" href="../../.github/workflows/ci.yml">ci.yml</a> uses mutable major action tags; there is no CODEOWNERS, SECURITY policy, release gate, coverage threshold, container scan, SBOM, provenance verification, or deploy environment approval.</li>
+          </ul><h4>Impact</h4><p>A direct push, compromised action tag, vulnerable dependency/image, or leaked secret can reach the canonical branch without mandatory independent review or an enforced security gate.</p></div><div><h4>Required remediation</h4><p>Protect main with a ruleset, required PR reviews/CODEOWNERS/status checks/conversation resolution, signed commits where appropriate, restricted Actions, full-SHA pins, Dependabot, CodeQL, secret scanning/push protection, artifact attestations, and protected deployment environments. See <a href="https://docs.github.com/en/repositories/configuring-branches-and-merges-in-your-repository/managing-rulesets/available-rules-for-rulesets">GitHub ruleset controls</a>.</p><h4>Close when</h4><p>Negative tests prove no direct/failed-check merge or unapproved deploy is possible and security alerts are owned with measurable remediation SLAs.</p></div></div>
+        </details>
+
+        <details class="finding" data-severity="Medium" data-domain="Authorization RBAC Admin">
+          <summary><span class="severity Medium">Medium</span><span class="finding-title"><span class="finding-id">KF-M01 · </span>The special admin role is assignable through ordinary subset rules</span></summary>
+          <div class="finding-body"><div><h4>Evidence and impact</h4><p><a class="path" href="../../backend/app/routers/users.py">users.py:45-63,206-234,310-330</a> treats the literal <code>admin</code> role as a meta-privilege but lets a non-admin holding the same permission set assign it. <a class="path" href="../../backend/app/routers/settings.py">settings.py:43-54</a> can also choose admin as the public default. This grants hierarchy/system-role bypasses not represented by permission keys.</p></div><div><h4>Remediation / acceptance</h4><p>Require an actual admin or explicit <code>admin.assign</code> capability; forbid admin/system/high-privilege onboarding defaults. Add custom-all-permissions negative tests for single, bulk, and settings paths.</p></div></div>
+        </details>
+
+        <details class="finding" data-severity="Medium" data-domain="Authorization Sessions Admin">
+          <summary><span class="severity Medium">Medium</span><span class="finding-title"><span class="finding-id">KF-M02 · </span>Delegated admin-target protections are inconsistent</span></summary>
+          <div class="finding-body"><div><h4>Evidence and impact</h4><p>Full kick guards self/admin targets at <a class="path" href="../../backend/app/routers/users.py">users.py:401-413</a>; individual revocation at <code>:441-454</code> discards the actor and does not load/guard the target. Direct-permission replacement at <code>:337-364</code> can strip an admin’s direct grants. This is administrator-device denial of service and policy damage, not loss of built-in admin role grants.</p></div><div><h4>Remediation / acceptance</h4><p>Centralize target hierarchy policy and apply it to every session, permission, role, status, and bulk mutation. Add a table-driven delegated-actor × target-role regression suite.</p></div></div>
+        </details>
+
+        <details class="finding" data-severity="Medium" data-domain="Security CSRF Cookies">
+          <summary><span class="severity Medium">Medium</span><span class="finding-title"><span class="finding-id">KF-M03 · </span>SameSite is treated as the complete mutation CSRF defense</span></summary>
+          <div class="finding-body"><div><h4>Evidence and impact</h4><p><a class="path" href="../../backend/app/main.py">main.py:35-57</a> guards only two login routes; <a class="path" href="../../backend/app/auth/jwt.py">jwt.py:35-54</a> relies on <code>SameSite=Lax</code>. Same-site sibling origins still send the cookie, and no-body POSTs such as approve/kick/heartbeat accept form submissions. A runtime sibling-origin form probe reached authentication. Risk is material wherever sibling subdomains are not equally trusted.</p></div><div><h4>Remediation / acceptance</h4><p>Validate same-origin Origin/Referer or Fetch Metadata with fallback on every unsafe method, or require a session-bound CSRF/custom header; consider <code>SameSite=Strict</code> and <code>__Host-session</code>. Test hostile cross-site and same-site sibling origins. See <a href="https://cheatsheetseries.owasp.org/cheatsheets/Cross-Site_Request_Forgery_Prevention_Cheat_Sheet.html">OWASP CSRF guidance</a>.</p></div></div>
+        </details>
+
+        <details class="finding" data-severity="Medium" data-domain="Sessions Privacy Retention Authentication">
+          <summary><span class="severity Medium">Medium</span><span class="finding-title"><span class="finding-id">KF-M04 · </span>Sessions and identity-adjacent data lack a lifecycle policy</span></summary>
+          <div class="finding-body"><div><h4>Evidence and impact</h4><p><a class="path" href="../../backend/app/models/user_session.py">user_session.py:25-34</a> has no <code>expires_at</code>; listings filter only revocation, and live data had 10 rows older than the 8-hour token TTL still labeled active. There is no session cap/purge. Provider/allowlist changes affect only new logins. GPS, IP, user agent, provider subject, and revoked-session retention/deletion are not governed.</p></div><div><h4>Remediation / acceptance</h4><p>Persist token expiry, enforce idle/concurrent-session limits, revoke on provider policy when intended, run bounded cleanup, and approve data-purpose/retention/deletion schedules with user/admin workflows. Prove expired rows disappear from active APIs and deletion jobs meet SLOs.</p></div></div>
+        </details>
+
+        <details class="finding" data-severity="Medium" data-domain="API Input validation Availability">
+          <summary><span class="severity Medium">Medium</span><span class="finding-title"><span class="finding-id">KF-M05 · </span>Public API inputs lack size and finite-number limits</span></summary>
+          <div class="finding-body"><div><h4>Evidence and impact</h4><p><a class="path" href="../../backend/app/schemas/auth.py">schemas/auth.py:8-10</a> accepts arbitrarily large tokens; a 10,000,000-character value validated. <a class="path" href="../../deploy/Caddyfile">deploy/Caddyfile:1-11</a> has no body cap. <code>LocationUpdate.accuracy</code> accepts positive infinity. Oversized unauthenticated bodies consume workers/memory and non-finite values can poison persistence/analytics.</p></div><div><h4>Remediation / acceptance</h4><p>Set edge and ASGI body limits, conservative JWT length limits, finite-only geospatial validation with realistic maxima, and request timeouts. Add boundary/fuzz tests and verify oversized requests are rejected before provider/network/DB work.</p></div></div>
+        </details>
+
+        <details class="finding" data-severity="Medium" data-domain="API Errors Identity Reliability">
+          <summary><span class="severity Medium">Medium</span><span class="finding-title"><span class="finding-id">KF-M06 · </span>Error contracts and provider-outage handling are inconsistent</span></summary>
+          <div class="finding-body"><div><h4>Evidence and impact</h4><p><a class="path" href="../../backend/app/errors.py">errors.py:1-4,26-50</a> promises a uniform envelope but does not handle Starlette HTTP exceptions; live 404/405 responses use default <code>{detail}</code>. Google/Microsoft network/JWKS failures collapse into 401 invalid-token responses. Clients cannot distinguish invalid credentials, unavailable upstreams, routing errors, and retryable failures.</p></div><div><h4>Remediation / acceptance</h4><p>Define/version one error schema, register HTTPException handling, map provider transport failures to bounded 503 responses, add explicit timeouts/retry/circuit metrics, and contract-test every status family without reflecting tokens.</p></div></div>
+        </details>
+
+        <details class="finding" data-severity="Medium" data-domain="Audit Performance Database">
+          <summary><span class="severity Medium">Medium</span><span class="finding-title"><span class="finding-id">KF-M07 · </span>Request logging adds a second database transaction to responses</span></summary>
+          <div class="finding-body"><div><h4>Evidence and impact</h4><p><a class="path" href="../../backend/app/main.py">main.py:60-80</a> waits for a threadpool logging call; <a class="path" href="../../backend/app/request_logging.py">request_logging.py:70-95</a> opens and commits another DB session. It fails open, omits rate-limited traffic, and prefix skips can hide future paths. Under load or DB degradation this adds latency, connection pressure, or silent evidence loss.</p></div><div><h4>Remediation / acceptance</h4><p>Separate access logs from transactional security events; use a bounded queue/outbox and centralized structured logging with loss/backpressure metrics. Performance tests should show request latency and pool health remain within SLO during sink slowdown/failure.</p></div></div>
+        </details>
+
+        <details class="finding" data-severity="Medium" data-domain="Database Alembic Migrations Reliability">
+          <summary><span class="severity Medium">Medium</span><span class="finding-title"><span class="finding-id">KF-M08 · </span>Migration drift, historical seeds, and rollout safety need repair</span></summary>
+          <div class="finding-body"><div><h4>Evidence and impact</h4><p><code>alembic current/heads</code> both return 0012, but <code>alembic check</code> produces seven false timestamp-default diffs because MySQL normalizes <code>CURRENT_TIMESTAMP(6)</code> to <code>now(6)</code>. Historical migrations seed/delete fixed surrogate IDs; migration 0006 drops data and cannot restore it. CI tests only fresh upgrade, not populated N-1/N-2 or zero-downtime behavior.</p></div><div><h4>Remediation / acceptance</h4><p>Normalize equivalent defaults in the comparator; resolve seeds by natural key; adopt expand/contract DDL, metadata-lock/capacity preflight, backup gates and restore rollback. Add drift plus populated snapshot upgrade tests to CI.</p></div></div>
+        </details>
+
+        <details class="finding" data-severity="Medium" data-domain="Database Constraints Integrity">
+          <summary><span class="severity Medium">Medium</span><span class="finding-title"><span class="finding-id">KF-M09 · </span>Security and business invariants exist only in application code</span></summary>
+          <div class="finding-body"><div><h4>Evidence and impact</h4><p>Live schema has no CHECK constraints. Provider availability, <code>signup_mode</code>, boolean domains, latitude/longitude/accuracy bounds, and the singleton settings row are not enforced by MySQL. Alternate writers, migrations, races, or bugs can persist states the API rejects.</p></div><div><h4>Remediation / acceptance</h4><p>Add focused DB constraints for durable security/business invariants—not every presentation rule—and make settings singleton non-auto-increment/guarded. Test both ORM and direct-SQL rejection on MySQL 8.4.</p></div></div>
+        </details>
+
+        <details class="finding" data-severity="Medium" data-domain="Database Performance API Scale">
+          <summary><span class="severity Medium">Medium</span><span class="finding-title"><span class="finding-id">KF-M10 · </span>Directory, log, role, session, and export queries will not scale</span></summary>
+          <div class="finding-body"><div><h4>Evidence and impact</h4><p>Live <code>EXPLAIN</code> confirmed table scans/sorts for common user queries and explicit session sorts. <a class="path" href="../../backend/app/routers/users.py">users.py:82-203</a> uses leading-wildcard LOWER search, offset/count pagination, and a cursor-holding unbounded export. Logs are similar; role listing performs one count per role.</p></div><div><h4>Remediation / acceptance</h4><p>Use keyset pagination, workload-validated composite indexes, grouped counts, bounded/asynchronous exports, and a deliberate search strategy. Load-test production-like cardinality and enforce query count/latency budgets with <code>EXPLAIN ANALYZE</code>.</p></div></div>
+        </details>
+
+        <details class="finding" data-severity="Medium" data-domain="Database Logs Retention Scale">
+          <summary><span class="severity Medium">Medium</span><span class="finding-title"><span class="finding-id">KF-M11 · </span>Request-log key and retention mechanics are not durable at scale</span></summary>
+          <div class="finding-body"><div><h4>Evidence and impact</h4><p><a class="path" href="../../backend/app/models/request_log.py">request_log.py:21</a> uses signed INT for an append stream (about 249 days at 100 logged requests/s). <a class="path" href="../../backend/app/request_logging.py">request_logging.py:13-18,62-93</a> uses a process-local counter and unbounded delete every 500 inserts; restarts/low traffic can leave old rows indefinitely.</p></div><div><h4>Remediation / acceptance</h4><p>Migrate to BIGINT, scheduled bounded purge or time partitioning, retention/legal-hold configuration, archive/export strategy, and alerting for keyspace/storage/cleanup lag. Test purge under realistic volume and replicas.</p></div></div>
+        </details>
+
+        <details class="finding" data-severity="Medium" data-domain="Database Pooling Time Reliability">
+          <summary><span class="severity Medium">Medium</span><span class="finding-title"><span class="finding-id">KF-M12 · </span>Connection budgets, timeouts, retries, and timestamp semantics are implicit</span></summary>
+          <div class="finding-body"><div><h4>Evidence and impact</h4><p><a class="path" href="../../backend/app/db.py">db.py:18-24</a> leaves pool size/overflow/checkout and driver read/write/query timeouts at defaults; two workers can open roughly 30 connections before migrations/admin tasks. App code mixes aware and naive UTC, while <code>updated_at</code> server generation is not mapped/refreshed consistently.</p></div><div><h4>Remediation / acceptance</h4><p>Budget connections from worker/instance count, configure and instrument pool/driver/statement timeouts, retry only safe idempotent work, normalize one UTC representation, and correctly fetch server-generated timestamps. Test failover, deadlock, saturation, and serialization.</p></div></div>
+        </details>
+
+        <details class="finding" data-severity="Medium" data-domain="React RBAC Authorization UX">
+          <summary><span class="severity Medium">Medium</span><span class="finding-title"><span class="finding-id">KF-M13 · </span>Frontend and backend permission contracts disagree</span></summary>
+          <div class="finding-body"><div><h4>Evidence and impact</h4><p><a class="path" href="../../frontend/src/App.tsx">App.tsx:64-70</a> admits <code>settings.manage</code>, then <a class="path" href="../../frontend/src/pages/SettingsPage.tsx">SettingsPage.tsx:22-29,41-45</a> calls roles/users/approval APIs requiring three other permissions. Failures become empty lists. Conversely, backend user role/direct-grant APIs need only <code>users.manage</code> while UI additionally requires <code>roles.manage</code>.</p></div><div><h4>Remediation / acceptance</h4><p>Define one permission-to-capability matrix, split/gate settings panels or align APIs, preserve explicit forbidden errors, and table-test every route, menu, component, and endpoint for representative roles.</p></div></div>
+        </details>
+
+        <details class="finding" data-severity="Medium" data-domain="React Mobile Accessibility Responsive">
+          <summary><span class="severity Medium">Medium</span><span class="finding-title"><span class="finding-id">KF-M14 · </span>Mobile navigation disappears and public pages fail 320 px reflow</span></summary>
+          <div class="finding-body"><div><h4>Evidence and impact</h4><p>At 320 px, measured overflow was 93 px on home, 104 on login, 79 on about, and 6 on security; 375 px still failed three pages. <a class="path" href="../../frontend/src/index.css">index.css:353-375</a> keeps public nav on one row and <code>:505-507</code> fixes the login panel at 400 px. At ≤860 px <code>:828-849</code> hides the authenticated rail—with all app navigation—and provides no replacement.</p></div><div><h4>Remediation / acceptance</h4><p>Build a keyboard-accessible compact app menu, responsive/wrapping public nav, fluid auth panel, safe-area/focus handling, and Playwright projects at 320/375/768 px. Pass WCAG 2.2 <a href="https://www.w3.org/TR/WCAG22/#reflow">Reflow</a> without two-dimensional page scrolling.</p></div></div>
+        </details>
+
+        <details class="finding" data-severity="Medium" data-domain="React Accessibility WCAG">
+          <summary><span class="severity Medium">Medium</span><span class="finding-title"><span class="finding-id">KF-M15 · </span>Admin form/dialog semantics and public accessibility are incomplete</span></summary>
+          <div class="finding-body"><div><h4>Evidence and impact</h4><p>Settings switches/default-role select and icon dismissals lack accessible names. <a class="path" href="../../frontend/src/pages/AdminRolesPage.tsx">AdminRolesPage.tsx:198,279</a> uses visual overlays without dialog semantics, name, Escape, trap, or focus restoration. Axe found a serious 1.15:1 link-distinguishability failure on <a class="path" href="../../frontend/src/pages/SecurityPage.tsx">SecurityPage.tsx:168</a>; login lacks a heading/landmark/skip route.</p></div><div><h4>Remediation / acceptance</h4><p>Reuse the repaired UserEditModal as the shared dialog primitive, associate every label, name icon controls, correct link contrast/underline and document landmarks, add <code>eslint-plugin-jsx-a11y</code> plus axe/manual keyboard/screen-reader gates against WCAG 2.2 AA.</p></div></div>
+        </details>
+
+        <details class="finding" data-severity="Medium" data-domain="React Reliability Telemetry Contracts">
+          <summary><span class="severity Medium">Medium</span><span class="finding-title"><span class="finding-id">KF-M16 · </span>The SPA has no render recovery or client error telemetry</span></summary>
+          <div class="finding-body"><div><h4>Evidence and impact</h4><p><a class="path" href="../../frontend/src/App.tsx">App.tsx:24-86</a> provides Suspense only; repository search found no Error Boundary. Render exceptions or stale lazy chunks can blank the whole SPA. API/WebSocket responses are trusted via TypeScript casts, and many requests have no timeout/cancellation, allowing stale updates without diagnostic context.</p></div><div><h4>Remediation / acceptance</h4><p>Add root and route-level error boundaries, stale-chunk reload/retry UX, sanitized client telemetry with correlation IDs, OpenAPI-generated/runtime-validated critical contracts, and AbortSignal timeouts. React documents boundaries in the <a href="https://react.dev/reference/react/Component#catching-rendering-errors-with-an-error-boundary">official API reference</a>.</p></div></div>
+        </details>
+
+        <details class="finding" data-severity="Medium" data-domain="React API Concurrency Authorization">
+          <summary><span class="severity Medium">Medium</span><span class="finding-title"><span class="finding-id">KF-M17 · </span>Access-control edits are last-writer-wins and can silently lose changes</span></summary>
+          <div class="finding-body"><div><h4>Evidence and impact</h4><p><a class="path" href="../../frontend/src/pages/AdminRolesPage.tsx">AdminRolesPage.tsx:32</a> and <a class="path" href="../../frontend/src/components/UserEditModal.tsx">UserEditModal.tsx:127</a> replace complete permission sets from rendered snapshots; rapid or concurrent edits can derive from the same old set and responses can arrive out of order. Server resources lack versions/ETags, mutation idempotency, and a conflict contract.</p></div><div><h4>Remediation / acceptance</h4><p>Serialize/disable per-resource mutations or provide add/remove operations; add optimistic versions/ETags and conflict UX; define idempotency for retryable operations and an API evolution/versioning policy. Test two-admin and high-latency races.</p></div></div>
+        </details>
+
+        <details class="finding" data-severity="Medium" data-domain="Testing Quality Python React">
+          <summary><span class="severity Medium">Medium</span><span class="finding-title"><span class="finding-id">KF-M18 · </span>Quality gates do not cover the application’s highest-risk behavior</span></summary>
+          <div class="finding-body"><div><h4>Evidence and impact</h4><p>Backend breadth is good (137 tests), but there is no coverage floor, mypy/Pyright, warning-as-error, proxy topology, Microsoft verifier, CSRF, test-DB guard, two-worker, or migration-drift gate. Frontend has 3 files/11 tests and 3 desktop Chromium E2E tests—no provider matrix, settings/role builder, mobile, accessibility, error boundary, or presence suite. ESLint omits Hooks and JSX-a11y rules.</p></div><div><h4>Remediation / acceptance</h4><p>Adopt risk-based coverage ratchets, typing, Hooks/a11y lint, provider/security/concurrency regression suites, mobile/axe projects, mutation and restore scenarios, warning discipline, and test artifacts. Require the suite in protected-branch rules.</p></div></div>
+        </details>
+
+        <details class="finding" data-severity="Medium" data-domain="Supply chain Dependencies CI Docker">
+          <summary><span class="severity Medium">Medium</span><span class="finding-title"><span class="finding-id">KF-M19 · </span>Dependency and build inputs are only partially reproducible and scanned</span></summary>
+          <div class="finding-body"><div><h4>Evidence and impact</h4><p>Direct Python packages are pinned, but transitives have no lock/hashes; CI runs <code>pip-audit --no-deps</code>, missing transitive CVEs that the manual full scan covered. Full npm audit reports 5 dev-tool entries (Vitest UI critical is not invoked; Vite is all-interface). Python/Node/base image tags are not digest-pinned; RDS CA is downloaded without content verification. No SBOM/provenance/security scan is enforced for deployable images.</p></div><div><h4>Remediation / acceptance</h4><p>Use hash-locked Python resolution, full-graph audit, coordinated Vite/Vitest upgrade, digest-pinned builders/runtimes/actions, verified build inputs, SBOM, signed provenance and container policy gates with documented reachability exceptions.</p></div></div>
+        </details>
+
+        <details class="finding" data-severity="Medium" data-domain="Operations Observability Deployment Secrets">
+          <summary><span class="severity Medium">Medium</span><span class="finding-title"><span class="finding-id">KF-M20 · </span>Operational telemetry, health semantics, and runtime hardening are incomplete</span></summary>
+          <div class="finding-body"><div><h4>Evidence and impact</h4><p>There are no structured JSON logs, metrics, traces, correlation IDs, SLOs/alerts, error service, or deployment/runbook ownership. Health conflates liveness and DB readiness and omits schema. Reference containers lack resource limits, read-only filesystems, dropped capabilities/no-new-privileges, web/Caddy healthchecks, and rollout/rollback orchestration. Local API also receives the MySQL root password because the whole root <code>.env</code> is injected.</p></div><div><h4>Remediation / acceptance</h4><p>Define SLIs/SLOs and on-call alerts; add correlation/trace propagation, separate liveness/readiness/startup checks, least-privilege per-service secrets, container hardening/resource budgets, deployment and rollback automation, synthetic checks, dashboards and runbooks. Prove behavior with failure injection.</p></div></div>
+        </details>
+
+        <details class="finding" data-severity="Low" data-domain="Security JWT Hardening">
+          <summary><span class="severity Low">Low</span><span class="finding-title"><span class="finding-id">KF-L01 · </span>Session JWTs have no issuer/audience/type or key-rotation contract</span></summary>
+          <div class="finding-body"><div><h4>Evidence and impact</h4><p><a class="path" href="../../backend/app/auth/jwt.py">jwt.py:11-32</a> correctly pins HS256 and requires exp/iat/sub/jti, but omits issuer, audience, token type, KID, and a verification keyring. This is defense-in-depth today because tokens are app-internal; it complicates safe secret rotation and future multi-service use.</p></div><div><h4>Remediation / acceptance</h4><p>Define explicit iss/aud/typ, key IDs and overlapping rotation windows; keep algorithms fixed and add old/new key acceptance/rejection tests plus an operational rotation drill.</p></div></div>
+        </details>
+
+        <details class="finding" data-severity="Low" data-domain="Security Sessions Defense in depth">
+          <summary><span class="severity Low">Low</span><span class="finding-title"><span class="finding-id">KF-L02 · </span>Session-row ownership is not reasserted against JWT subject</span></summary>
+          <div class="finding-body"><div><h4>Evidence and impact</h4><p><a class="path" href="../../backend/app/auth/deps.py">auth/deps.py:45-61</a> resolves a user from JWT <code>sub</code> and an active session from <code>jti</code>; <a class="path" href="../../backend/app/auth/sessions.py">sessions.py:33-38</a> does not explicitly assert both belong together. Unique random jti and signed tokens make exploitation unlikely without another failure.</p></div><div><h4>Remediation / acceptance</h4><p>Query/validate <code>session.user_id == sub</code> atomically and add a mismatched subject/jti negative test so a future token/session refactor cannot weaken the binding.</p></div></div>
+        </details>
+
+        <details class="finding" data-severity="Low" data-domain="Identity Privacy Data minimization">
+          <summary><span class="severity Low">Low</span><span class="finding-title"><span class="finding-id">KF-L03 · </span>Identity lifecycle and disclosure can be narrowed</span></summary>
+          <div class="finding-body"><div><h4>Evidence and impact</h4><p>Google admin bootstrap uses mutable/reassignable email rather than immutable subject at <a class="path" href="../../backend/app/auth/service.py">service.py:39-54</a>; canonical <code>User.email</code> is not refreshed on provider change. <a class="path" href="../../backend/app/schemas/user.py">schemas/user.py:9-14,75-78</a> returns stable provider subjects to any directory viewer.</p></div><div><h4>Remediation / acceptance</h4><p>Use immutable bootstrap IDs or authoritative group/SCIM workflow, define email synchronization/audit behavior, and return identity IDs only to self/admin DTOs. Add reassignment and least-data response tests.</p></div></div>
+        </details>
+
+        <details class="finding" data-severity="Low" data-domain="Security Headers Session Step-up">
+          <summary><span class="severity Low">Low</span><span class="finding-title"><span class="finding-id">KF-L04 · </span>Session/cache/edge hardening and privileged step-up are incomplete</span></summary>
+          <div class="finding-body"><div><h4>Evidence and impact</h4><p>Auth/session/PII responses have no explicit <code>Cache-Control: no-store</code>; the cookie is host-only but not <code>__Host-</code> prefixed. The reference edge has no explicit HSTS/security-header policy for API responses. Privileged RBAC, settings, export, and bulk actions require no recent authentication/step-up or IdP assurance signal.</p></div><div><h4>Remediation / acceptance</h4><p>Add cache directives, <code>__Host-session</code>, HSTS at the TLS edge, consistent API headers, and policy-driven recent-auth/MFA/Conditional Access for high-impact operations; verify with production-response tests.</p></div></div>
+        </details>
+
+        <details class="finding" data-severity="Low" data-domain="React Privacy Third party Geolocation">
+          <summary><span class="severity Low">Low</span><span class="finding-title"><span class="finding-id">KF-L05 · </span>Third-party script and geolocation UX exceed minimum exposure</span></summary>
+          <div class="finding-body"><div><h4>Evidence and impact</h4><p><a class="path" href="../../frontend/index.html">frontend/index.html:34</a> loads Google’s remote script on every route even when disabled. <a class="path" href="../../frontend/src/pages/LoginPage.tsx">LoginPage.tsx:36-39</a> requests precise location immediately after login without an in-product purpose/retention explanation. Browser consent exists, but privacy exposure and surprise can be reduced.</p></div><div><h4>Remediation / acceptance</h4><p>Load provider SDKs on demand after effective configuration, add a clear purpose/retention choice before location prompt, persist opt-out, and test that public/non-Google routes make no Google request.</p></div></div>
+        </details>
+
+        <details class="finding" data-severity="Low" data-domain="Python Maintainability Architecture">
+          <summary><span class="severity Low">Low</span><span class="finding-title"><span class="finding-id">KF-L06 · </span>One router mutation is a complexity hotspot</span></summary>
+          <div class="finding-body"><div><h4>Evidence and impact</h4><p>Radon rates 172 of 173 Python blocks A-C with average complexity 3.16, a strong result. <a class="path" href="../../backend/app/routers/users.py">users.bulk_action:207</a> is the exception at D / 23 and combines authorization, action branching, per-item transactions, error mapping and response aggregation.</p></div><div><h4>Remediation / acceptance</h4><p>Extract policy and action services with typed outcomes while preserving intentional partial-success semantics. Bring the function below the agreed complexity threshold and retain branch/transaction tests.</p></div></div>
+        </details>
+
+        <details class="finding" data-severity="Low" data-domain="Documentation Product claims Governance">
+          <summary><span class="severity Low">Low</span><span class="finding-title"><span class="finding-id">KF-L07 · </span>Documentation and public security claims have drifted</span></summary>
+          <div class="finding-body"><div><h4>Evidence and impact</h4><p><a class="path" href="../../README.md">README.md:140,281</a> says migrations stop at 0010 although head is 0012; <a class="path" href="../../frontend/src/pages/SecurityPage.tsx">SecurityPage.tsx:169</a> says nonce binding is not wired although Google now uses it; landing content advertises working Microsoft and an “audit-ready” provider trail that do not exist.</p></div><div><h4>Remediation / acceptance</h4><p>Generate architecture/API/migration facts where possible, add claim-review ownership to release checklists, and describe current limitations plainly. Documentation tests should fail on migration count/provider capability drift.</p></div></div>
+        </details>
+
+        <details class="finding" data-severity="Decision" data-domain="Architecture Tenancy Product">
+          <summary><span class="severity Decision">Decision</span><span class="finding-title"><span class="finding-id">KF-A01 · </span>Declare one tenant per deployment—or redesign every data boundary</span></summary>
+          <div class="finding-body"><div><h4>Evidence and consequence</h4><p>Users, roles, permissions, settings, sessions, logs and all queries are global. Microsoft <code>tid</code> is verified transiently but not persisted; identity uniqueness is provider + subject. This is acceptable for a deliberately single-company console, but is a High blocker for shared SaaS.</p></div><div><h4>Decision / acceptance</h4><p><strong>Single tenant:</strong> enforce one organization/tenant at startup and document one isolated database/deployment per customer. <strong>Shared SaaS:</strong> add organization roots, tenant FKs and composite constraints everywhere, tenant-aware identity keys such as <code>(tid,oid)</code>, mandatory scoped repositories, cross-tenant negative tests, tenant audit, and isolation strategy. See <a href="https://learn.microsoft.com/en-us/security/zero-trust/develop/token-management">Microsoft identity guidance</a>.</p></div></div>
+        </details>
+
+      </div>
+    </section>
+
+    <section id="deep-dives">
+      <div class="wrap">
+        <h2>Domain conclusions</h2>
+        <p class="section-lede">The register above is the authoritative issue list. These summaries explain the engineering posture behind the scores and keep strengths visible alongside risk.</p>
+        <div class="deep-grid">
+          <article class="deep"><h3>Python / FastAPI</h3><p><strong>Verdict: well-structured small service, not yet production-operational.</strong></p><ul><li>Strong: compact routers/models, low average complexity, Pydantic validation, generic 500s, threadpool treatment for sync ORM work, non-root production user.</li><li>Strong: provider signature/audience/issuer checks, JWT claim requirements, server-side session revocation and per-request RBAC.</li><li>Gap: proxy/rate limiter ordering, process-local coordination, destructive test guard, CSRF, input size, uniform errors, typing/coverage/security gates.</li><li>Recommendation: retain the synchronous SQLAlchemy design for now; invest in service/policy boundaries and production controls before considering framework churn.</li></ul></article>
+          <article class="deep"><h3>Database architecture</h3><p><strong>Verdict: sound relational kernel for one organization; weak enterprise lifecycle.</strong></p><ul><li>Strong: InnoDB, utf8mb4, sensible FKs, composite RBAC keys, atomic nonce consume, first-login race recovery, last-admin row locking, UTC app sessions.</li><li>Gap: EOL MySQL, opaque-ID collation, settings invariant race, TLS split, no CHECK constraints, session/log retention, scale indexes, noisy drift gate.</li><li>Gap: no implemented managed database, migration orchestration, HA/PITR/restore evidence or schema-aware readiness.</li><li>Recommendation: upgrade/rehearse 8.4 first, then evolve with expand/contract migrations and evidence-producing recovery automation.</li></ul></article>
+          <article class="deep"><h3>React / TypeScript</h3><p><strong>Verdict: lean SPA with good foundations and one broken identity capability.</strong></p><ul><li>Strong: strict TypeScript, no dangerous HTML/eval/session storage, route-level splitting, lean bundle, reduced-motion support, reconnect/fallback behavior.</li><li>Gap: Microsoft is advertised but unreachable, provider toggles are inconsistent, permission contracts drift, and access edits race.</li><li>Gap: missing mobile app navigation, 320 px overflow, systemic dialog/form accessibility gaps, no render boundary or client telemetry.</li><li>Recommendation: fix provider state first; then establish shared accessible primitives, generated contracts, mutation orchestration, and risk-centered tests.</li></ul></article>
+          <article class="deep"><h3>Security / identity</h3><p><strong>Verdict: good cryptographic verification, incomplete surrounding control plane.</strong></p><ul><li>Strong: algorithms pinned, nonces DB-backed and atomic, provider errors sanitized, identities normally keyed by immutable subject, sessions revocable.</li><li>Gap: active dev bypass exposure, open admission, wrong Google organization claim, SameSite-only mutation policy, proxy topology, provider failover.</li><li>Gap: request logging is not a security event system; no step-up, key rotation runbook, or tenant decision.</li><li>Recommendation: treat identity as an end-to-end product capability—configuration, UX, admission, sessions, audit, recovery and incident controls—not only token verification.</li></ul></article>
+          <article class="deep"><h3>Supply chain / CI</h3><p><strong>Verdict: application packages are clean; deployable artifact and governance controls are not.</strong></p><ul><li>Strong: Python transitive and production npm scans are clean; builds are deterministic enough for local development; last 10 CI runs passed.</li><li>Gap: Nginx runtime is stale, dev tool advisories exist, Python transitives are unlocked, images/actions are not digest/SHA pinned.</li><li>Gap: no enforced container scan, SBOM/provenance, signed release, protected environment, or branch/ruleset.</li><li>Recommendation: make the built digest—not the source tree—the governed release unit.</li></ul></article>
+          <article class="deep"><h3>Operations / resilience</h3><p><strong>Verdict: reference architecture only.</strong></p><ul><li>Strong: local Compose is convenient; DB/API health and configurable ports work; source explicitly says deployment is not wired.</li><li>Gap: no IaC, secret rotation, least-privilege DB roles, resource budgets, telemetry, SLOs, deploy/rollback, HA, PITR, restore drill or incident playbook.</li><li>Gap: liveness/readiness/schema state are conflated; two-worker image contradicts application state model.</li><li>Recommendation: build one boring, observable, reproducible production path and game-day it before feature expansion.</li></ul></article>
+        </div>
+      </div>
+    </section>
+
+    <section id="risk-profile">
+      <div class="wrap">
+        <h2>Risk concentration</h2>
+        <p class="section-lede">Grouped finding count by primary owner. Counts are a workload signal, not a substitute for severity: the first security and data blockers dominate release risk.</p>
+        <div class="score-layout">
+          <div class="card full">
+            <div class="risk-bars" aria-label="Findings by domain">
+              <div class="risk-row"><span>Identity / security</span><div class="bar"><span style="--w:100%;--bar:var(--red)"></span></div><strong>12</strong></div>
+              <div class="risk-row"><span>Database / data</span><div class="bar"><span style="--w:83%;--bar:var(--orange)"></span></div><strong>10</strong></div>
+              <div class="risk-row"><span>Operations</span><div class="bar"><span style="--w:58%;--bar:var(--amber)"></span></div><strong>7</strong></div>
+              <div class="risk-row"><span>Frontend</span><div class="bar"><span style="--w:50%;--bar:var(--teal)"></span></div><strong>6</strong></div>
+              <div class="risk-row"><span>SDLC / supply</span><div class="bar"><span style="--w:42%;--bar:var(--blue)"></span></div><strong>5</strong></div>
+              <div class="risk-row"><span>Quality / docs</span><div class="bar"><span style="--w:17%;--bar:var(--green)"></span></div><strong>2</strong></div>
+            </div>
+          </div>
+          <aside class="callout"><h3>Severity model</h3><p><strong>High</strong> means a verified material compromise/outage/data-loss path or an enterprise release control with no credible production evidence. <strong>Medium</strong> is meaningful but conditional, scoped, or recoverable. <strong>Low</strong> is defense-in-depth or maintainability debt. <strong>Decision</strong> becomes High only if shared SaaS is intended.</p></aside>
+        </div>
+      </div>
+    </section>
+
+    <section id="delta">
+      <div class="wrap">
+        <h2>Change since the 2026-07-15 audit</h2>
+        <p class="section-lede">The team moved quickly: Git history contains remediation-tagged commits for 42 of the previous 43 IDs. That is not the same as 42 independently closed controls; this audit spot-checked behavior and found substantial closure plus several partial fixes and new cross-boundary risks.</p>
+        <div class="deep-grid">
+          <div class="deep"><h3>Materially improved</h3><ul><li>Production dependency CVE removed; Python advisories patched.</li><li>JWT/config negative tests, safe environment default, secure-cookie invariant and secret entropy checks.</li><li>Admin hierarchy and last-admin locking across most high-impact paths.</li><li>DB-backed single-use nonce, WebSocket origin/auth/cap/reconnect improvements.</li><li>Non-root API, SPA security headers, trusted-proxy configuration, CI audits and production image builds.</li><li>User-edit dialog, contrast/focus improvements, permission refresh, mutation E2E.</li></ul></div>
+          <div class="deep"><h3>Partial / reopened / still open</h3><ul><li>Provider lockout guard is raceable and ignores configured-vs-enabled state; Microsoft remains nonfunctional.</li><li>Image pinning moved from floating Nginx to an old vulnerable version, without digest or scan gate.</li><li>A11y repaired one modal but other admin dialogs/forms and mobile navigation remain.</li><li>Previous lost-update item (FND-038) remains across access-control replace operations.</li><li>Request logging improved throughput/retention but still is not an attributable audit-event design.</li><li>Nonce closed replay across workers but introduced an unauthenticated write/amplification surface.</li></ul></div>
+        </div>
+      </div>
+    </section>
+
+    <section id="roadmap">
+      <div class="wrap">
+        <h2>Risk-ordered remediation roadmap</h2>
+        <p class="section-lede">Sequence is designed to reduce current exposure first, then correct identity/data invariants, then build the evidence needed for a production decision. Avoid bundling the MySQL engine upgrade with unrelated schema redesign.</p>
+        <div class="card full" style="overflow:auto">
+          <table class="roadmap" aria-label="Remediation roadmap">
+            <thead><tr><th>Window</th><th>Actions</th><th>Primary owners</th><th>Proof</th></tr></thead>
+            <tbody>
+              <tr><td>0–24 hours</td><td><ul><li>Bind API/web to loopback or disable dev auth immediately.</li><li>Set onboarding to approval/closed and explicitly configure organization admission.</li><li>Temporarily keep one API worker; document current stack as local-only.</li><li>Open tracked blocker issues and protect main from direct push.</li></ul></td><td>Platform · Product · Security</td><td>Off-host probes fail; config snapshot reviewed; required PR checks active.</td></tr>
+              <tr><td>2–7 days</td><td><ul><li>Fix effective provider config and complete Microsoft end-to-end—or remove it from settings/copy.</li><li>Fix Google <code>hd</code>, nonce endpoint limits/cleanup, proxy IP ordering and test DB guard.</li><li>Upgrade Nginx base and enforce image scan; enable GitHub security services.</li><li>Add CSRF policy and close delegated admin/meta-role authorization gaps.</li></ul></td><td>Backend · Frontend · AppSec · DevEx</td><td>Provider/security matrix and negative tests; clean image; protected workflow.</td></tr>
+              <tr><td>2–4 weeks</td><td><ul><li>Rehearse and migrate to MySQL 8.4 LTS.</li><li>Fix opaque-ID collations, settings lock/CHECK, TLS parity and Alembic drift.</li><li>Add session expiry/retention, DB indexes/pool/timeouts, migration/readiness job.</li><li>Implement mobile navigation, AA dialog/form repairs, error boundaries and telemetry.</li></ul></td><td>Data · Backend · Frontend · QA</td><td>Upgrade/rollback rehearsal; concurrency/DB tests; 320 px + axe gates.</td></tr>
+              <tr><td>30–60 days</td><td><ul><li>Implement structured security events and transactional outbox/SIEM delivery.</li><li>Introduce IaC-managed DB, private networking, KMS, Multi-AZ, PITR, secret rotation and least-privilege principals.</li><li>Add SBOM, signed provenance, locked Python graph, SHA/digest pins and release environments.</li><li>Establish coverage/type/security/migration/load gates and API concurrency contracts.</li></ul></td><td>Platform · Security · Data · Engineering</td><td>Traceable privileged events; reproducible signed release; load/security gates.</td></tr>
+              <tr><td>60–90 days</td><td><ul><li>Run restore and incident game days; measure RPO/RTO and alert response.</li><li>Finalize single-tenant vs SaaS decision and isolation model.</li><li>Publish SLOs, dashboards, on-call/runbooks, retention/legal-hold policy and privacy workflows.</li><li>Run independent penetration test and accessibility validation on the production-like environment.</li></ul></td><td>Leadership · SRE · Security · Compliance</td><td>Signed game-day report, accepted architecture decision, closed production exit review.</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <section id="exit-criteria">
+      <div class="wrap">
+        <h2>Production exit criteria</h2>
+        <p class="section-lede">A release is not ready because code was changed; it is ready when these outcomes are demonstrated in CI and a production-like environment.</p>
+        <div class="exit-grid">
+          <div class="exit">Dev-auth is unreachable off-host and absent from all production artifacts/routes.</div>
+          <div class="exit">Google-only, Microsoft-only and failover login E2E tests pass with effective provider configuration.</div>
+          <div class="exit">Admission policy validates signed organization/tenant claims and defaults closed or approval.</div>
+          <div class="exit">Nonce issuance/cleanup remains bounded under distributed abuse tests.</div>
+          <div class="exit">MySQL 8.4 LTS upgrade and rollback-by-restore rehearsal passes.</div>
+          <div class="exit">Runtime and migration connections require verified TLS and separate least-privilege roles.</div>
+          <div class="exit">OIDC opaque identifiers use binary semantics; provider settings invariant is race-safe and DB-enforced.</div>
+          <div class="exit">Deployable images have no unaccepted Critical/High findings and include signed SBOM/provenance.</div>
+          <div class="exit">Test DB guard aborts on every main/production URL before destructive work.</div>
+          <div class="exit">Main branch and deployment environments enforce review, checks, security scans and approvals.</div>
+          <div class="exit">Privileged/auth events are attributable, correlated, append-only, monitored and retention-governed.</div>
+          <div class="exit">A serial migration job and schema-aware readiness gate traffic safely.</div>
+          <div class="exit">Backup/PITR/HA and a timed restore drill meet accepted RPO/RTO.</div>
+          <div class="exit">Single-tenant or tenant-aware SaaS architecture is explicitly approved and enforced.</div>
+          <div class="exit">Desktop/mobile WCAG 2.2 AA, error recovery, provider and authorization matrices pass.</div>
+          <div class="exit">Load/failure tests meet SLOs for latency, errors, DB pool, rate limits, presence and event delivery.</div>
+        </div>
+      </div>
+    </section>
+
+    <section id="method">
+      <div class="wrap">
+        <h2>Method, scope, and limitations</h2>
+        <div class="deep-grid">
+          <div class="deep"><h3>Included</h3><ul><li>Tracked architecture, Python/FastAPI/SQLAlchemy/Alembic, React/TypeScript/CSS, Docker/Compose/Caddy/Nginx, CI and docs.</li><li>Live read-only schema/DDL/index/constraint/query-plan and aggregate data checks.</li><li>Unit/lint/build/dependency/security/complexity/container/secret scans.</li><li>Public-page axe and responsive browser checks; authenticated frontend static analysis.</li><li>Current GitHub repository security/governance posture via authenticated API/CLI.</li><li>Benchmark mapping to OWASP ASVS, NIST SSDF, WCAG 2.2 and official vendor guidance.</li></ul></div>
+          <div class="deep"><h3>Not claimed</h3><ul><li>No black-box penetration test, exploit campaign, source-code formal verification or production load test.</li><li>No legal/compliance certification (SOC 2, ISO 27001, HIPAA, GDPR, etc.).</li><li>No evidence was available for external AWS/network/IdP controls outside this repository.</li><li>No local E2E mutation rerun against the persistent main development database.</li><li>Container CVE counts are artifact findings; individual runtime reachability was not exhaustively proven.</li><li>Scores and severities are expert judgment and should be ratified against business threat model/data classification.</li></ul></div>
+        </div>
+      </div>
+    </section>
+
+    <section id="sources">
+      <div class="wrap">
+        <h2>Primary standards and vendor references</h2>
+        <p class="section-lede">Current technical claims were checked against primary/official sources. These are benchmarks, not assertions that Kingfisher is compliant.</p>
+        <ol class="sources">
+          <li><a href="https://owasp.org/www-project-application-security-verification-standard/">OWASP ASVS 5.0</a></li>
+          <li><a href="https://csrc.nist.gov/pubs/sp/800/218/final">NIST SP 800-218 Secure Software Development Framework</a></li>
+          <li><a href="https://www.w3.org/TR/WCAG22/">W3C Web Content Accessibility Guidelines 2.2</a></li>
+          <li><a href="https://openid.net/specs/openid-connect-core-1_0.html">OpenID Connect Core</a></li>
+          <li><a href="https://developers.google.com/identity/openid-connect/reference">Google OpenID Connect reference</a></li>
+          <li><a href="https://learn.microsoft.com/en-us/security/zero-trust/develop/token-management">Microsoft token management and tenant identity</a></li>
+          <li><a href="https://learn.microsoft.com/en-us/entra/identity-platform/claims-validation">Microsoft claims validation</a></li>
+          <li><a href="https://cheatsheetseries.owasp.org/cheatsheets/Cross-Site_Request_Forgery_Prevention_Cheat_Sheet.html">OWASP CSRF Prevention Cheat Sheet</a></li>
+          <li><a href="https://cheatsheetseries.owasp.org/cheatsheets/Logging_Cheat_Sheet.html">OWASP Logging Cheat Sheet</a></li>
+          <li><a href="https://dev.mysql.com/doc/relnotes/mysql/8.0/en/">Oracle MySQL 8.0 release notes</a></li>
+          <li><a href="https://dev.mysql.com/doc/refman/8.4/en/upgrade-paths.html">MySQL 8.4 upgrade paths</a></li>
+          <li><a href="https://dev.mysql.com/doc/refman/8.0/en/create-table-check-constraints.html">MySQL CHECK constraints</a></li>
+          <li><a href="https://alembic.sqlalchemy.org/en/latest/autogenerate.html#running-alembic-check-to-test-for-new-upgrade-operations">Alembic drift checking</a></li>
+          <li><a href="https://docs.sqlalchemy.org/en/20/core/pooling.html">SQLAlchemy connection pooling</a></li>
+          <li><a href="https://fastapi.tiangolo.com/deployment/concepts/">FastAPI deployment concepts</a></li>
+          <li><a href="https://react.dev/reference/react/Component#catching-rendering-errors-with-an-error-boundary">React error boundaries</a></li>
+          <li><a href="https://docs.docker.com/scout/">Docker Scout</a> and <a href="https://docs.docker.com/reference/cli/docker/scout/sbom/">SBOM guidance</a></li>
+          <li><a href="https://docs.github.com/en/repositories/configuring-branches-and-merges-in-your-repository/managing-rulesets/available-rules-for-rulesets">GitHub repository rulesets</a></li>
+          <li><a href="https://docs.github.com/en/code-security/tutorials/secure-your-organization/protect-against-threats">GitHub Actions and supply-chain hardening</a></li>
+          <li><a href="https://docs.aws.amazon.com/AmazonRDS/latest/gettingstartedguide/managing-backup-restore.html">AWS RDS backup and restore</a></li>
+          <li><a href="https://docs.aws.amazon.com/AmazonRDS/latest/UserGuide/Concepts.MultiAZSingleStandby.html">AWS RDS Multi-AZ</a></li>
+          <li><a href="https://docs.aws.amazon.com/AmazonRDS/latest/UserGuide/mysql-ssl-connections.require-ssl.html">AWS RDS MySQL TLS enforcement</a></li>
+        </ol>
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    <div class="wrap">Kingfisher enterprise readiness audit · Evidence captured 2026-07-20 · Baseline <code>23343f9</code>. This is a code/configuration review, not a penetration test, legal opinion, compliance certification, load test, or proof of external cloud controls.</div>
+  </footer>
+  <script>
+    (() => {
+      const root = document.documentElement;
+      const saved = localStorage.getItem('kf-audit-theme');
+      if (saved) root.dataset.theme = saved;
+      document.getElementById('themeToggle').addEventListener('click', () => {
+        const next = root.dataset.theme === 'dark' ? 'light' : 'dark';
+        root.dataset.theme = next; localStorage.setItem('kf-audit-theme', next);
+      });
+      const buttons = [...document.querySelectorAll('.filter-btn')];
+      const items = [...document.querySelectorAll('.finding')];
+      const search = document.getElementById('findingSearch');
+      const count = document.getElementById('findingCount');
+      let severity = 'All';
+      const apply = () => {
+        const q = search.value.trim().toLowerCase(); let shown = 0;
+        items.forEach(item => {
+          const okSev = severity === 'All' || item.dataset.severity === severity;
+          const okText = !q || item.textContent.toLowerCase().includes(q) || (item.dataset.domain || '').toLowerCase().includes(q);
+          item.hidden = !(okSev && okText); if (!item.hidden) shown++;
+        });
+        count.textContent = `${shown} shown`;
+      };
+      buttons.forEach(button => button.addEventListener('click', () => {
+        severity = button.dataset.filter;
+        buttons.forEach(b => b.setAttribute('aria-pressed', String(b === button)));
+        apply();
+      }));
+      search.addEventListener('input', apply);
+      document.getElementById('findings').addEventListener('dblclick', event => {
+        if (event.target.closest('.filters')) return;
+        items.filter(item => !item.hidden).forEach(item => item.open = true);
+      });
+      apply();
+    })();
+  </script>
+</body>
+</html>
