@@ -123,6 +123,28 @@
     .exit::before { content:"☐"; color:var(--red); font-weight:800; }
     .sources { columns:2; column-gap:36px; }
     .sources li { break-inside:avoid; margin:.35rem 0; }
+    .remediation-summary { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:12px; margin:22px 0; }
+    .remediation-stat { background:var(--surface); border:1px solid var(--line); border-radius:12px; padding:16px; }
+    .remediation-stat strong { display:block; color:var(--navy); font-size:1.8rem; line-height:1.1; }
+    .remediation-stat span { color:var(--muted); font:700 .7rem/1.2 var(--mono); letter-spacing:.07em; text-transform:uppercase; }
+    .table-scroll { max-width:100%; overflow-x:auto; border:1px solid var(--line); border-radius:var(--radius); background:var(--surface); }
+    .remediation-table { width:100%; min-width:860px; border-collapse:collapse; }
+    .remediation-table caption { padding:14px 16px; text-align:left; color:var(--muted); font-size:.84rem; }
+    .remediation-table th,.remediation-table td { padding:11px 13px; border-bottom:1px solid var(--line); text-align:left; vertical-align:top; }
+    .remediation-table th { color:var(--muted); background:var(--surface-2); font:700 .7rem/1.2 var(--mono); letter-spacing:.07em; text-transform:uppercase; }
+    .remediation-table tbody tr:last-child td { border-bottom:0; }
+    .remediation-table td:first-child { color:var(--navy); font:800 .78rem var(--mono); white-space:nowrap; }
+    .remediation-table td:nth-child(2) { white-space:nowrap; }
+    .remediation-table td:last-child { min-width:160px; }
+    .status-badge { display:inline-flex; align-items:center; border-radius:999px; padding:4px 8px; font:800 .67rem var(--mono); letter-spacing:.04em; text-transform:uppercase; }
+    .status-fixed { color:var(--green); background:var(--green-bg); }
+    .status-mitigated { color:var(--amber); background:var(--amber-bg); }
+    .status-deferred { color:var(--red); background:var(--red-bg); }
+    .verification-grid { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:12px; margin:20px 0 28px; }
+    .verification-item { border:1px solid var(--line); border-radius:12px; background:var(--surface); padding:15px; }
+    .verification-item b { display:block; color:var(--navy); margin-bottom:5px; }
+    .verification-item p { color:var(--muted); font-size:.86rem; margin:0; }
+    .ledger-note { color:var(--muted); font-size:.84rem; }
     footer { color:var(--muted); border-top:1px solid var(--line); padding:30px 0 48px; font-size:.84rem; }
     .print-only { display:none; }
     :focus-visible { outline:3px solid color-mix(in srgb,var(--blue) 55%,transparent); outline-offset:3px; }
@@ -137,6 +159,8 @@
       .finding summary { grid-template-columns:auto 1fr; } .finding summary::after { grid-column:2; justify-self:end; }
       .finding-body,.deep-grid,.exit-grid { grid-template-columns:1fr; } .risk-row { grid-template-columns:105px 1fr 42px; }
       .sources { columns:1; } .score-list,.evidence-table,.roadmap { display:block; max-width:100%; overflow-x:auto; }
+      .remediation-summary { grid-template-columns:repeat(2,minmax(0,1fr)); }
+      .verification-grid { grid-template-columns:1fr; }
     }
     @media print {
       :root { --bg:#fff; --surface:#fff; --surface-2:#f4f5f6; --ink:#111; --muted:#444; --line:#bbb; --navy:#111; --blue:#145d91; }
@@ -153,7 +177,7 @@
       <div class="brand">KINGFISHER / AUDIT</div>
       <nav class="topnav" aria-label="Report sections">
         <a href="#verdict">Verdict</a><a href="#scorecard">Scorecard</a><a href="#architecture">Architecture</a>
-        <a href="#evidence">Verification</a><a href="#findings">Findings</a><a href="#roadmap">Roadmap</a><a href="#sources">Sources</a>
+        <a href="#evidence">Verification</a><a href="#findings">Findings</a><a href="#remediation">Remediation</a><a href="#roadmap">Roadmap</a><a href="#sources">Sources</a>
       </nav>
       <button class="icon-btn" id="themeToggle" type="button" aria-label="Toggle color theme" title="Toggle color theme">◐</button>
     </div>
@@ -552,6 +576,92 @@
       </div>
     </section>
 
+    <section id="remediation">
+      <div class="wrap">
+        <div class="eyebrow">Remediation update · 2026-07-20 · through 34b2cd8</div>
+        <h2>Repository remediation ledger</h2>
+        <p class="section-lede">The verdict, scores, evidence, and finding cards above remain the point-in-time audit baseline at <code>23343f9</code>. This addendum records subsequent corrective action without rewriting that historical evidence.</p>
+
+        <div class="callout warning" role="note" aria-label="Current release recommendation">
+          <h3>Current recommendation: repository engineering green; enterprise production remains conditional</h3>
+          <p>All repository-scoped blockers found by the audit were corrected or materially mitigated and the local Docker reference stack is healthy. Production approval remains a conditional no-go until the two explicitly deferred external controls—and the external portions of mitigated controls—are demonstrated by the accountable platform, identity, security, and operations owners.</p>
+          <p><strong>Scope boundary:</strong> no AWS resource, GitHub repository-setting, or deployment-pipeline implementation was changed. CI quality and supply-chain tests were strengthened as authorized.</p>
+        </div>
+
+        <div class="remediation-summary" aria-label="Remediation status summary">
+          <div class="remediation-stat"><strong>42</strong><span>Total findings</span></div>
+          <div class="remediation-stat"><strong class="pass">24</strong><span>Fixed</span></div>
+          <div class="remediation-stat"><strong class="partial">16</strong><span>Mitigated</span></div>
+          <div class="remediation-stat"><strong class="fail">2</strong><span>Deferred</span></div>
+        </div>
+
+        <h3>Verification evidence</h3>
+        <div class="verification-grid">
+          <div class="verification-item"><b>Python / database</b><p>315 tests passed on Python 3.13.14 with 87.09% branch coverage. Ruff, mypy across 60 source files, Bandit, Alembic drift, and the MySQL 8.4 constraint suite passed.</p></div>
+          <div class="verification-item"><b>React / browser</b><p>ESLint and TypeScript passed; Vitest passed 22 tests across 8 files; the production Vite build and npm audit passed with zero known vulnerabilities.</p></div>
+          <div class="verification-item"><b>Production-like E2E</b><p>A clean isolated Compose environment migrated from an empty database through Alembic <code>0017</code>; all 3 Playwright scenarios passed and temporary resources were removed.</p></div>
+          <div class="verification-item"><b>Dependencies / supply chain</b><p>Linux/Python 3.13 production and development locks reproduced byte-for-byte. Both hash-locked graphs passed pip-audit with no known vulnerabilities.</p></div>
+          <div class="verification-item"><b>Container posture</b><p>Final API and web images scanned with zero Critical, High, Medium, or Low Docker Scout findings. API runs as UID/GID 65532 and contains no runtime pip.</p></div>
+          <div class="verification-item"><b>Recovery / runtime</b><p>Pre-migration backups were checksum-verified and restored into disposable MySQL 8.4 instances with matching schemas and row counts. Live liveness, schema readiness, API, and web probes are healthy.</p></div>
+        </div>
+
+        <h3>Finding-by-finding disposition</h3>
+        <p class="ledger-note"><span class="status-badge status-fixed">Fixed</span> means the repository acceptance condition was implemented and verified. <span class="status-badge status-mitigated">Mitigated</span> means material risk reduction is verified but an external, operational, scale, or lifecycle control remains. <span class="status-badge status-deferred">Deferred</span> means the controlling change is outside the authorized repository scope.</p>
+        <div class="table-scroll" tabindex="0" role="region" aria-label="Scrollable remediation ledger">
+          <table class="remediation-table">
+            <caption>Disposition of all 42 original findings. Commit identifiers refer to commits on <code>main</code>.</caption>
+            <thead><tr><th scope="col">Finding</th><th scope="col">Status</th><th scope="col">Corrective action and remaining boundary</th><th scope="col">Evidence commits</th></tr></thead>
+            <tbody>
+              <tr id="rem-KF-H01"><td>KF-H01</td><td><span class="status-badge status-fixed">Fixed</span></td><td>Bound local services to loopback, isolated development authentication, and removed automatic role rewriting.</td><td><code>82d69c4</code> <code>776d4f8</code></td></tr>
+              <tr id="rem-KF-H02"><td>KF-H02</td><td><span class="status-badge status-mitigated">Mitigated</span></td><td>Made provider state effective at runtime; completed Microsoft nonce/UI flow and cross-provider serialization. Real enterprise-tenant and provider-outage E2E remain external.</td><td><code>776d4f8</code> <code>9f45b66</code></td></tr>
+              <tr id="rem-KF-H03"><td>KF-H03</td><td><span class="status-badge status-fixed">Fixed</span></td><td>Closed public admission by default, persisted signed Google <code>hd</code>/Microsoft <code>tid</code>, and made bootstrap authority immutable and fail-closed.</td><td><code>776d4f8</code> <code>34b2cd8</code></td></tr>
+              <tr id="rem-KF-H04"><td>KF-H04</td><td><span class="status-badge status-fixed">Fixed</span></td><td>Changed nonce issuance to POST, added a tight limiter, bounded storage/cleanup, and emitted security telemetry.</td><td><code>776d4f8</code></td></tr>
+              <tr id="rem-KF-H05"><td>KF-H05</td><td><span class="status-badge status-mitigated">Mitigated</span></td><td>Hardened proxy parsing and bounded concurrent WebSockets in a one-worker topology. Shared multi-replica coordination and pub/sub remain a future scale control.</td><td><code>776d4f8</code> <code>f6fbee3</code> <code>34b2cd8</code></td></tr>
+              <tr id="rem-KF-H06"><td>KF-H06</td><td><span class="status-badge status-fixed">Fixed</span></td><td>Made destructive tests require explicit acknowledgement, local/non-root targets, and a distinct randomized <code>_test</code> database.</td><td><code>776d4f8</code> <code>71b32a8</code></td></tr>
+              <tr id="rem-KF-H07"><td>KF-H07</td><td><span class="status-badge status-fixed">Fixed</span></td><td>Upgraded to digest-pinned MySQL 8.4 and proved backup, restore, schema, and row-count integrity before and after migration.</td><td><code>f6fbee3</code> <code>71b32a8</code> <code>34b2cd8</code></td></tr>
+              <tr id="rem-KF-H08"><td>KF-H08</td><td><span class="status-badge status-fixed">Fixed</span></td><td>Migrated opaque identity values to binary comparison semantics with a collision-safe downgrade and MySQL regression tests.</td><td><code>776d4f8</code></td></tr>
+              <tr id="rem-KF-H09"><td>KF-H09</td><td><span class="status-badge status-fixed">Fixed</span></td><td>Serialized provider-setting mutations, added a database CHECK, and verified reachable administration including <code>0017</code> identity authority.</td><td><code>776d4f8</code></td></tr>
+              <tr id="rem-KF-H10"><td>KF-H10</td><td><span class="status-badge status-mitigated">Mitigated</span></td><td>Added production TLS/CA/timeouts and configuration parity. Server-side TLS enforcement, principal separation, and live negative drills belong to the deployment environment.</td><td><code>776d4f8</code> <code>f6fbee3</code> <code>34b2cd8</code></td></tr>
+              <tr id="rem-KF-H11"><td>KF-H11</td><td><span class="status-badge status-mitigated">Mitigated</span></td><td>Added a durable transactional security-event outbox, independent audit permission, and attribution metadata. External dispatch, SIEM/WORM retention, and lag alerting remain operational work.</td><td><code>776d4f8</code> <code>34b2cd8</code></td></tr>
+              <tr id="rem-KF-H12"><td>KF-H12</td><td><span class="status-badge status-deferred">Deferred</span></td><td>Added schema readiness, runbooks, and local backup/restore evidence. AWS HA, PITR, approved RPO/RTO, secrets, and deployment automation were explicitly out of scope.</td><td><code>402f64d</code> <code>1ba34c4</code> <code>34b2cd8</code></td></tr>
+              <tr id="rem-KF-H13"><td>KF-H13</td><td><span class="status-badge status-fixed">Fixed</span></td><td>Rebuilt on a patched digest-pinned Nginx image and made image scans/SBOM checks hard gates; the final artifact scan is clean.</td><td><code>955d5c9</code> <code>71b32a8</code></td></tr>
+              <tr id="rem-KF-H14"><td>KF-H14</td><td><span class="status-badge status-deferred">Deferred</span></td><td>Hardened CI, but branch/ruleset/review/secret/security settings were deliberately untouched under the user’s GitHub-governance boundary.</td><td><code>71b32a8</code></td></tr>
+
+              <tr id="rem-KF-M01"><td>KF-M01</td><td><span class="status-badge status-fixed">Fixed</span></td><td>Made the built-in admin role a true meta-role that ordinary permission-subset delegation cannot assign.</td><td><code>776d4f8</code></td></tr>
+              <tr id="rem-KF-M02"><td>KF-M02</td><td><span class="status-badge status-fixed">Fixed</span></td><td>Centralized and enforced actor/target hierarchy across role, permission, status, session, and bulk mutations.</td><td><code>776d4f8</code></td></tr>
+              <tr id="rem-KF-M03"><td>KF-M03</td><td><span class="status-badge status-fixed">Fixed</span></td><td>Added production cookie-CSRF enforcement using Origin/Referer and Fetch Metadata checks for unsafe methods.</td><td><code>776d4f8</code></td></tr>
+              <tr id="rem-KF-M04"><td>KF-M04</td><td><span class="status-badge status-mitigated">Mitigated</span></td><td>Added expiry, concurrent-session caps, masking, and bounded retention. Legal schedules, end-user deletion, and automatic external provider-policy revocation remain organizational controls.</td><td><code>776d4f8</code> <code>34b2cd8</code></td></tr>
+              <tr id="rem-KF-M05"><td>KF-M05</td><td><span class="status-badge status-fixed">Fixed</span></td><td>Enforced ASGI request-body, token, and location bounds plus browser request timeouts and abort handling.</td><td><code>776d4f8</code> <code>d9b5fed</code></td></tr>
+              <tr id="rem-KF-M06"><td>KF-M06</td><td><span class="status-badge status-mitigated">Mitigated</span></td><td>Standardized safe errors and provider 503 behavior; added bounded key fetches, single-flight caches, stale-key fallback, unknown-key cooldown, and outage circuits. External metrics remain.</td><td><code>776d4f8</code></td></tr>
+              <tr id="rem-KF-M07"><td>KF-M07</td><td><span class="status-badge status-fixed">Fixed</span></td><td>Implemented bounded non-blocking request-log delivery and transactional security-event persistence with structured boundary-rejection evidence.</td><td><code>776d4f8</code></td></tr>
+              <tr id="rem-KF-M08"><td>KF-M08</td><td><span class="status-badge status-mitigated">Mitigated</span></td><td>Normalized timestamps, added migrations <code>0013–0017</code>, CI drift checks, and a migration runbook. Historical migrations remain immutable; N-1/N-2 zero-downtime rehearsal remains release work.</td><td><code>776d4f8</code> <code>71b32a8</code> <code>34b2cd8</code></td></tr>
+              <tr id="rem-KF-M09"><td>KF-M09</td><td><span class="status-badge status-fixed">Fixed</span></td><td>Added database CHECK constraints for booleans, geography, provider state, and role/identity invariants with direct-SQL tests.</td><td><code>776d4f8</code></td></tr>
+              <tr id="rem-KF-M10"><td>KF-M10</td><td><span class="status-badge status-mitigated">Mitigated</span></td><td>Aggregated roles, capped presence, keyset-paginated logs, bounded exports, and capped offsets. User-search leading wildcards and production EXPLAIN evidence remain scale considerations.</td><td><code>776d4f8</code></td></tr>
+              <tr id="rem-KF-M11"><td>KF-M11</td><td><span class="status-badge status-mitigated">Mitigated</span></td><td>Promoted identifiers, added indexes, and implemented scheduled bounded retention. Archive/legal-hold design and external lag alerts remain operational.</td><td><code>776d4f8</code> <code>34b2cd8</code></td></tr>
+              <tr id="rem-KF-M12"><td>KF-M12</td><td><span class="status-badge status-mitigated">Mitigated</span></td><td>Configured explicit pool, connection/read/write timeouts, recycling, UTC, and server timestamps. Statement policy, retry instrumentation, and failover drills remain environment-specific.</td><td><code>776d4f8</code> <code>34b2cd8</code></td></tr>
+              <tr id="rem-KF-M13"><td>KF-M13</td><td><span class="status-badge status-fixed">Fixed</span></td><td>Aligned settings, users, and roles navigation and page access with authoritative permissions.</td><td><code>d9b5fed</code> <code>776d4f8</code> <code>9f45b66</code></td></tr>
+              <tr id="rem-KF-M14"><td>KF-M14</td><td><span class="status-badge status-fixed">Fixed</span></td><td>Added responsive navigation and mobile layouts with verified no-overflow behavior.</td><td><code>d9b5fed</code></td></tr>
+              <tr id="rem-KF-M15"><td>KF-M15</td><td><span class="status-badge status-fixed">Fixed</span></td><td>Made dialogs keyboard/focus-safe, completed accessible labels, enabled accessibility linting, and added Axe coverage.</td><td><code>d9b5fed</code></td></tr>
+              <tr id="rem-KF-M16"><td>KF-M16</td><td><span class="status-badge status-mitigated">Mitigated</span></td><td>Added a React error boundary, abort/timeout recovery, and surfaced request IDs. External client telemetry and a generated runtime API contract remain future integration work.</td><td><code>d9b5fed</code> <code>776d4f8</code></td></tr>
+              <tr id="rem-KF-M17"><td>KF-M17</td><td><span class="status-badge status-fixed">Fixed</span></td><td>Added optimistic versions to role/user mutations with required preconditions, 409 conflict handling, and recovery UI.</td><td><code>776d4f8</code> <code>9f45b66</code></td></tr>
+              <tr id="rem-KF-M18"><td>KF-M18</td><td><span class="status-badge status-mitigated">Mitigated</span></td><td>Expanded CI and the unit/integration/browser/security matrix. Live provider, full mobile accessibility, load, restore, and protected-enforcement tests require external environments.</td><td><code>71b32a8</code> <code>776d4f8</code> <code>d9b5fed</code></td></tr>
+              <tr id="rem-KF-M19"><td>KF-M19</td><td><span class="status-badge status-mitigated">Mitigated</span></td><td>Added hash-locked/audited dependencies, pinned builders/runtimes/actions/CA, image scans, and SBOMs. Signed provenance and release signing remain deployment controls.</td><td><code>147e611</code> <code>f6fbee3</code> <code>71b32a8</code></td></tr>
+              <tr id="rem-KF-M20"><td>KF-M20</td><td><span class="status-badge status-mitigated">Mitigated</span></td><td>Added structured correlation, separate live/ready probes, bounded readiness work, allowlisted environment, non-root runtime, and runbooks. Metrics, traces, SLO alerts, and deployment resources remain external.</td><td><code>402f64d</code> <code>776d4f8</code> <code>f6fbee3</code> <code>34b2cd8</code></td></tr>
+
+              <tr id="rem-KF-L01"><td>KF-L01</td><td><span class="status-badge status-fixed">Fixed</span></td><td>Required JWT issuer, audience, type, JTI, and KID and added keyring rotation support.</td><td><code>776d4f8</code> <code>34b2cd8</code></td></tr>
+              <tr id="rem-KF-L02"><td>KF-L02</td><td><span class="status-badge status-fixed">Fixed</span></td><td>Bound each active session JTI to the authenticated subject user on every request.</td><td><code>776d4f8</code></td></tr>
+              <tr id="rem-KF-L03"><td>KF-L03</td><td><span class="status-badge status-mitigated">Mitigated</span></td><td>Made bootstrap subjects immutable, persisted signed organization authority in <code>0017</code>, and minimized identity disclosure. Canonical email sync and SCIM lifecycle remain directory work.</td><td><code>776d4f8</code> <code>34b2cd8</code></td></tr>
+              <tr id="rem-KF-L04"><td>KF-L04</td><td><span class="status-badge status-mitigated">Mitigated</span></td><td>Added <code>no-store</code>, <code>__Host-session</code>, CSP, and security headers. Edge HSTS, MFA, and recent-auth requirements must be enforced by production identity/edge controls.</td><td><code>d9b5fed</code> <code>776d4f8</code> <code>34b2cd8</code></td></tr>
+              <tr id="rem-KF-L05"><td>KF-L05</td><td><span class="status-badge status-fixed">Fixed</span></td><td>Lazy-loaded provider GIS only when effectively enabled and made precise-location collection an explicit, explainable opt-in.</td><td><code>d9b5fed</code> <code>9f45b66</code></td></tr>
+              <tr id="rem-KF-L06"><td>KF-L06</td><td><span class="status-badge status-fixed">Fixed</span></td><td>Extracted bulk-action helpers and enforced a McCabe complexity ceiling of 10.</td><td><code>776d4f8</code> <code>71b32a8</code></td></tr>
+              <tr id="rem-KF-L07"><td>KF-L07</td><td><span class="status-badge status-fixed">Fixed</span></td><td>Aligned documentation and public capability claims with current behavior and Alembic head <code>0017</code>.</td><td><code>34b2cd8</code> <code>9f45b66</code></td></tr>
+              <tr id="rem-KF-A01"><td>KF-A01</td><td><span class="status-badge status-fixed">Fixed</span></td><td>Recorded the single-tenant architecture decision and enforced one organization/tenant/bootstrap authority in startup and readiness policy.</td><td><code>1ba34c4</code> <code>776d4f8</code> <code>34b2cd8</code></td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
     <section id="deep-dives">
       <div class="wrap">
         <h2>Domain conclusions</h2>
@@ -685,7 +795,7 @@
   </main>
 
   <footer>
-    <div class="wrap">Kingfisher enterprise readiness audit · Evidence captured 2026-07-20 · Baseline <code>23343f9</code>. This is a code/configuration review, not a penetration test, legal opinion, compliance certification, load test, or proof of external cloud controls.</div>
+    <div class="wrap">Kingfisher enterprise readiness audit · Evidence captured 2026-07-20 · Baseline <code>23343f9</code> · Remediation evidence through <code>34b2cd8</code>. This is a code/configuration review, not a penetration test, legal opinion, compliance certification, load test, or proof of external cloud controls.</div>
   </footer>
   <script>
     (() => {
