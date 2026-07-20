@@ -8,21 +8,25 @@ constant here. The initial RBAC migration seeds exactly the built-ins below, and
 
 USERS_READ = "users.read"
 USERS_MANAGE = "users.manage"
+USERS_EXPORT = "users.export"
 ROLES_MANAGE = "roles.manage"
 PRESENCE_VIEW = "presence.view"
 PRESENCE_KICK = "presence.kick"
 SETTINGS_MANAGE = "settings.manage"
 LOGS_VIEW = "logs.view"
+SECURITY_EVENTS_VIEW = "security_events.view"
 
 # (key, description) — order is the seed order.
 BUILTIN_PERMISSIONS: list[tuple[str, str]] = [
     (USERS_READ, "View the user directory"),
-    (USERS_MANAGE, "Change user roles, activation, and approval"),
+    (USERS_MANAGE, "Manage user profiles, activation, and approval"),
+    (USERS_EXPORT, "Export the user directory as CSV"),
     (ROLES_MANAGE, "Create and edit roles and permissions"),
     (PRESENCE_VIEW, "See who is currently online"),
     (PRESENCE_KICK, "Force sign-out (kick) a user's active sessions"),
-    (SETTINGS_MANAGE, "Manage site settings and approve sign-ups"),
+    (SETTINGS_MANAGE, "Manage site-wide configuration"),
     (LOGS_VIEW, "View the request activity log"),
+    (SECURITY_EVENTS_VIEW, "View and export durable security events"),
 ]
 
 ADMIN_ROLE = "admin"
@@ -34,11 +38,13 @@ SYSTEM_ROLES: dict[str, dict] = {
         "permissions": [
             USERS_READ,
             USERS_MANAGE,
+            USERS_EXPORT,
             ROLES_MANAGE,
             PRESENCE_VIEW,
             PRESENCE_KICK,
             SETTINGS_MANAGE,
             LOGS_VIEW,
+            SECURITY_EVENTS_VIEW,
         ],
     },
     DEFAULT_ROLE: {

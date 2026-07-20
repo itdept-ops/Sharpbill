@@ -1,11 +1,22 @@
+import pytest
+
 from app.auth import VerifiedIdentity
 from app.auth.jwt import COOKIE_NAME
 from app.auth.service import find_or_create_user
 from app.config import settings
+from app.errors import ApiError
 
 
-def _google(email: str, subject: str = "g-sub-1") -> VerifiedIdentity:
-    return VerifiedIdentity(provider="google", subject=subject, email=email, display_name="G User")
+def _google(
+    email: str, subject: str = "g-sub-1", hosted_domain: str | None = None
+) -> VerifiedIdentity:
+    return VerifiedIdentity(
+        provider="google",
+        subject=subject,
+        email=email,
+        display_name="G User",
+        hosted_domain=hosted_domain,
+    )
 
 
 def test_first_google_login_provisions_user(db):
@@ -22,6 +33,32 @@ def test_admin_bootstrap_from_admin_emails_google(db, monkeypatch):
     user = find_or_create_user(db, _google("boss@example.com", subject="g-boss"))
     assert user.role_name == "admin"
     assert "roles.manage" in user.permission_keys
+
+
+def test_production_google_admin_bootstrap_requires_immutable_subject(db, monkeypatch):
+    monkeypatch.setattr(settings, "app_env", "production")
+    monkeypatch.setattr(settings, "admin_emails", "email-only@example.com")
+    monkeypatch.setattr(settings, "google_admin_subjects", "immutable-admin-subject")
+    monkeypatch.setattr(settings, "allowed_email_domains", "example.com")
+
+    email_only = find_or_create_user(
+        db,
+        _google(
+            "email-only@example.com",
+            subject="not-allowlisted",
+            hosted_domain="example.com",
+        ),
+    )
+    immutable = find_or_create_user(
+        db,
+        _google(
+            "different@example.com",
+            subject="immutable-admin-subject",
+            hosted_domain="example.com",
+        ),
+    )
+    assert email_only.role_name == "user"
+    assert immutable.role_name == "admin"
 
 
 def test_microsoft_admin_requires_matching_tenant_and_object_id(db, monkeypatch):
@@ -80,6 +117,38 @@ def test_stored_identity_records_the_provider_id(db):
     assert user.identities[0].provider_subject == "google-oid-abc"
 
 
+def test_google_org_allowlist_requires_the_signed_hosted_domain(db, monkeypatch):
+    monkeypatch.setattr(settings, "allowed_email_domains", "example.com")
+
+    with pytest.raises(ApiError) as missing:
+        find_or_create_user(
+            db,
+            _google("matching-email@example.com", subject="no-hd", hosted_domain=None),
+        )
+    assert missing.value.detail["code"] == "LOGIN_NOT_ALLOWED"
+
+    with pytest.raises(ApiError):
+        find_or_create_user(
+            db,
+            _google("matching-email@example.com", subject="wrong-hd", hosted_domain="other.com"),
+        )
+
+    accepted = find_or_create_user(
+        db,
+        _google("alias@unrelated.example", subject="signed-hd", hosted_domain="EXAMPLE.COM"),
+    )
+    assert accepted.id is not None
+
+
+def test_new_account_requires_allowlist_or_explicit_public_signup(db, monkeypatch):
+    monkeypatch.setattr(settings, "allow_public_signup", False)
+    monkeypatch.setattr(settings, "allowed_email_domains", "")
+
+    with pytest.raises(ApiError) as denied:
+        find_or_create_user(db, _google("closed-by-default@example.com", subject="restricted"))
+    assert denied.value.detail["code"] == "SIGNUP_RESTRICTED"
+
+
 def test_google_login_via_http_sets_cookie(client, monkeypatch):
     from app.routers import auth as auth_router
 
@@ -99,7 +168,7 @@ def test_google_login_via_http_sets_cookie(client, monkeypatch):
 
 def test_login_rejects_non_json_content_type(client):
     resp = client.post(
-        "/api/auth/google", data="id_token=x", headers={"content-type": "text/plain"}
+        "/api/auth/google", content="id_token=x", headers={"content-type": "text/plain"}
     )
     assert resp.status_code == 415
     assert resp.json()["detail"]["code"] == "UNSUPPORTED_MEDIA_TYPE"
@@ -149,7 +218,10 @@ def test_logout_revokes_token_durably(client):
 def test_auth_config_reports_dev_enabled(client):
     resp = client.get("/api/auth/config")
     assert resp.status_code == 200
-    assert resp.json()["dev"] is True
+    config = resp.json()
+    assert config["dev"] is True
+    assert config["google_client_id"] == settings.google_client_id
+    assert config["microsoft_client_id"] == settings.azure_client_id
 
 
 def test_update_location(client):

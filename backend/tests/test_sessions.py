@@ -1,8 +1,14 @@
 """Per-device session tracking and revocation."""
 
-from fastapi.testclient import TestClient
+from datetime import UTC, datetime, timedelta
 
+from sqlalchemy import func, select
+
+from app.auth.sessions import prune_stale_sessions
+from app.config import settings
 from app.main import app
+from app.models import UserSession
+from tests.client import TestClient
 
 
 def _login(client, email, role="user"):
@@ -63,8 +69,8 @@ def test_logout_only_signs_out_the_current_device(client):
     assert device2.get("/api/auth/me").status_code == 200  # other device stays signed in
 
 
-def test_session_ip_masked_for_read_only_viewer(client):
-    """FND-011: session IP is shown to managers/self but masked for a users.read-only viewer."""
+def test_session_device_details_masked_for_read_only_viewer(client):
+    """IP and user-agent are shown to managers/self but masked for a directory-only viewer."""
     target = TestClient(app)
     tu = target.post("/api/auth/dev", json={"email": "iptarget@example.com", "role": "user"}).json()
 
@@ -73,10 +79,19 @@ def test_session_ip_masked_for_read_only_viewer(client):
     viewer = TestClient(app)
     viewer.post("/api/auth/dev", json={"email": "ro-view@example.com", "role": "ReadOnly"})
 
-    # A manager (admin holds users.manage) sees the source IP.
-    assert client.get(f"/api/users/{tu['id']}/sessions").json()[0]["ip"] is not None
-    # A users.read-only viewer gets it masked.
-    assert viewer.get(f"/api/users/{tu['id']}/sessions").json()[0]["ip"] is None
+    own_session = target.get("/api/auth/sessions").json()[0]
+    assert own_session["ip"] is not None
+    assert own_session["user_agent"] is not None
+
+    # A manager (admin holds users.manage) sees the source device details.
+    managed_session = client.get(f"/api/users/{tu['id']}/sessions").json()[0]
+    assert managed_session["ip"] is not None
+    assert managed_session["user_agent"] is not None
+
+    # A users.read-only viewer gets both identifying values masked.
+    masked_session = viewer.get(f"/api/users/{tu['id']}/sessions").json()[0]
+    assert masked_session["ip"] is None
+    assert masked_session["user_agent"] is None
 
 
 def test_deactivation_revokes_session_rows(client):
@@ -105,3 +120,64 @@ def test_kick_revokes_all_of_a_users_sessions(client):
 
     assert target.get("/api/auth/me").status_code == 401
     assert device2.get("/api/auth/me").status_code == 401  # every device
+
+
+def test_new_login_enforces_per_user_concurrent_session_cap(client, db, monkeypatch):
+    monkeypatch.setattr(settings, "max_active_sessions_per_user", 2)
+    first = client
+    user = _login(first, "session-cap@example.com")
+    second = TestClient(app)
+    _login(second, "session-cap@example.com")
+    third = TestClient(app)
+    _login(third, "session-cap@example.com")
+
+    now = datetime.now(UTC).replace(tzinfo=None)
+    active_count = db.scalar(
+        select(func.count())
+        .select_from(UserSession)
+        .where(
+            UserSession.user_id == user["id"],
+            UserSession.revoked_at.is_(None),
+            UserSession.expires_at > now,
+        )
+    )
+    assert active_count == 2
+    assert first.get("/api/auth/me").status_code == 401
+    assert second.get("/api/auth/me").status_code == 200
+    assert third.get("/api/auth/me").status_code == 200
+
+
+def test_stale_session_cleanup_is_bounded_and_keeps_recent_revocations(client, db):
+    user = _login(client, "session-retention@example.com")
+    now = datetime.now(UTC).replace(tzinfo=None)
+    recently_expired = UserSession(
+        user_id=user["id"],
+        jti="cleanup-recently-expired",
+        expires_at=now - timedelta(seconds=1),
+    )
+    stale_expired = UserSession(
+        user_id=user["id"],
+        jti="cleanup-stale-expired",
+        expires_at=now - timedelta(days=settings.session_retention_days + 1),
+    )
+    old_revoked = UserSession(
+        user_id=user["id"],
+        jti="cleanup-old-revoked",
+        expires_at=now + timedelta(days=1),
+        revoked_at=now - timedelta(days=settings.session_retention_days + 1),
+    )
+    recent_revoked = UserSession(
+        user_id=user["id"],
+        jti="cleanup-recent-revoked",
+        expires_at=now + timedelta(days=1),
+        revoked_at=now,
+    )
+    db.add_all([recently_expired, stale_expired, old_revoked, recent_revoked])
+    db.commit()
+
+    assert prune_stale_sessions(db, now=now, limit=2) == 2
+    remaining = set(db.scalars(select(UserSession.jti)))
+    assert "cleanup-recently-expired" in remaining
+    assert "cleanup-stale-expired" not in remaining
+    assert "cleanup-old-revoked" not in remaining
+    assert "cleanup-recent-revoked" in remaining

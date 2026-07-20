@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from sqlalchemy import DateTime, String, text
+from sqlalchemy import CheckConstraint, DateTime, String, text
 from sqlalchemy.dialects.mysql import TINYINT
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -15,7 +15,7 @@ _TABLE_ARGS = {
 
 class Permission(Base):
     __tablename__ = "permissions"
-    __table_args__ = _TABLE_ARGS
+    __table_args__ = (CheckConstraint("is_system IN (0, 1)", name="is_system_boolean"), _TABLE_ARGS)
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     key: Mapped[str] = mapped_column(String(100), unique=True)
@@ -28,4 +28,5 @@ class Permission(Base):
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=False),
         server_default=text("CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6)"),
+        server_onupdate=text("CURRENT_TIMESTAMP(6)"),
     )

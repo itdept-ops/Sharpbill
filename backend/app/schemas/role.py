@@ -34,6 +34,7 @@ class RoleOut(BaseModel):
     is_system: bool
     permissions: list[PermissionOut]
     user_count: int
+    version: int
 
 
 class RoleCreate(BaseModel):
@@ -56,6 +57,7 @@ class RoleUpdate(BaseModel):
     name: str | None = None
     description: str | None = Field(default=None, max_length=255)
     permission_keys: list[str] | None = Field(default=None, max_length=100)
+    expected_version: int | None = Field(default=None, ge=1)
 
     @field_validator("name")
     @classmethod

@@ -2,9 +2,8 @@
 who outrank them, and a roles.manage delegate cannot rewrite/delete a role above their
 privilege. Covers FND-002 and FND-004."""
 
-from fastapi.testclient import TestClient
-
 from app.main import app
+from tests.client import TestClient
 
 
 def _login(client, email, role=None):
@@ -46,6 +45,9 @@ def test_non_admin_delegate_cannot_kick_deactivate_or_demote_admin():
     user_role = _role_id(admin, "user")
     assert mgr.patch(f"/api/users/{a['id']}/role", json={"role_id": user_role}).status_code == 403
 
+    # Approving an admin is also an account-state mutation and follows the same hierarchy.
+    assert mgr.post(f"/api/users/{a['id']}/approve").status_code == 403
+
     # Bulk deactivate an admin -> reported per-item as a privilege failure, not applied.
     bulk = mgr.post("/api/users/bulk", json={"ids": [a["id"]], "action": "deactivate"})
     assert bulk.status_code == 200
@@ -71,6 +73,54 @@ def test_delegate_can_still_manage_ordinary_members():
 
     assert mgr.patch(f"/api/users/{s['id']}/status", json={"is_active": False}).status_code == 200
     assert mgr.post(f"/api/users/{s['id']}/kick").status_code == 200
+
+
+def test_delegate_cannot_mutate_higher_custom_role_or_erase_its_access():
+    admin = TestClient(app)
+    _login(admin, "admin@example.com", role="admin")
+    admin.post(
+        "/api/roles",
+        json={"name": "HigherCustom", "permission_keys": ["settings.manage"]},
+    )
+    admin.post(
+        "/api/roles",
+        json={
+            "name": "LifecycleDelegate",
+            "permission_keys": [
+                "users.read",
+                "users.manage",
+                "roles.manage",
+                "presence.kick",
+            ],
+        },
+    )
+    target = TestClient(app)
+    higher = _login(target, "higher@example.com", role="HigherCustom")
+    delegate = TestClient(app)
+    _login(delegate, "delegate@example.com", role="LifecycleDelegate")
+
+    user_role = _role_id(admin, "user")
+    assert (
+        delegate.patch(f"/api/users/{higher['id']}/status", json={"is_active": False}).status_code
+        == 403
+    )
+    assert delegate.post(f"/api/users/{higher['id']}/kick").status_code == 403
+    assert (
+        delegate.patch(f"/api/users/{higher['id']}/role", json={"role_id": user_role}).status_code
+        == 403
+    )
+    assert (
+        delegate.put(
+            f"/api/users/{higher['id']}/permissions", json={"permission_keys": []}
+        ).status_code
+        == 403
+    )
+    assert (
+        delegate.patch(
+            f"/api/users/{higher['id']}/profile", json={"display_name": "tampered"}
+        ).status_code
+        == 403
+    )
 
 
 def test_admin_can_act_on_another_admin():
@@ -124,5 +174,15 @@ def test_roles_delegate_can_manage_role_within_its_privilege():
     _login(delegate, "rmy@example.com", role="RoleMgrY")
 
     # The delegate holds presence.view, so it may edit a role that only grants presence.view.
-    assert delegate.patch(f"/api/roles/{low}", json={"description": "tweaked"}).status_code == 200
-    assert delegate.delete(f"/api/roles/{low}").status_code == 204
+    low_version = next(r["version"] for r in delegate.get("/api/roles").json() if r["id"] == low)
+    updated = delegate.patch(
+        f"/api/roles/{low}",
+        json={"description": "tweaked", "expected_version": low_version},
+    )
+    assert updated.status_code == 200
+    assert (
+        delegate.delete(
+            f"/api/roles/{low}?expected_version={updated.json()['version']}"
+        ).status_code
+        == 204
+    )

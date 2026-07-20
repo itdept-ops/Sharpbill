@@ -56,7 +56,7 @@ def get_current_user(request: Request, db: Session = Depends(get_db)) -> User:
             raise ApiError(401, "SESSION_REVOKED", "Your session was ended by an administrator")
 
     # Per-device revocation: the token's session row must still exist and be un-revoked.
-    session = active_session(db, payload["jti"])
+    session = active_session(db, payload["jti"], user.id)
     if session is None:
         raise ApiError(401, "SESSION_REVOKED", "This session was signed out")
 

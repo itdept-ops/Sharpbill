@@ -13,9 +13,20 @@ client flow).
 import hashlib
 import threading
 import time
+from heapq import heappop, heappush
 
 _lock = threading.Lock()
 _seen: dict[str, float] = {}  # sha256(token) -> monotonic expiry
+_expiries: list[tuple[float, str]] = []
+_MAX_SEEN = 10_000
+
+
+def _prune_expired(now: float) -> None:
+    """Discard expired entries in O(log n) time without scanning the active set."""
+    while _expiries and _expiries[0][0] <= now:
+        expires_at, key = heappop(_expiries)
+        if _seen.get(key) == expires_at:
+            del _seen[key]
 
 
 def check_replay(raw_token: str, ttl_seconds: float) -> bool:
@@ -29,15 +40,21 @@ def check_replay(raw_token: str, ttl_seconds: float) -> bool:
     key = hashlib.sha256(raw_token.encode("utf-8")).hexdigest()
     now = time.monotonic()
     with _lock:
-        if _seen:  # opportunistic prune of expired entries
-            for stale in [k for k, exp in _seen.items() if exp <= now]:
-                del _seen[stale]
+        _prune_expired(now)
         if key in _seen:
             return True
-        _seen[key] = now + ttl_seconds
+        if len(_seen) >= _MAX_SEEN:
+            # Preserve the hard memory boundary under attacker-controlled token cardinality.
+            # Treat an unrecordable token as unsafe (the caller rejects True) rather than
+            # silently weakening replay protection until another entry expires.
+            return True
+        expires_at = now + ttl_seconds
+        _seen[key] = expires_at
+        heappush(_expiries, (expires_at, key))
         return False
 
 
 def _reset_for_tests() -> None:
     with _lock:
         _seen.clear()
+        _expiries.clear()

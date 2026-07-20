@@ -4,7 +4,7 @@ import time
 
 import pytest
 
-from app.auth import ProviderTokenError
+from app.auth import ProviderTokenError, replay
 from app.auth import google as google_auth
 from app.auth.nonce import issue_nonce
 from app.auth.replay import _reset_for_tests, check_replay
@@ -26,6 +26,24 @@ def test_replay_does_not_record_expired_ttl():
     _reset_for_tests()
     assert check_replay("token-exp", 0) is False  # already expired → not recorded
     assert check_replay("token-exp", 60) is False  # so a later valid presentation still passes
+
+
+def test_replay_guard_has_a_hard_bound_and_heap_prunes_expired_entries(monkeypatch):
+    _reset_for_tests()
+    now = [100.0]
+    monkeypatch.setattr(replay, "_MAX_SEEN", 2)
+    monkeypatch.setattr(replay.time, "monotonic", lambda: now[0])
+
+    assert check_replay("token-A", 60) is False
+    assert check_replay("token-B", 120) is False
+    assert check_replay("token-at-capacity", 120) is True  # fail closed without allocating
+    assert len(replay._seen) == 2
+    assert len(replay._expiries) == 2
+
+    now[0] = 161.0
+    assert check_replay("token-after-expiry", 120) is False
+    assert len(replay._seen) == 2
+    assert len(replay._expiries) == 2
 
 
 def _google_claims(nonce, **over):
@@ -74,3 +92,12 @@ def test_google_verifier_requires_a_valid_nonce(monkeypatch):
     monkeypatch.setattr(google_auth.google_id_token, "verify_oauth2_token", lambda *a, **k: forged)
     with pytest.raises(ProviderTokenError):
         google_auth.verify_google_id_token("tok-forged-nonce")
+
+
+def test_google_verifier_preserves_normalized_signed_hosted_domain(monkeypatch):
+    _reset_for_tests()
+    monkeypatch.setattr(google_auth.settings, "google_client_id", "test-cid")
+    claims = _google_claims(issue_nonce(), hd="Example.COM")
+    monkeypatch.setattr(google_auth.google_id_token, "verify_oauth2_token", lambda *a, **k: claims)
+
+    assert google_auth.verify_google_id_token("token-with-hd").hosted_domain == "example.com"

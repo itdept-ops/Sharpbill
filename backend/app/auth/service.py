@@ -39,13 +39,14 @@ def _role_by_name(db: Session, name: str) -> Role:
 def _admin_bootstrap(ident: VerifiedIdentity) -> bool:
     """Whether a first-login identity should be provisioned as admin.
 
-    Only provider-verified identities qualify. Google enforces `email_verified` upstream, so its
-    email claim is trustworthy and ADMIN_EMAILS drives bootstrap. Microsoft ID tokens carry no
-    verified-email signal and the email/UPN claim is tenant-mutable, so Microsoft bootstrap keys
-    on the immutable object id (oid) allowlist within the configured admin tenant — never email.
+    Only provider-verified identities qualify. Hosted Google deployments use the immutable `sub`
+    allowlist. Email bootstrap is retained only as a local-development recovery convenience.
+    Microsoft keys on the immutable object id (oid) within the configured admin tenant.
     """
     if ident.provider == "google":
-        return ident.email in settings.admin_email_set
+        return ident.subject in settings.google_admin_subject_set or (
+            settings.app_env == "local" and ident.email in settings.admin_email_set
+        )
     if ident.provider == "microsoft":
         return (
             bool(settings.azure_admin_tenant_id)
@@ -56,15 +57,34 @@ def _admin_bootstrap(ident: VerifiedIdentity) -> bool:
 
 
 def _assert_login_allowed(ident: VerifiedIdentity) -> None:
-    """Optional env allowlist gate (empty config = allow any verified account)."""
+    """Enforce provider-issued organization claims when an allowlist is configured."""
     if ident.provider == "google":
         domains = settings.allowed_email_domain_set
-        if domains and ident.email.rsplit("@", 1)[-1] not in domains:
+        # Google explicitly warns that an email suffix does not establish Workspace membership;
+        # only the signed `hd` claim is authoritative for an organization restriction.
+        if domains and (ident.hosted_domain or "").lower() not in domains:
             raise ApiError(403, "LOGIN_NOT_ALLOWED", "This account is not permitted to sign in")
     elif ident.provider == "microsoft":
         tenants = settings.allowed_azure_tenant_set
         if tenants and (ident.tenant_id or "") not in tenants:
             raise ApiError(403, "LOGIN_NOT_ALLOWED", "This account is not permitted to sign in")
+
+
+def _assert_new_account_admission(ident: VerifiedIdentity, *, is_admin_boot: bool) -> None:
+    """Require an organization allowlist or an explicit public-signup acknowledgement."""
+    if is_admin_boot or settings.allow_public_signup:
+        return
+    has_provider_allowlist = (
+        bool(settings.allowed_email_domain_set)
+        if ident.provider == "google"
+        else bool(settings.allowed_azure_tenant_set)
+    )
+    if not has_provider_allowlist:
+        raise ApiError(
+            403,
+            "SIGNUP_RESTRICTED",
+            "New accounts require an organization allowlist or explicit public signup",
+        )
 
 
 def _assert_provider_enabled(site: SiteSettings, ident: VerifiedIdentity) -> None:
@@ -106,14 +126,18 @@ def find_or_create_user(db: Session, ident: VerifiedIdentity) -> User:
         user.last_login_at = _utcnow()
         user.last_seen_at = _now_naive()
         identity.provider_email = ident.email  # audit trail only; not used for lookups
+        # Persist only claims that survived provider signature and organization-admission checks.
+        # Readiness uses these immutable authority claims rather than trusting an email suffix.
+        identity.provider_tenant_id = ident.tenant_id
+        identity.provider_hosted_domain = ident.hosted_domain
         db.commit()
         return user
 
     # --- first login: provision ---
-    # A configured admin email (already provider-verified) bootstraps regardless of signup
-    # mode, so "closed" can never lock administration out — it is the recovery/seed path.
-    # Everyone else obeys the closed gate.
+    # An immutable Google sub or Microsoft (tenant, oid) bootstrap identity may enter even when
+    # signup is closed, preserving a controlled recovery/seed path. Everyone else obeys it.
     is_admin_boot = _admin_bootstrap(ident)
+    _assert_new_account_admission(ident, is_admin_boot=is_admin_boot)
     if site.signup_mode == "closed" and not is_admin_boot:
         raise ApiError(403, "SIGNUP_CLOSED", "Sign-ups are currently closed")
 
@@ -139,6 +163,8 @@ def find_or_create_user(db: Session, ident: VerifiedIdentity) -> User:
             provider=ident.provider,
             provider_subject=ident.subject,
             provider_email=ident.email,
+            provider_tenant_id=ident.tenant_id,
+            provider_hosted_domain=ident.hosted_domain,
         )
     )
     try:
@@ -187,11 +213,11 @@ def dev_upsert_user(
             UserIdentity(user=user, provider="dev", provider_subject=email, provider_email=email)
         )
     else:
-        if role_name is not None:
-            user.role = _role_by_name(db, role_name)
-        if display_name is not None:
-            user.display_name = display_name
-        user.is_approved = True
+        # The dev seam may authenticate an existing account, but must never rewrite its role,
+        # profile, or approval state from caller-controlled fields. Inactive/pending accounts are
+        # returned unchanged so the router can reject them without a committed side effect.
+        if not user.is_active or not user.is_approved:
+            return user
         user.last_login_at = _utcnow()
         user.last_seen_at = _now_naive()
         if not any(i.provider == "dev" for i in user.identities):

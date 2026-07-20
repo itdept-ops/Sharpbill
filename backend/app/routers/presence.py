@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends
-from sqlalchemy import select
-from sqlalchemy.orm import Session
+from sqlalchemy import func, select
+from sqlalchemy.orm import Session, selectinload
 
 from app.auth.deps import get_current_user, require_permission
 from app.db import get_db
@@ -11,21 +11,30 @@ from app.schemas.presence import PresenceOut, PresenceUser
 
 router = APIRouter()
 
+# A large tenant must not turn one polling request into an unbounded ORM allocation or response.
+# Clients still receive the exact count and explicit truncation metadata.
+_PRESENCE_ROSTER_LIMIT = 500
+
 
 @router.get("/online", response_model=PresenceOut)
 def online_users(
     db: Session = Depends(get_db), _: User = Depends(require_permission(PRESENCE_VIEW))
 ) -> PresenceOut:
     cutoff = online_cutoff()
+    eligible = (
+        User.is_active.is_(True),
+        User.is_approved.is_(True),
+        User.last_seen_at.is_not(None),
+        User.last_seen_at >= cutoff,
+    )
+    count = db.scalar(select(func.count(User.id)).where(*eligible)) or 0
     users = list(
         db.scalars(
             select(User)
-            .where(
-                User.is_active.is_(True),
-                User.last_seen_at.is_not(None),
-                User.last_seen_at >= cutoff,
-            )
-            .order_by(User.last_seen_at.desc())
+            .options(selectinload(User.role))
+            .where(*eligible)
+            .order_by(User.last_seen_at.desc(), User.id.desc())
+            .limit(_PRESENCE_ROSTER_LIMIT)
         )
     )
     return PresenceOut(
@@ -38,8 +47,10 @@ def online_users(
             )
             for u in users
         ],
-        count=len(users),
+        count=count,
         window_seconds=ONLINE_WINDOW_SECONDS,
+        truncated=count > len(users),
+        roster_limit=_PRESENCE_ROSTER_LIMIT,
     )
 
 

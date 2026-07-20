@@ -1,25 +1,58 @@
 import re
 import time
+from typing import Any
 
 import jwt
-from jwt import PyJWKClient
 
-from app.auth import ProviderTokenError, VerifiedIdentity
+from app.auth import ProviderTokenError, ProviderUnavailableError, VerifiedIdentity
 from app.auth.nonce import consume_nonce
+from app.auth.provider_resilience import (
+    ProviderKeyCache,
+    fetch_json_document,
+    microsoft_jwks_ids,
+    verification_slot,
+)
 from app.auth.replay import check_replay
 from app.config import settings
 
 _JWKS_URL = "https://login.microsoftonline.com/common/discovery/v2.0/keys"
-_jwks_client = PyJWKClient(_JWKS_URL, cache_keys=True, lifespan=3600)
+_jwks_cache = ProviderKeyCache(
+    provider="Microsoft",
+    fetch_document=lambda: fetch_json_document(_JWKS_URL),
+    key_ids=microsoft_jwks_ids,
+)
 _UUID_RE = re.compile(r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$")
 
 
-def verify_microsoft_id_token(raw_token: str) -> VerifiedIdentity:
-    if not settings.azure_client_id:
-        raise ProviderTokenError("Microsoft sign-in is not configured")
+def _microsoft_signing_key(raw_token: str) -> jwt.PyJWK:
     try:
-        signing_key = _jwks_client.get_signing_key_from_jwt(raw_token)
-        claims = jwt.decode(
+        header = jwt.get_unverified_header(raw_token)
+    except jwt.PyJWTError as exc:
+        raise ProviderTokenError("malformed token header") from exc
+    kid = header.get("kid")
+    if header.get("alg") != "RS256" or not isinstance(kid, str):
+        raise ProviderTokenError("unsupported token signing header")
+
+    document = _jwks_cache.document_for_kid(kid)
+    keys = document["keys"]
+    matching_key: dict[str, Any] | None = next(
+        (key for key in keys if isinstance(key, dict) and key.get("kid") == kid), None
+    )
+    if matching_key is None:  # Defensive: ProviderKeyCache already established membership.
+        raise ProviderTokenError("unknown signing key id")
+    try:
+        signing_key = jwt.PyJWK.from_dict(matching_key)
+    except (jwt.PyJWTError, ValueError) as exc:
+        raise ProviderUnavailableError("Microsoft returned an unusable signing key") from exc
+    if signing_key.algorithm_name != "RS256":
+        raise ProviderUnavailableError("Microsoft returned an unexpected signing-key algorithm")
+    return signing_key
+
+
+def _verified_claims(raw_token: str) -> dict[str, Any]:
+    try:
+        signing_key = _microsoft_signing_key(raw_token)
+        return jwt.decode(
             raw_token,
             signing_key.key,
             algorithms=["RS256"],  # pinned; never 'none'/HS*
@@ -27,11 +60,15 @@ def verify_microsoft_id_token(raw_token: str) -> VerifiedIdentity:
             leeway=30,
             options={"require": ["exp", "iat", "aud", "iss", "sub"], "verify_iss": False},
         )
+    except ProviderUnavailableError:
+        raise
+    except ProviderTokenError:
+        raise
     except (jwt.PyJWTError, ValueError) as exc:
-        # Covers InvalidTokenError plus PyJWKClientError (JWKS fetch / kid resolution failures),
-        # so a provider-side hiccup becomes a clean 401 rather than an unhandled 500.
         raise ProviderTokenError(str(exc)) from exc
 
+
+def _identity_from_claims(raw_token: str, claims: dict[str, Any]) -> VerifiedIdentity:
     # Multi-tenant issuer validation: with the 'common' authority, 'iss' is per-tenant.
     # Take 'tid' from the (signature-verified) token, ensure it is a UUID, and require an
     # exact match against the issuer template.
@@ -66,3 +103,11 @@ def verify_microsoft_id_token(raw_token: str) -> VerifiedIdentity:
         display_name=claims.get("name") or email,
         tenant_id=tid,
     )
+
+
+def verify_microsoft_id_token(raw_token: str) -> VerifiedIdentity:
+    if not settings.azure_client_id:
+        raise ProviderTokenError("Microsoft sign-in is not configured")
+    with verification_slot():
+        claims = _verified_claims(raw_token)
+    return _identity_from_claims(raw_token, claims)

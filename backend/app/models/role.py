@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from sqlalchemy import DateTime, String, text
+from sqlalchemy import CheckConstraint, DateTime, Integer, String, text
 from sqlalchemy.dialects.mysql import TINYINT
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -17,19 +17,21 @@ _TABLE_ARGS = {
 
 class Role(Base):
     __tablename__ = "roles"
-    __table_args__ = _TABLE_ARGS
+    __table_args__ = (CheckConstraint("is_system IN (0, 1)", name="is_system_boolean"), _TABLE_ARGS)
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     name: Mapped[str] = mapped_column(String(50), unique=True)
     description: Mapped[str | None] = mapped_column(String(255))
     # System roles (admin/user) cannot be renamed or deleted through the API.
     is_system: Mapped[bool] = mapped_column(TINYINT(1), server_default=text("0"))
+    version: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text("1"))
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=False), server_default=text("CURRENT_TIMESTAMP(6)")
     )
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=False),
         server_default=text("CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6)"),
+        server_onupdate=text("CURRENT_TIMESTAMP(6)"),
     )
 
     permissions: Mapped[list[Permission]] = relationship(

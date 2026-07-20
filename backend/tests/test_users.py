@@ -1,8 +1,10 @@
 """HTTP-level tests for user management, RBAC, presence, and kick — via dev login."""
 
-from fastapi.testclient import TestClient
+from sqlalchemy import select
 
 from app.main import app
+from app.models import SecurityEvent
+from tests.client import TestClient
 
 
 def _login(client, email, role=None):
@@ -51,7 +53,10 @@ def test_admin_can_change_another_users_role(client):
     target = next(u for u in users if u["email"] == "target@example.com")
     assert target["id"] != admin["id"]
 
-    resp = client.patch(f"/api/users/{target['id']}/role", json={"role_id": admin_role})
+    resp = client.patch(
+        f"/api/users/{target['id']}/role",
+        json={"role_id": admin_role, "expected_version": target["access_version"]},
+    )
     assert resp.status_code == 200
     assert resp.json()["role"] == "admin"
 
@@ -138,6 +143,12 @@ def test_search_escapes_like_wildcards(client):
     assert "axb@example.com" not in emails  # '_' must match literally, not as a wildcard
 
 
+def test_directory_scan_inputs_and_legacy_offset_are_bounded(client):
+    _login(client, "admin@example.com", role="admin")
+    assert client.get("/api/users", params={"search": "a"}).status_code == 422
+    assert client.get("/api/users", params={"offset": 10_001}).status_code == 422
+
+
 def test_kick_requires_permission(client):
     target = TestClient(app)
     tu = target.post("/api/auth/dev", json={"email": "kt@example.com", "role": "user"}).json()
@@ -175,13 +186,137 @@ def test_bulk_assign_role(client):
     assert resp.json()["applied"] == 1
 
 
-def test_export_csv(client):
+def test_role_assignment_requires_roles_manage_for_single_and_bulk(client):
     _login(client, "admin@example.com", role="admin")
+    client.post(
+        "/api/roles",
+        json={"name": "LifecycleManager", "permission_keys": ["users.read", "users.manage"]},
+    )
+    user_role = _role_id(client, "user")
+    target = TestClient(app)
+    target_user = _login(target, "role-target@example.com", role="user")
+    delegate = TestClient(app)
+    _login(delegate, "role-delegate@example.com", role="LifecycleManager")
+
+    single = delegate.patch(f"/api/users/{target_user['id']}/role", json={"role_id": user_role})
+    bulk = delegate.post(
+        "/api/users/bulk",
+        json={"ids": [target_user["id"]], "action": "assign_role", "role_id": user_role},
+    )
+
+    assert single.status_code == bulk.status_code == 403
+    assert single.json()["detail"]["code"] == "INSUFFICIENT_PRIVILEGE"
+    assert bulk.json()["detail"]["code"] == "INSUFFICIENT_PRIVILEGE"
+
+
+def test_scoped_delegate_with_both_authorities_can_assign_only_held_access(client):
+    _login(client, "admin@example.com", role="admin")
+    client.post(
+        "/api/roles",
+        json={
+            "name": "ScopedAccessDelegate",
+            "permission_keys": ["users.read", "users.manage", "roles.manage", "presence.view"],
+        },
+    )
+    limited = client.post(
+        "/api/roles",
+        json={"name": "LimitedReader", "permission_keys": ["users.read", "presence.view"]},
+    ).json()
+    target = TestClient(app)
+    target_user = _login(target, "scoped-target@example.com")
+    delegate = TestClient(app)
+    _login(delegate, "scoped-delegate@example.com", role="ScopedAccessDelegate")
+
+    assigned = delegate.patch(
+        f"/api/users/{target_user['id']}/role",
+        json={"role_id": limited["id"], "expected_version": target_user["access_version"]},
+    )
+    granted = delegate.put(
+        f"/api/users/{target_user['id']}/permissions",
+        json={
+            "permission_keys": ["users.read"],
+            "expected_version": assigned.json()["access_version"],
+        },
+    )
+
+    assert assigned.status_code == granted.status_code == 200
+    assert assigned.json()["role"] == "LimitedReader"
+    assert granted.json()["direct_permissions"] == ["users.read"]
+
+
+def test_provider_subjects_are_visible_only_to_self_or_admin(client):
+    _login(client, "admin@example.com", role="admin")
+    client.post("/api/roles", json={"name": "DirectoryViewer", "permission_keys": ["users.read"]})
+    target = TestClient(app)
+    target_user = _login(target, "identity-target@example.com")
+    viewer = TestClient(app)
+    viewer_user = _login(viewer, "identity-viewer@example.com", role="DirectoryViewer")
+
+    directory = viewer.get("/api/users").json()["items"]
+    target_row = next(row for row in directory if row["id"] == target_user["id"])
+    self_row = next(row for row in directory if row["id"] == viewer_user["id"])
+
+    assert target_row["identities"] == []
+    assert self_row["identities"][0]["subject"] == "identity-viewer@example.com"
+    assert viewer.get(f"/api/users/{target_user['id']}").json()["identities"] == []
+    admin_row = client.get(f"/api/users/{target_user['id']}").json()
+    assert admin_row["identities"][0]["subject"] == "identity-target@example.com"
+
+
+def test_export_csv_is_audited(client, db):
+    admin = _login(client, "admin@example.com", role="admin")
     resp = client.get("/api/users/export.csv")
     assert resp.status_code == 200
     assert resp.headers["content-type"].startswith("text/csv")
     assert "admin@example.com" in resp.text
     assert resp.text.splitlines()[0].startswith("id,email,display_name,role,status")
+    event = db.scalar(select(SecurityEvent).where(SecurityEvent.event_type == "users.exported"))
+    assert event is not None
+    assert event.actor_user_id == admin["id"]
+    assert event.target_type == "user_collection"
+    assert event.event_metadata == {"exported_count": 1, "filters_applied": False}
+
+
+def test_user_csv_requires_users_export_independently_of_users_read(client):
+    _login(client, "admin@example.com", role="admin")
+    assert (
+        client.post(
+            "/api/roles", json={"name": "DirectoryReader", "permission_keys": ["users.read"]}
+        ).status_code
+        == 201
+    )
+    assert (
+        client.post(
+            "/api/roles", json={"name": "CsvExporter", "permission_keys": ["users.export"]}
+        ).status_code
+        == 201
+    )
+    reader = TestClient(app)
+    _login(reader, "directory-reader@example.com", role="DirectoryReader")
+
+    assert reader.get("/api/users").status_code == 200
+    denied = reader.get("/api/users/export.csv")
+    assert denied.status_code == 403
+    assert denied.json()["detail"]["code"] == "FORBIDDEN"
+
+    exporter = TestClient(app)
+    _login(exporter, "csv-exporter@example.com", role="CsvExporter")
+    assert exporter.get("/api/users").status_code == 403
+    assert exporter.get("/api/users/export.csv").status_code == 200
+
+
+def test_user_csv_export_has_a_hard_row_cap(client, monkeypatch):
+    from app.routers import users as users_router
+
+    _login(TestClient(app), "extra-user@example.com", role="user")
+    _login(client, "admin@example.com", role="admin")
+    monkeypatch.setattr(users_router, "_MAX_USER_EXPORT_ROWS", 1)
+
+    response = client.get("/api/users/export.csv")
+
+    assert response.status_code == 413
+    assert response.json()["detail"]["code"] == "EXPORT_TOO_LARGE"
+    assert "1 rows" in response.json()["detail"]["message"]
 
 
 def test_csv_export_neutralizes_formula(client):
@@ -246,7 +381,10 @@ def test_last_admin_guard_blocks_removing_final_admin(client):
     )
     user_role = _role_id(client, "user")
     # Demoting the remaining admin-role account would leave zero admins -> LAST_ADMIN.
-    resp = client.patch(f"/api/users/{second['id']}/role", json={"role_id": user_role})
+    resp = client.patch(
+        f"/api/users/{second['id']}/role",
+        json={"role_id": user_role, "expected_version": second["access_version"]},
+    )
     assert resp.status_code == 403
     assert resp.json()["detail"]["code"] == "LAST_ADMIN"
 
@@ -375,6 +513,7 @@ def test_filter_users_by_search_and_role(client):
     admin_role = _role_id(client, "admin")
 
     assert client.get("/api/users", params={"search": "alice"}).json()["total"] == 1
+    assert client.get("/api/users", params={"search": "ALICE"}).json()["total"] == 1
     admins = client.get("/api/users", params={"role_id": admin_role}).json()
     assert all(u["role"] == "admin" for u in admins["items"])
 

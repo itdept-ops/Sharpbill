@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from sqlalchemy import DateTime, ForeignKey, String, text
+from sqlalchemy import CheckConstraint, DateTime, ForeignKey, String, text
 from sqlalchemy.dialects.mysql import TINYINT
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -17,9 +17,23 @@ class SiteSettings(Base):
     """Singleton row (id = 1) holding site-wide configuration."""
 
     __tablename__ = "site_settings"
-    __table_args__ = _TABLE_ARGS
+    __table_args__ = (
+        CheckConstraint("id = 1", name="singleton_id"),
+        CheckConstraint(
+            "signup_mode IN ('open', 'approval', 'closed')",
+            name="signup_mode_valid",
+        ),
+        CheckConstraint(
+            "allow_google = 1 OR allow_microsoft = 1",
+            name="provider_available",
+        ),
+        CheckConstraint("allow_google IN (0, 1)", name="allow_google_boolean"),
+        CheckConstraint("allow_microsoft IN (0, 1)", name="allow_microsoft_boolean"),
+        CheckConstraint("calm_mode IN (0, 1)", name="calm_mode_boolean"),
+        _TABLE_ARGS,
+    )
 
-    id: Mapped[int] = mapped_column(primary_key=True)  # always 1
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=False)  # always 1
     signup_mode: Mapped[str] = mapped_column(
         String(20), server_default="open"
     )  # open|approval|closed
@@ -31,4 +45,5 @@ class SiteSettings(Base):
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=False),
         server_default=text("CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6)"),
+        server_onupdate=text("CURRENT_TIMESTAMP(6)"),
     )

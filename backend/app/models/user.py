@@ -1,6 +1,7 @@
 from datetime import datetime
+from typing import TYPE_CHECKING
 
-from sqlalchemy import DateTime, Double, ForeignKey, String, text
+from sqlalchemy import CheckConstraint, DateTime, Double, ForeignKey, Index, Integer, String, text
 from sqlalchemy.dialects.mysql import JSON, TINYINT
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -8,6 +9,9 @@ from app.models.base import Base
 from app.models.permission import Permission
 from app.models.role import Role
 from app.models.user_permission import user_permissions
+
+if TYPE_CHECKING:
+    from app.models.user_identity import UserIdentity
 
 _TABLE_ARGS = {
     "mysql_engine": "InnoDB",
@@ -18,7 +22,25 @@ _TABLE_ARGS = {
 
 class User(Base):
     __tablename__ = "users"
-    __table_args__ = _TABLE_ARGS
+    __table_args__ = (
+        # Directory/export endpoints use this stable ordering for every page.
+        Index("ix_users_created_at_id", "created_at", "id"),
+        CheckConstraint(
+            "last_latitude IS NULL OR last_latitude BETWEEN -90 AND 90",
+            name="last_latitude_valid",
+        ),
+        CheckConstraint(
+            "last_longitude IS NULL OR last_longitude BETWEEN -180 AND 180",
+            name="last_longitude_valid",
+        ),
+        CheckConstraint(
+            "last_location_accuracy IS NULL OR last_location_accuracy BETWEEN 0 AND 100000",
+            name="last_location_accuracy_valid",
+        ),
+        CheckConstraint("is_active IN (0, 1)", name="is_active_boolean"),
+        CheckConstraint("is_approved IN (0, 1)", name="is_approved_boolean"),
+        _TABLE_ARGS,
+    )
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     email: Mapped[str] = mapped_column(String(255), index=True)  # lowercase; not unique
@@ -34,6 +56,8 @@ class User(Base):
     role_id: Mapped[int] = mapped_column(ForeignKey("roles.id", ondelete="RESTRICT"), index=True)
     is_active: Mapped[bool] = mapped_column(TINYINT(1), server_default=text("1"))
     is_approved: Mapped[bool] = mapped_column(TINYINT(1), server_default=text("1"))
+    # Optimistic-concurrency token for role/direct-permission replacement operations.
+    access_version: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text("1"))
     last_login_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=False))
     last_seen_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=False), index=True)
     session_valid_after: Mapped[datetime | None] = mapped_column(DateTime(timezone=False))
@@ -53,6 +77,7 @@ class User(Base):
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=False),
         server_default=text("CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6)"),
+        server_onupdate=text("CURRENT_TIMESTAMP(6)"),
     )
 
     role: Mapped[Role] = relationship(lazy="selectin")

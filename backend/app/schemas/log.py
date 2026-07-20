@@ -17,3 +17,4 @@ class RequestLogOut(BaseModel):
 class RequestLogListOut(BaseModel):
     items: list[RequestLogOut]
     total: int
+    next_cursor: int | None

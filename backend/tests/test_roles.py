@@ -1,11 +1,12 @@
 """RBAC: permissions/roles CRUD, protection guards, and end-to-end permission enforcement."""
 
-from fastapi.testclient import TestClient
 from sqlalchemy import select
 
 from app.main import app
-from app.models import Permission, Role
+from app.models import Permission, Role, User
 from app.permissions import BUILTIN_PERMISSIONS, SYSTEM_ROLES
+from app.routers import roles as roles_router
+from tests.client import TestClient
 
 
 def _login(client, email, role=None):
@@ -34,6 +35,21 @@ def test_admin_lists_builtin_permissions(client):
     perms = client.get("/api/permissions").json()
     keys = {p["key"] for p in perms}
     assert {"users.read", "users.manage", "roles.manage", "presence.view", "presence.kick"} <= keys
+
+
+def test_role_collection_uses_one_aggregate_count_query(client, db, monkeypatch):
+    """Collection size must not turn role user counts into an N+1 query pattern."""
+    _login(client, "count-admin@example.com", role="admin")
+    actor = db.scalar(select(User).where(User.email == "count-admin@example.com"))
+    assert actor is not None
+
+    def unexpected_scalar(*args, **kwargs):
+        raise AssertionError("list_roles issued a per-role scalar query")
+
+    monkeypatch.setattr(db, "scalar", unexpected_scalar)
+    roles = roles_router.list_roles(db=db, _=actor)
+    admin = next(role for role in roles if role.name == "admin")
+    assert admin.user_count == 1
 
 
 def test_regular_user_cannot_manage_rbac(client):
@@ -90,7 +106,13 @@ def test_custom_role_grants_access_end_to_end(client):
     assert auditor.get("/api/users").status_code == 403
 
     # ...admin reassigns them to Auditor...
-    assert client.patch(f"/api/users/{au['id']}/role", json={"role_id": role_id}).status_code == 200
+    assert (
+        client.patch(
+            f"/api/users/{au['id']}/role",
+            json={"role_id": role_id, "expected_version": au["access_version"]},
+        ).status_code
+        == 200
+    )
 
     # ...and now (role read fresh from DB per request) they can read the directory.
     listed = auditor.get("/api/users")
@@ -118,7 +140,10 @@ def test_delete_role_in_use_conflicts(client):
     role_id = client.post("/api/roles", json={"name": "Temp", "permission_keys": []}).json()["id"]
     holder = TestClient(app)
     hu = holder.post("/api/auth/dev", json={"email": "holder@example.com", "role": "user"}).json()
-    client.patch(f"/api/users/{hu['id']}/role", json={"role_id": role_id})
+    client.patch(
+        f"/api/users/{hu['id']}/role",
+        json={"role_id": role_id, "expected_version": hu["access_version"]},
+    )
 
     resp = client.delete(f"/api/roles/{role_id}")
     assert resp.status_code == 409
@@ -127,11 +152,30 @@ def test_delete_role_in_use_conflicts(client):
 
 def test_delete_unused_custom_role(client):
     _login(client, "admin@example.com", role="admin")
-    role_id = client.post("/api/roles", json={"name": "Disposable", "permission_keys": []}).json()[
-        "id"
-    ]
-    assert client.delete(f"/api/roles/{role_id}").status_code == 204
+    role = client.post("/api/roles", json={"name": "Disposable", "permission_keys": []}).json()
+    role_id = role["id"]
+    assert (
+        client.delete(f"/api/roles/{role_id}?expected_version={role['version']}").status_code == 204
+    )
     assert all(r["id"] != role_id for r in client.get("/api/roles").json())
+
+
+def test_zero_user_signup_default_role_cannot_be_deleted(client):
+    _login(client, "admin@example.com", role="admin")
+    role = client.post(
+        "/api/roles", json={"name": "EmptySignupDefault", "permission_keys": []}
+    ).json()
+    assert role["user_count"] == 0
+    assert (
+        client.put("/api/admin/settings", json={"default_role_id": role["id"]}).status_code == 200
+    )
+
+    response = client.delete(f"/api/roles/{role['id']}?expected_version={role['version']}")
+
+    assert response.status_code == 409
+    assert response.json()["detail"]["code"] == "ROLE_IN_USE"
+    assert "signup default" in response.json()["detail"]["message"]
+    assert any(item["id"] == role["id"] for item in client.get("/api/roles").json())
 
 
 def test_delegate_cannot_grant_permissions_it_lacks(client):
@@ -180,6 +224,27 @@ def test_admin_can_attach_custom_permission_to_role(client):
     assert r.status_code == 201, r.text
     assert "reports.export" in [p["key"] for p in r.json()["permissions"]]
     # And an admin can attach it to an existing custom role via PATCH too.
-    rid = client.post("/api/roles", json={"name": "Reporter2", "permission_keys": []}).json()["id"]
-    patched = client.patch(f"/api/roles/{rid}", json={"permission_keys": ["reports.export"]})
+    existing = client.post("/api/roles", json={"name": "Reporter2", "permission_keys": []}).json()
+    patched = client.patch(
+        f"/api/roles/{existing['id']}",
+        json={"permission_keys": ["reports.export"], "expected_version": existing["version"]},
+    )
     assert patched.status_code == 200, patched.text
+
+
+def test_stale_role_replacement_is_rejected(client):
+    _login(client, "admin@example.com", role="admin")
+    role = client.post("/api/roles", json={"name": "VersionedRole", "permission_keys": []}).json()
+    first = client.patch(
+        f"/api/roles/{role['id']}",
+        json={"description": "first", "expected_version": role["version"]},
+    )
+    assert first.status_code == 200
+    stale = client.patch(
+        f"/api/roles/{role['id']}",
+        json={"description": "stale", "expected_version": role["version"]},
+    )
+    assert stale.status_code == 409
+    assert stale.json()["detail"]["code"] == "STALE_WRITE"
+    refreshed = next(item for item in client.get("/api/roles").json() if item["id"] == role["id"])
+    assert refreshed["description"] == "first"

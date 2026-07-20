@@ -13,5 +13,8 @@ class PresenceUser(BaseModel):
 
 class PresenceOut(BaseModel):
     online: list[PresenceUser]
+    # Exact eligible-online count. ``online`` is a bounded roster and may be shorter.
     count: int
     window_seconds: int
+    truncated: bool
+    roster_limit: int

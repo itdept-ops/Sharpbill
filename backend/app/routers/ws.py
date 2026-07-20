@@ -1,8 +1,8 @@
 import asyncio
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import UTC, datetime
-from urllib.parse import urlparse
+from urllib.parse import urlsplit
 
 import jwt as pyjwt
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
@@ -10,6 +10,7 @@ from starlette.concurrency import run_in_threadpool
 
 from app.auth.jwt import COOKIE_NAME, decode_session_token
 from app.auth.sessions import active_session
+from app.config import settings
 from app.db import SessionLocal
 from app.models import User
 from app.permissions import PRESENCE_VIEW
@@ -26,6 +27,9 @@ _RECHECK_SECONDS = 30
 # spamming frames can't hammer the DB / event loop.
 _MIN_REAUTH_INTERVAL = 5
 _LAST_SEEN_THROTTLE = 15
+# A client whose network send never completes must not stall presence updates for everyone else.
+_BROADCAST_SEND_TIMEOUT_SECONDS = 2.0
+_CONNECTION_CLOSE_TIMEOUT_SECONDS = 1.0
 
 
 @dataclass
@@ -35,6 +39,9 @@ class Conn:
     name: str | None
     role: str
     can_view: bool
+    disconnect_requested: asyncio.Event = field(
+        default_factory=asyncio.Event, repr=False, compare=False
+    )
 
 
 class PresenceHub:
@@ -48,12 +55,45 @@ class PresenceHub:
     def __init__(self) -> None:
         self._conns: list[Conn] = []
         self._lock = asyncio.Lock()
+        # Starlette does not guarantee concurrent sends on one WebSocket. Serialize broadcast
+        # rounds while still sending to all distinct connections concurrently within each round.
+        self._broadcast_lock = asyncio.Lock()
 
-    def _roster(self) -> list[dict]:
+    @staticmethod
+    def _roster(conns: list[Conn]) -> list[dict]:
         seen: dict[int, dict] = {}
-        for c in self._conns:
+        for c in conns:
             seen[c.user_id] = {"id": c.user_id, "display_name": c.name, "role": c.role}
         return list(seen.values())
+
+    @staticmethod
+    async def _send_presence(conn: Conn, roster: list[dict], count: int) -> bool:
+        payload = {"type": "presence", "count": count}
+        if conn.can_view:
+            payload["online"] = roster
+        try:
+            await asyncio.wait_for(
+                conn.ws.send_json(payload), timeout=_BROADCAST_SEND_TIMEOUT_SECONDS
+            )
+        except Exception:
+            return False
+        return True
+
+    @staticmethod
+    async def _close_connection(conn: Conn, code: int) -> None:
+        try:
+            await asyncio.wait_for(
+                conn.ws.close(code=code), timeout=_CONNECTION_CLOSE_TIMEOUT_SECONDS
+            )
+        except Exception:
+            # The connection has already been removed from the roster and its handler has been
+            # signaled below. Closing the transport is best-effort and independently bounded.
+            pass
+
+    async def _disconnect(self, conns: list[Conn], *, code: int) -> None:
+        for conn in conns:
+            conn.disconnect_requested.set()
+        await asyncio.gather(*(self._close_connection(conn, code) for conn in conns))
 
     async def add(self, conn: Conn) -> bool:
         """Register a connection. Returns False if the global cap is hit (caller should close)."""
@@ -68,11 +108,7 @@ class PresenceHub:
                 self._conns.remove(victim)
                 evicted.append(victim)
             self._conns.append(conn)
-        for c in evicted:
-            try:
-                await c.ws.close(code=1000)
-            except Exception:
-                pass
+        await self._disconnect(evicted, code=1000)
         await self.broadcast()
         return True
 
@@ -82,20 +118,23 @@ class PresenceHub:
         await self.broadcast()
 
     async def broadcast(self) -> None:
-        roster = self._roster()
-        count = len(roster)
         dead: list[Conn] = []
-        for c in list(self._conns):
-            try:
-                payload = {"type": "presence", "count": count}
-                if c.can_view:
-                    payload["online"] = roster
-                await c.ws.send_json(payload)
-            except Exception:
-                dead.append(c)
-        if dead:
+        async with self._broadcast_lock:
             async with self._lock:
-                self._conns = [c for c in self._conns if c not in dead]
+                conns = list(self._conns)
+                roster = self._roster(conns)
+            if not conns:
+                return
+            delivered = await asyncio.gather(
+                *(self._send_presence(conn, roster, len(roster)) for conn in conns)
+            )
+            dead = [conn for conn, sent in zip(conns, delivered, strict=True) if not sent]
+            dead_ids = {id(conn) for conn in dead}
+            if dead_ids:
+                async with self._lock:
+                    self._conns = [conn for conn in self._conns if id(conn) not in dead_ids]
+        if dead:
+            await self._disconnect(dead, code=1011)
 
 
 hub = PresenceHub()
@@ -115,7 +154,7 @@ def _authenticate(db, token: str | None) -> User | None:
         cutoff = int(user.session_valid_after.replace(tzinfo=UTC).timestamp())
         if int(payload.get("iat", 0)) <= cutoff:
             return None
-    if active_session(db, payload.get("jti", "")) is None:  # per-device revocation
+    if active_session(db, payload.get("jti", ""), user.id) is None:  # per-device revocation
         return None
     return user
 
@@ -142,16 +181,41 @@ def _auth_snapshot(token: str | None) -> tuple[int, str | None, str, bool] | Non
         return snap
 
 
+def _canonical_http_origin(value: str) -> tuple[str, str, int] | None:
+    """Normalize an HTTP origin and reject credentials, paths, or malformed ports."""
+    try:
+        parsed = urlsplit(value)
+        if (
+            parsed.scheme not in {"http", "https"}
+            or not parsed.hostname
+            or parsed.username is not None
+            or parsed.password is not None
+            or parsed.path not in {"", "/"}
+            or parsed.query
+            or parsed.fragment
+        ):
+            return None
+        default_port = 443 if parsed.scheme == "https" else 80
+        return parsed.scheme, parsed.hostname.lower(), parsed.port or default_port
+    except ValueError:
+        return None
+
+
 def _origin_ok(websocket: WebSocket) -> bool:
     """Reject a cross-site WebSocket handshake (defense-in-depth beyond the SameSite cookie).
 
     Browsers always send Origin on a WS handshake; a non-browser client (no Origin) is allowed
-    since it still needs the session cookie. Same-origin means Origin.host == Host.
+    since it still needs the session cookie. Same-origin includes scheme, host, and effective port.
     """
     origin = websocket.headers.get("origin")
     if not origin:
         return True
-    return urlparse(origin).netloc == websocket.headers.get("host", "")
+    if settings.app_env == "production":
+        expected = _canonical_http_origin(settings.public_origin)
+    else:
+        http_scheme = "https" if websocket.url.scheme == "wss" else "http"
+        expected = _canonical_http_origin(f"{http_scheme}://{websocket.headers.get('host', '')}")
+    return expected is not None and _canonical_http_origin(origin) == expected
 
 
 def _refresh_conn(conn: Conn, name: str | None, role: str, can_view: bool) -> bool:
@@ -162,6 +226,31 @@ def _refresh_conn(conn: Conn, name: str | None, role: str, can_view: bool) -> bo
         conn.name = name
         return True
     return False
+
+
+async def _wait_for_client_activity(websocket: WebSocket, conn: Conn) -> bool:
+    """Wait for a client frame, recheck timeout, or hub-requested disconnect.
+
+    Returning ``False`` makes the owning handler exit even when the socket transport's close/send
+    calls are stuck. This prevents a timed-out broadcast client from becoming a polling ghost.
+    """
+    receive_task = asyncio.create_task(websocket.receive_text())
+    disconnect_task = asyncio.create_task(conn.disconnect_requested.wait())
+    done, pending = await asyncio.wait(
+        {receive_task, disconnect_task},
+        timeout=_RECHECK_SECONDS,
+        return_when=asyncio.FIRST_COMPLETED,
+    )
+    for task in pending:
+        task.cancel()
+    await asyncio.gather(*pending, return_exceptions=True)
+    if conn.disconnect_requested.is_set():
+        if receive_task in done:
+            await asyncio.gather(receive_task, return_exceptions=True)
+        return False
+    if receive_task in done:
+        receive_task.result()
+    return True
 
 
 @router.websocket("/presence")
@@ -186,10 +275,8 @@ async def presence_ws(websocket: WebSocket) -> None:
     last_auth = time.monotonic()
     try:
         while True:
-            try:
-                await asyncio.wait_for(websocket.receive_text(), timeout=_RECHECK_SECONDS)
-            except TimeoutError:
-                pass
+            if not await _wait_for_client_activity(websocket, conn):
+                break
             now = time.monotonic()
             if now - last_auth < _MIN_REAUTH_INTERVAL:
                 continue  # throttle re-auth so a frame flood can't hammer the DB

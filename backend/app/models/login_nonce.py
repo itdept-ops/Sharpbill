@@ -23,7 +23,9 @@ class LoginNonce(Base):
     __tablename__ = "login_nonces"
     __table_args__ = _TABLE_ARGS
 
-    nonce: Mapped[str] = mapped_column(String(64), primary_key=True)
+    # OIDC nonces are opaque and case-sensitive. The explicit binary collation also governs
+    # primary-key lookups, so a case-modified nonce cannot consume the issued value.
+    nonce: Mapped[str] = mapped_column(String(64, collation="utf8mb4_0900_bin"), primary_key=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=False), server_default=text("CURRENT_TIMESTAMP(6)")
     )

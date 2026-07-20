@@ -30,6 +30,7 @@ class UserOut(BaseModel):
     permissions: list[str]  # effective = role ∪ direct grants
     role_permissions: list[str]  # inherited from the role
     direct_permissions: list[str]  # granted directly to this user
+    access_version: int
     is_active: bool
     is_approved: bool
     status: str  # active | pending | disabled
@@ -46,7 +47,12 @@ class UserOut(BaseModel):
 
     @classmethod
     def from_user(
-        cls, user: User, *, online: bool = False, include_location: bool = True
+        cls,
+        user: User,
+        *,
+        online: bool = False,
+        include_location: bool = True,
+        include_identity_subjects: bool = False,
     ) -> "UserOut":
         # Location is opt-in GPS and privacy-sensitive: callers pass include_location=False to
         # strip it for viewers who may only see their own coordinates.
@@ -69,13 +75,18 @@ class UserOut(BaseModel):
             permissions=sorted(user.permission_keys),
             role_permissions=sorted(user.role.permission_keys),
             direct_permissions=sorted(user.direct_permission_keys),
+            access_version=user.access_version,
             is_active=user.is_active,
             is_approved=user.is_approved,
             status=user.status,
-            identities=[
-                IdentityOut(provider=i.provider, subject=i.provider_subject)
-                for i in user.identities
-            ],
+            identities=(
+                [
+                    IdentityOut(provider=i.provider, subject=i.provider_subject)
+                    for i in user.identities
+                ]
+                if include_identity_subjects
+                else []
+            ),
             auth_providers=user.auth_providers,
             created_at=user.created_at,
             last_login_at=user.last_login_at,
@@ -96,6 +107,7 @@ class UserListOut(BaseModel):
 class RoleAssignRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
     role_id: int
+    expected_version: int | None = Field(default=None, ge=1)
 
 
 class StatusUpdateRequest(BaseModel):
@@ -108,6 +120,7 @@ class PermissionGrantRequest(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
     permission_keys: list[str] = Field(default_factory=list, max_length=100)
+    expected_version: int | None = Field(default=None, ge=1)
 
 
 class BulkActionRequest(BaseModel):
