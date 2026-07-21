@@ -2,7 +2,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 
-import { LEGAL_BUNDLE_VERSION, LEGAL_DOCUMENT_SHA256, type LegalManifest } from "../legal";
+import {
+  LEGAL_ACCEPTANCE_LABEL,
+  LEGAL_BUNDLE_VERSION,
+  LEGAL_DOCUMENT_SHA256,
+  type LegalManifest,
+} from "../legal";
 import type { AuthConfig } from "../types";
 
 const mocks = vi.hoisted(() => ({
@@ -206,9 +211,20 @@ describe("LoginPage provider matrix", () => {
     renderLogin();
 
     const checkbox = await acceptanceCheckbox();
+    const locationOptIn = screen.getByRole("checkbox", {
+      name: /share this device's location after sign-in/i,
+    });
+    const choices = screen.getByRole("group", { name: /before you continue/i });
+    expect(choices.querySelectorAll(".login-consent-option")).toHaveLength(2);
+    expect(checkbox.closest(".login-consent-option")).toBeInTheDocument();
+    expect(locationOptIn.closest(".login-consent-option")).toBeInTheDocument();
+    expect(screen.getByText("Required")).toBeInTheDocument();
+    expect(screen.getByText("Optional")).toBeInTheDocument();
     expect(checkbox).not.toBeChecked();
     expect(checkbox).toBeRequired();
     expect(checkbox).toBeEnabled();
+    expect(locationOptIn).not.toBeRequired();
+    expect(locationOptIn).not.toBeChecked();
     expect(screen.getByText(/Draft bundle — counsel review required before production/i)).toBeInTheDocument();
     expect(
       screen.getByText(/precise coordinates scheduled for clearing after 24 hours unless held/i),
@@ -216,11 +232,18 @@ describe("LoginPage provider matrix", () => {
     expect(screen.getByRole("button", { name: /continue with microsoft/i })).toBeDisabled();
     expect(mocks.post).not.toHaveBeenCalledWith("/api/auth/nonce");
 
-    const agreementLabel = screen.getByText("I agree to the");
+    const agreementLabel = screen.getByText(LEGAL_ACCEPTANCE_LABEL);
     fireEvent.click(agreementLabel);
     expect(checkbox).toBeChecked();
+    expect(locationOptIn).not.toBeChecked();
     fireEvent.click(agreementLabel);
     expect(checkbox).not.toBeChecked();
+
+    fireEvent.click(screen.getByText("Share this device's location after sign-in"));
+    expect(locationOptIn).toBeChecked();
+    expect(checkbox).not.toBeChecked();
+    fireEvent.click(screen.getByText("Share this device's location after sign-in"));
+    expect(locationOptIn).not.toBeChecked();
 
     const expectedLinks = [
       ["Terms of Service", "/legal/terms-of-service.html"],
@@ -234,6 +257,7 @@ describe("LoginPage provider matrix", () => {
       expect(link).toHaveAttribute("target", "_blank");
       expect(link).toHaveAttribute("rel", expect.stringContaining("noopener"));
       expect(link).toHaveAttribute("rel", expect.stringContaining("noreferrer"));
+      expect(link.closest("label")).toBeNull();
     }
   });
 
@@ -365,8 +389,13 @@ describe("LoginPage provider matrix", () => {
     await waitFor(() => expect(mocks.microsoftLogin).toHaveBeenCalledTimes(1));
 
     const checkbox = await acceptanceCheckbox();
+    const locationOptIn = screen.getByRole("checkbox", {
+      name: /share this device's location after sign-in/i,
+    });
     expect(checkbox).toBeChecked();
     expect(checkbox).toBeDisabled();
+    expect(locationOptIn).not.toBeChecked();
+    expect(locationOptIn).toBeDisabled();
     expect(screen.getByRole("button", { name: /opening microsoft/i })).toBeDisabled();
 
     await act(async () => resolveMicrosoftLogin("deferred-microsoft-token"));

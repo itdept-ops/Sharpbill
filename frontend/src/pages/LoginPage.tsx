@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { Link, Navigate, useLocation, useNavigate } from "react-router-dom";
 
 import { api, ApiError } from "../api/client";
@@ -6,6 +6,7 @@ import { useAuth } from "../auth/AuthContext";
 import { GOOGLE_NONCE_REFRESH_MS, loadGoogleIdentityServices } from "../auth/google";
 import { MatrixRain } from "../components/MatrixRain";
 import {
+  LEGAL_ACCEPTANCE_LABEL,
   isSupportedLegalManifest,
   LEGAL_BUNDLE_VERSION,
   LEGAL_DOCUMENTS,
@@ -22,6 +23,60 @@ function isAbort(error: unknown): boolean {
 function isLegalAcceptanceError(error: unknown): error is ApiError {
   if (!(error instanceof ApiError)) return false;
   return error.code === "LEGAL_ACCEPTANCE_REQUIRED" || error.code === "LEGAL_BUNDLE_STALE";
+}
+
+type LoginConsentOptionProps = {
+  id: string;
+  label: string;
+  checked: boolean;
+  disabled: boolean;
+  required?: boolean;
+  description: ReactNode;
+  children?: ReactNode;
+  onCheckedChange: (checked: boolean) => void;
+};
+
+function LoginConsentOption({
+  id,
+  label,
+  checked,
+  disabled,
+  required = false,
+  description,
+  children,
+  onCheckedChange,
+}: LoginConsentOptionProps) {
+  const labelId = `${id}-label`;
+  const requirementId = `${id}-requirement`;
+  const descriptionId = `${id}-description`;
+
+  return (
+    <div className="login-consent-option">
+      <input
+        id={id}
+        type="checkbox"
+        required={required}
+        disabled={disabled}
+        checked={checked}
+        aria-labelledby={labelId}
+        aria-describedby={`${requirementId} ${descriptionId}`}
+        onChange={(event) => onCheckedChange(event.target.checked)}
+      />
+      <div className="login-consent-option-body">
+        <div className="login-consent-option-title">
+          <label id={labelId} htmlFor={id}>{label}</label>
+          <span
+            id={requirementId}
+            className={`login-consent-badge login-consent-badge--${required ? "required" : "optional"}`}
+          >
+            {required ? "Required" : "Optional"}
+          </span>
+        </div>
+        {children}
+        <small id={descriptionId}>{description}</small>
+      </div>
+    </div>
+  );
 }
 
 export function LoginPage() {
@@ -308,94 +363,92 @@ export function LoginPage() {
             </div>
           )}
 
-          <div className="legal-acceptance">
-            <input
+          <fieldset className="login-consent-options">
+            <legend>Before you continue</legend>
+            <LoginConsentOption
               id="legal-acceptance"
-              type="checkbox"
+              label={LEGAL_ACCEPTANCE_LABEL}
               required
               disabled={!legalReady || signingIn !== null}
               checked={legalAccepted}
-              aria-labelledby="legal-acceptance-copy"
-              aria-describedby="legal-acceptance-hint"
-              onChange={(event) => {
-                legalAcceptedRef.current = event.target.checked;
-                setLegalAccepted(event.target.checked);
+              onCheckedChange={(checked) => {
+                legalAcceptedRef.current = checked;
+                setLegalAccepted(checked);
                 if (
-                  event.target.checked &&
+                  checked &&
                   (error?.startsWith("The legal terms changed") ||
                     error?.startsWith("Your legal acceptance"))
                 ) {
                   setError(null);
                 }
               }}
-            />
-            <span>
-              <span id="legal-acceptance-copy" className="legal-acceptance-copy">
-                <label htmlFor="legal-acceptance">I agree to the</label>{" "}
-                <Link
-                  to={legalUrl("terms", LEGAL_DOCUMENTS.terms.route)}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  aria-label="Terms of Service (opens in a new tab)"
-                >
-                  Terms of Service
-                </Link>
-                <label htmlFor="legal-acceptance">,</label>{" "}
-                <Link
-                  to={legalUrl("eula", LEGAL_DOCUMENTS.eula.route)}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  aria-label="EULA (opens in a new tab)"
-                >
-                  EULA
-                </Link>
-                <label htmlFor="legal-acceptance">, and</label>{" "}
-                <Link
-                  to={legalUrl("acceptable_use", LEGAL_DOCUMENTS.aup.route)}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  aria-label="Acceptable Use Policy (opens in a new tab)"
-                >
-                  Acceptable Use Policy
-                </Link>
-                <label htmlFor="legal-acceptance">, and acknowledge the</label>{" "}
-                <Link
-                  to={legalUrl("privacy", LEGAL_DOCUMENTS.privacy.route)}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  aria-label="Privacy Notice (opens in a new tab)"
-                >
-                  Privacy Notice
-                </Link>
-                <label htmlFor="legal-acceptance">.</label>
-              </span>
-              <small id="legal-acceptance-hint">
-                Draft bundle — counsel review required before production · required to sign in ·
-                bundle {legalManifest?.bundle_version ?? LEGAL_BUNDLE_VERSION} · each document
-                opens in a new tab
-              </small>
-            </span>
-          </div>
+              description={
+                <>
+                  Draft bundle — counsel review required before production · bundle{" "}
+                  {legalManifest?.bundle_version ?? LEGAL_BUNDLE_VERSION} · documents open in a new tab
+                </>
+              }
+            >
+              <ul className="login-consent-links" aria-label="Legal documents">
+                <li>
+                  <Link
+                    to={legalUrl("terms", LEGAL_DOCUMENTS.terms.route)}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    aria-label="Terms of Service (opens in a new tab)"
+                  >
+                    Terms of Service
+                  </Link>
+                </li>
+                <li>
+                  <Link
+                    to={legalUrl("eula", LEGAL_DOCUMENTS.eula.route)}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    aria-label="EULA (opens in a new tab)"
+                  >
+                    EULA
+                  </Link>
+                </li>
+                <li>
+                  <Link
+                    to={legalUrl("acceptable_use", LEGAL_DOCUMENTS.aup.route)}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    aria-label="Acceptable Use Policy (opens in a new tab)"
+                  >
+                    Acceptable Use Policy
+                  </Link>
+                </li>
+                <li>
+                  <Link
+                    to={legalUrl("privacy", LEGAL_DOCUMENTS.privacy.route)}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    aria-label="Privacy Notice (opens in a new tab)"
+                  >
+                    Privacy Notice
+                  </Link>
+                </li>
+              </ul>
+            </LoginConsentOption>
 
-          <label className="location-optin">
-            <input
-              type="checkbox"
+            <LoginConsentOption
+              id="location-optin"
+              label="Share this device's location after sign-in"
               disabled={!legalReady || signingIn !== null}
               checked={shareLocation}
-              onChange={(e) => {
-                shareLocationRef.current = e.target.checked;
-                setShareLocation(e.target.checked);
+              onCheckedChange={(checked) => {
+                shareLocationRef.current = checked;
+                setShareLocation(checked);
               }}
+              description={
+                legalReady && legalManifest
+                  ? `Used to set your place and timezone · precise coordinates scheduled for clearing after ${legalManifest.precise_location_retention_hours} hours unless held · derived place/timezone remain until you clear them · browser permission is required and may prompt`
+                  : "Location sharing becomes available after the current legal and retention policy loads."
+              }
             />
-            <span>
-              Share this device&apos;s location after sign-in
-              <small>
-                {legalReady && legalManifest
-                  ? `Optional · used to set your place and timezone · precise coordinates scheduled for clearing after ${legalManifest.precise_location_retention_hours} hours unless held · derived place/timezone remain until you clear them · browser permission is required and may prompt`
-                  : "Location sharing becomes available after the current legal and retention policy loads."}
-              </small>
-            </span>
-          </label>
+          </fieldset>
 
           {error && <div className="auth-error" role="alert">ERR: {error}</div>}
 
