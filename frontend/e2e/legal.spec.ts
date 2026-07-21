@@ -12,8 +12,14 @@ test("login consent choices share one responsive, independent control pattern", 
   const location = page.getByRole("checkbox", {
     name: "Share this device's location after sign-in",
   });
+  const loginButton = page.getByRole("button", { name: "Continue with Google" });
+  const selectAll = page.getByRole("button", {
+    name: "Select all sign-in choices, including optional location sharing",
+  });
 
   await expect(choices).toBeVisible();
+  await expect(loginButton).toBeVisible();
+  await expect(loginButton).toBeDisabled();
   await expect(cards).toHaveCount(2);
   await expect(acceptance).toHaveAttribute("required", "");
   await expect(location).not.toHaveAttribute("required", "");
@@ -45,6 +51,25 @@ test("login consent choices share one responsive, independent control pattern", 
 
   await expect(acceptance).toBeEnabled();
   await expect(location).toBeEnabled();
+  await expect(selectAll).toBeEnabled();
+  await expect(selectAll).toHaveAttribute("aria-controls", "legal-acceptance location-optin");
+
+  const loginBounds = await loginButton.boundingBox();
+  const choicesBounds = await choices.boundingBox();
+  expect(loginBounds).not.toBeNull();
+  expect(choicesBounds).not.toBeNull();
+  expect((loginBounds?.y ?? 0) + (loginBounds?.height ?? 0)).toBeLessThanOrEqual(choicesBounds?.y ?? 0);
+
+  await selectAll.click();
+  await expect(acceptance).toBeChecked();
+  await expect(location).toBeChecked();
+  await expect(page.getByText("Required agreement complete; the sign-in gate is unlocked.")).toBeVisible();
+  await page.getByRole("button", { name: "Clear all sign-in choices" }).click();
+  await expect(acceptance).not.toBeChecked();
+  await expect(location).not.toBeChecked();
+  await expect(loginButton).toBeVisible();
+  await expect(loginButton).toBeDisabled();
+
   await acceptance.focus();
   await page.keyboard.press("Space");
   await expect(acceptance).toBeChecked();

@@ -106,7 +106,32 @@ export function LoginPage() {
   const microsoftClientId = config?.microsoft ? config.microsoft_client_id : null;
   const legalReady = legalManifest !== null && isSupportedLegalManifest(legalManifest);
   const legalBundleVersion = legalReady ? legalManifest.bundle_version : null;
+  const allConsentChoicesSelected = legalAccepted && shareLocation;
   legalBundleVersionRef.current = legalBundleVersion;
+
+  function updateLegalAcceptance(checked: boolean) {
+    legalAcceptedRef.current = checked;
+    setLegalAccepted(checked);
+    if (
+      checked &&
+      (error?.startsWith("The legal terms changed") ||
+        error?.startsWith("Your legal acceptance"))
+    ) {
+      setError(null);
+    }
+  }
+
+  function updateLocationChoice(checked: boolean) {
+    shareLocationRef.current = checked;
+    setShareLocation(checked);
+  }
+
+  function toggleAllConsentChoices() {
+    if (!legalReady || signingIn !== null) return;
+    const checked = !allConsentChoicesSelected;
+    updateLegalAcceptance(checked);
+    updateLocationChoice(checked);
+  }
 
   const loadConfig = useCallback((signal?: AbortSignal) => {
     setConfigFailed(false);
@@ -363,25 +388,114 @@ export function LoginPage() {
             </div>
           )}
 
+          <div className="login-provider-options">
+            {error && <div className="auth-error" role="alert">ERR: {error}</div>}
+
+            {googleClientId && (!legalAccepted || !legalReady) && (
+              <button className="sso-btn" type="button" disabled aria-describedby="login-consent-gate">
+                <span className="sso-mark google-mark" aria-hidden="true">G</span>
+                Continue with Google
+              </button>
+            )}
+            {googleClientId && legalReady && legalAccepted && !gsiFailed && (
+              <div className="google-slot" ref={googleBtnRef} />
+            )}
+            {signingIn === "google" && (
+              <p className="muted small" role="status" aria-live="polite" style={{ margin: 0 }}>
+                Completing Google sign-in...
+              </p>
+            )}
+
+            {googleClientId && legalReady && legalAccepted && gsiFailed && (
+              <div className="auth-error" role="alert" style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                <span>ERR: Google sign-in couldn&apos;t load. Check your connection or blockers.</span>
+                <span className="spacer" />
+                <button
+                  className="btn btn-ghost btn-sm"
+                  onClick={() => {
+                    setGsiFailed(false);
+                    setGsiAttempt((attempt) => attempt + 1);
+                  }}
+                >
+                  Retry
+                </button>
+              </div>
+            )}
+
+            {googleClientId && microsoftClientId && <div className="auth-divider">OR</div>}
+
+            {microsoftClientId && (
+              <button
+                className="sso-btn"
+                type="button"
+                disabled={!legalReady || !legalAccepted || signingIn !== null}
+                aria-busy={signingIn === "microsoft"}
+                aria-describedby="login-consent-gate"
+                onClick={signInWithMicrosoft}
+              >
+                <span className="sso-mark" aria-hidden="true">
+                  <span className="msq"><i /><i /><i /><i /></span>
+                </span>
+                {signingIn === "microsoft" ? "Opening Microsoft…" : "Continue with Microsoft"}
+              </button>
+            )}
+
+            {config && !googleClientId && !microsoftClientId && !configFailed && (
+              <p className="auth-error" role="alert">
+                No sign-in provider is currently available. Contact an administrator.
+              </p>
+            )}
+
+            {configFailed && (
+              <div className="auth-error" role="alert" style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                <span>ERR: could not reach the sign-in service.</span>
+                <span className="spacer" />
+                <button className="btn btn-ghost btn-sm" onClick={() => loadConfig()}>
+                  Retry
+                </button>
+              </div>
+            )}
+          </div>
+
+          {(googleClientId || microsoftClientId) && (
+            <p
+              id="login-consent-gate"
+              className={`login-consent-gate${legalReady && legalAccepted ? " is-ready" : ""}`}
+              role="status"
+              aria-live="polite"
+            >
+              {legalReady && legalAccepted
+                ? "Required agreement complete; the sign-in gate is unlocked."
+                : "Accept the required agreement below to unlock sign-in."}
+            </p>
+          )}
+
           <fieldset className="login-consent-options">
             <legend>Before you continue</legend>
+            <div className="login-consent-actions">
+              <span>Includes optional location sharing.</span>
+              <button
+                className="btn btn-ghost btn-sm login-consent-toggle"
+                type="button"
+                disabled={!legalReady || signingIn !== null}
+                aria-controls="legal-acceptance location-optin"
+                aria-label={
+                  allConsentChoicesSelected
+                    ? "Clear all sign-in choices"
+                    : "Select all sign-in choices, including optional location sharing"
+                }
+                onClick={toggleAllConsentChoices}
+              >
+                {allConsentChoicesSelected ? "Clear all choices" : "Select all choices"}
+              </button>
+            </div>
             <LoginConsentOption
               id="legal-acceptance"
               label={LEGAL_ACCEPTANCE_LABEL}
               required
               disabled={!legalReady || signingIn !== null}
               checked={legalAccepted}
-              onCheckedChange={(checked) => {
-                legalAcceptedRef.current = checked;
-                setLegalAccepted(checked);
-                if (
-                  checked &&
-                  (error?.startsWith("The legal terms changed") ||
-                    error?.startsWith("Your legal acceptance"))
-                ) {
-                  setError(null);
-                }
-              }}
+              onCheckedChange={updateLegalAcceptance}
               description={
                 <>
                   Draft bundle — counsel review required before production · bundle{" "}
@@ -438,10 +552,7 @@ export function LoginPage() {
               label="Share this device's location after sign-in"
               disabled={!legalReady || signingIn !== null}
               checked={shareLocation}
-              onCheckedChange={(checked) => {
-                shareLocationRef.current = checked;
-                setShareLocation(checked);
-              }}
+              onCheckedChange={updateLocationChoice}
               description={
                 legalReady && legalManifest
                   ? `Used to set your place and timezone · precise coordinates scheduled for clearing after ${legalManifest.precise_location_retention_hours} hours unless held · derived place/timezone remain until you clear them · browser permission is required and may prompt`
@@ -449,72 +560,6 @@ export function LoginPage() {
               }
             />
           </fieldset>
-
-          {error && <div className="auth-error" role="alert">ERR: {error}</div>}
-
-          {googleClientId && (!legalAccepted || !legalReady) && (
-            <button className="sso-btn" type="button" disabled>
-              <span className="sso-mark google-mark" aria-hidden="true">G</span>
-              Continue with Google
-            </button>
-          )}
-          {googleClientId && legalAccepted && !gsiFailed && (
-            <div className="google-slot" ref={googleBtnRef} />
-          )}
-          {signingIn === "google" && (
-            <p className="muted small" role="status" aria-live="polite" style={{ margin: 0 }}>
-              Completing Google sign-in...
-            </p>
-          )}
-
-          {googleClientId && legalReady && legalAccepted && gsiFailed && (
-            <div className="auth-error" role="alert" style={{ display: "flex", alignItems: "center", gap: 10 }}>
-              <span>ERR: Google sign-in couldn&apos;t load. Check your connection or blockers.</span>
-              <span className="spacer" />
-              <button
-                className="btn btn-ghost btn-sm"
-                onClick={() => {
-                  setGsiFailed(false);
-                  setGsiAttempt((attempt) => attempt + 1);
-                }}
-              >
-                Retry
-              </button>
-            </div>
-          )}
-
-          {googleClientId && microsoftClientId && <div className="auth-divider">OR</div>}
-
-          {microsoftClientId && (
-            <button
-              className="sso-btn"
-              type="button"
-              disabled={!legalReady || !legalAccepted || signingIn !== null}
-              aria-busy={signingIn === "microsoft"}
-              onClick={signInWithMicrosoft}
-            >
-              <span className="sso-mark" aria-hidden="true">
-                <span className="msq"><i /><i /><i /><i /></span>
-              </span>
-              {signingIn === "microsoft" ? "Opening Microsoft…" : "Continue with Microsoft"}
-            </button>
-          )}
-
-          {config && !googleClientId && !microsoftClientId && !configFailed && (
-            <p className="auth-error" role="alert">
-              No sign-in provider is currently available. Contact an administrator.
-            </p>
-          )}
-
-          {configFailed && (
-            <div className="auth-error" role="alert" style={{ display: "flex", alignItems: "center", gap: 10 }}>
-              <span>ERR: could not reach the sign-in service.</span>
-              <span className="spacer" />
-              <button className="btn btn-ghost btn-sm" onClick={() => loadConfig()}>
-                Retry
-              </button>
-            </div>
-          )}
 
           <div className="auth-links">
             <Link to="/">← Back to site</Link>

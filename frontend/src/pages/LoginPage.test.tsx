@@ -215,6 +215,10 @@ describe("LoginPage provider matrix", () => {
       name: /share this device's location after sign-in/i,
     });
     const choices = screen.getByRole("group", { name: /before you continue/i });
+    const loginButton = screen.getByRole("button", { name: /continue with microsoft/i });
+    const selectAll = screen.getByRole("button", {
+      name: /select all sign-in choices, including optional location sharing/i,
+    });
     expect(choices.querySelectorAll(".login-consent-option")).toHaveLength(2);
     expect(checkbox.closest(".login-consent-option")).toBeInTheDocument();
     expect(locationOptIn.closest(".login-consent-option")).toBeInTheDocument();
@@ -225,19 +229,46 @@ describe("LoginPage provider matrix", () => {
     expect(checkbox).toBeEnabled();
     expect(locationOptIn).not.toBeRequired();
     expect(locationOptIn).not.toBeChecked();
+    expect(loginButton.compareDocumentPosition(choices) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(loginButton).toBeDisabled();
+    expect(selectAll).toBeEnabled();
+    expect(selectAll).toHaveAttribute("type", "button");
+    expect(selectAll).toHaveAttribute("aria-controls", "legal-acceptance location-optin");
     expect(screen.getByText(/Draft bundle — counsel review required before production/i)).toBeInTheDocument();
     expect(
       screen.getByText(/precise coordinates scheduled for clearing after 24 hours unless held/i),
     ).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /continue with microsoft/i })).toBeDisabled();
     expect(mocks.post).not.toHaveBeenCalledWith("/api/auth/nonce");
+
+    fireEvent.click(selectAll);
+    expect(checkbox).toBeChecked();
+    expect(locationOptIn).toBeChecked();
+    expect(loginButton).toBeEnabled();
+    expect(screen.getByText(/sign-in gate is unlocked/i)).toBeInTheDocument();
+
+    fireEvent.click(screen.getByText("Share this device's location after sign-in"));
+    expect(checkbox).toBeChecked();
+    expect(locationOptIn).not.toBeChecked();
+    expect(loginButton).toBeEnabled();
+
+    fireEvent.click(screen.getByRole("button", {
+      name: /select all sign-in choices, including optional location sharing/i,
+    }));
+    expect(checkbox).toBeChecked();
+    expect(locationOptIn).toBeChecked();
+    fireEvent.click(screen.getByRole("button", { name: /clear all sign-in choices/i }));
+    expect(checkbox).not.toBeChecked();
+    expect(locationOptIn).not.toBeChecked();
+    expect(loginButton).toBeDisabled();
 
     const agreementLabel = screen.getByText(LEGAL_ACCEPTANCE_LABEL);
     fireEvent.click(agreementLabel);
     expect(checkbox).toBeChecked();
     expect(locationOptIn).not.toBeChecked();
+    expect(loginButton).toBeEnabled();
     fireEvent.click(agreementLabel);
     expect(checkbox).not.toBeChecked();
+    expect(loginButton).toBeDisabled();
 
     fireEvent.click(screen.getByText("Share this device's location after sign-in"));
     expect(locationOptIn).toBeChecked();
@@ -277,8 +308,15 @@ describe("LoginPage provider matrix", () => {
     const locationOptIn = screen.getByRole("checkbox", {
       name: /share this device's location after sign-in/i,
     });
+    const selectAll = screen.getByRole("button", {
+      name: /select all sign-in choices, including optional location sharing/i,
+    });
     expect(locationOptIn).toBeDisabled();
     expect(locationOptIn).not.toBeChecked();
+    expect(selectAll).toBeDisabled();
+    fireEvent.click(selectAll);
+    expect(locationOptIn).not.toBeChecked();
+    expect(await acceptanceCheckbox()).not.toBeChecked();
     expect(screen.queryByText(/coordinates scheduled for clearing after 24 hours/i)).not.toBeInTheDocument();
     expect(screen.getByText(/becomes available after the current legal and retention policy loads/i)).toBeInTheDocument();
 
@@ -287,6 +325,7 @@ describe("LoginPage provider matrix", () => {
     });
 
     await waitFor(() => expect(locationOptIn).toBeEnabled());
+    expect(selectAll).toBeEnabled();
     expect(locationOptIn).not.toBeChecked();
     expect(
       screen.getByText(/precise coordinates scheduled for clearing after 720 hours unless held/i),
@@ -304,6 +343,9 @@ describe("LoginPage provider matrix", () => {
 
     expect(await screen.findByRole("alert")).toHaveTextContent(/could not load the current legal bundle/i);
     expect(await acceptanceCheckbox()).toBeDisabled();
+    expect(screen.getByRole("button", {
+      name: /select all sign-in choices, including optional location sharing/i,
+    })).toBeDisabled();
     expect(screen.getByRole("button", { name: /continue with microsoft/i })).toBeDisabled();
     expect(mocks.post).not.toHaveBeenCalledWith("/api/auth/nonce");
   });
@@ -396,6 +438,9 @@ describe("LoginPage provider matrix", () => {
     expect(checkbox).toBeDisabled();
     expect(locationOptIn).not.toBeChecked();
     expect(locationOptIn).toBeDisabled();
+    expect(screen.getByRole("button", {
+      name: /select all sign-in choices, including optional location sharing/i,
+    })).toBeDisabled();
     expect(screen.getByRole("button", { name: /opening microsoft/i })).toBeDisabled();
 
     await act(async () => resolveMicrosoftLogin("deferred-microsoft-token"));
