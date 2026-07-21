@@ -1,0 +1,23 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" />
+    <PackageReference Include="Microsoft.AspNetCore.OpenApi" />
+    <PackageReference Include="Microsoft.OpenApi" />
+    <PackageReference Include="System.IdentityModel.Tokens.Jwt" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Sharpbill.Application\Sharpbill.Application.csproj" />
+    <ProjectReference Include="..\Sharpbill.Infrastructure\Sharpbill.Infrastructure.csproj" />
+    <ProjectReference Include="..\Sharpbill.Contracts\Sharpbill.Contracts.csproj" />
+    <ProjectReference Include="..\Sharpbill.Workers\Sharpbill.Workers.csproj" />
+  </ItemGroup>
+
+</Project>

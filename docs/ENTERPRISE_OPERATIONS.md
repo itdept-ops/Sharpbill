@@ -4,6 +4,12 @@ This repository contains the application and test controls. It intentionally doe
 AWS resources, GitHub repository settings, or a deployment pipeline. Those external controls must
 be implemented and evidenced by the environment owner before production release.
 
+References to numbered migrations `0001`…`0021` below describe the frozen historical Alembic
+provenance of the compatibility schema. Current schema authority belongs to the reviewed
+`Sharpbill.Migrator` executable; the ASP.NET Core API never runs migrations at startup.
+The C# cutover is complete: no Python service or migration image is built, published, or used by
+the active release path.
+
 ## Tested operating boundary
 
 The supported repository-managed runtime is the loopback-only local Compose stack:
@@ -11,11 +17,12 @@ The supported repository-managed runtime is the loopback-only local Compose stac
 - host ports bind to `127.0.0.1`; MySQL 8.4.10 is pinned by tag and digest;
 - Compose fails closed until `MYSQL_DATA_VOLUME` names an explicitly selected fresh or
   restore-validated MySQL 8.4 volume;
-- the production-shaped API image uses a digest-pinned Wolfi base with exact Python 3.13 package
-  versions; production images are still release candidates, not deployed artifacts;
+- the production-shaped API image uses a digest-pinned .NET 10 ASP.NET Core chiseled runtime, while
+  `global.json` pins the approved SDK patch; production images are still release candidates, not
+  deployed artifacts;
 - one application/database instance represents exactly one organization;
-- the API receives an allowlisted environment and a non-root database URL, never the Compose root
-  password;
+- the API receives an allowlisted environment and non-root database credentials, never the Compose
+  root password;
 - development authentication is disabled by default and requires local mode, an explicit flag,
   and a separate strong request secret;
 - public OAuth client IDs and effective provider flags are served to the SPA at runtime by
@@ -38,10 +45,10 @@ The supported repository-managed runtime is the loopback-only local Compose stac
 - selected authentication and privileged outcomes are inserted as append-only event facts plus
   independent retry/lease state in a durable repository outbox;
 - `/api/health/live` reports process liveness, while `/api/health/ready` requires MySQL, the exact
-  packaged Alembic head, an effective identity provider, a non-admin signup default role, and a
-  reachable active administrator or valid bootstrap path; and
+  `0021` compatibility baseline, an effective identity provider, a non-admin signup default role,
+  and a reachable active administrator or valid bootstrap path; and
 - rate limits, live presence, token-replay memory, and WebSocket broadcasts are process-local. The
-  production image therefore runs one API worker until those controls are externalized.
+  reference production topology therefore runs one API replica until those controls are externalized.
 
 This boundary has no AWS resource implementation, edge TLS, HA, autoscaling, shared limiter/pub-sub,
 managed secret rotation, PITR, external outbox dispatcher, immutable/WORM audit sink, SIEM
@@ -90,7 +97,7 @@ Never log session cookies, provider tokens, authorization headers, secrets, or r
 
 - Liveness answers only whether the process can serve requests. It must not depend on MySQL or an
   identity provider.
-- Readiness requires a database connection, the exact Alembic head packaged with the running API,
+- Readiness requires a database connection, the exact `0021` schema compatibility baseline,
   and a usable identity/admission path. At least one configured provider must also be enabled in
   site settings (or the explicitly enabled local dev path must be usable), the signup default must
   not be the protected admin role, and either an active administrator must be reachable through an
@@ -104,12 +111,25 @@ Never log session cookies, provider tokens, authorization headers, secrets, or r
 1. Capture and verify a logical or physical backup before an engine or schema change.
 2. Test the change against a clone with representative data and record elapsed time, locks, and
    query-plan changes.
-3. Apply only a single linear Alembic head. Prefer expand/contract changes; do not rely on schema
-   downgrade as the recovery plan for destructive data changes.
+3. Run exactly one `Sharpbill.Migrator` process with dedicated schema authority. On an empty
+   database it applies the reviewed `0021` snapshot; on an existing database it accepts only an
+   exact legacy `0021` schema, validates its structure and canonical seeds, and writes the C#
+   baseline journal. It refuses partial Alembic history instead of guessing an upgrade path.
 4. Verify database TLS, schema revision, constraints, case-sensitive opaque identifiers, and the
    critical application paths before directing traffic to the new version.
 5. Recover a failed destructive change by restoring the verified backup into an isolated target,
    validating it, and then performing an explicitly approved cutover.
+
+For the current baseline, dry-run, apply/bridge, and then validate explicitly:
+
+```sh
+docker compose run --rm migrator migrate --dry-run
+docker compose run --rm migrator migrate
+docker compose run --rm migrator validate
+```
+
+The API never migrates its database during startup. Future schema changes must be reviewed,
+journaled migrations owned by `Sharpbill.Migrator` and follow expand/contract discipline.
 
 ### 0013 DDL maintenance window
 
@@ -121,6 +141,15 @@ and rebuilding regardless of what a small development database did. Review the o
 [online DDL operation matrix](https://dev.mysql.com/doc/refman/8.4/en/innodb-online-ddl-operations.html)
 and [metadata-lock instrumentation](https://dev.mysql.com/doc/refman/8.4/en/performance-schema-metadata-locks-table.html)
 for the exact target patch release.
+
+This procedure is retained for a **legacy database below `0021`**. The active C# migrator does not
+replay `0013` or any other partial Alembic history. The environment owner must supply an
+operator-owned, explicitly approved, source-matched archival migration artifact whose provenance
+and digest have been verified; this repository neither builds nor publishes that artifact. Use it
+only to bring an isolated clone to exact `0021`, then cross the bridge with
+`Sharpbill.Migrator validate` before admitting the ASP.NET Core API. If no approved artifact exists,
+stop and establish a separately approved data-recovery plan; the provenance files are not a
+runnable recovery package.
 
 Capture the affected-table baseline from the application database before rehearsal and again before
 the approved window (remember that `table_rows` is an InnoDB estimate):
@@ -138,7 +167,8 @@ ORDER BY total_bytes DESC;
 1. **Inventory and rehearse.** From an `0012` clone with representative cardinality and churn,
    capture row estimates plus data/index bytes for `user_identities`, `login_nonces`,
    `site_settings`, `users`, `user_sessions`, and `request_logs` from
-   `information_schema.tables`. Run `alembic upgrade 0013` there while recording every statement's
+   `information_schema.tables`. In the approved source-matched archival artifact, run
+   `alembic upgrade 0013` while recording every statement's
    elapsed time, peak temporary/free-space use, DML blocking, metadata-lock wait, and replica lag if
    applicable; then run `alembic upgrade head`. Size the window and free space from that measured
    rehearsal, including table-copy/index workspace, not from row count alone.
@@ -152,15 +182,19 @@ ORDER BY total_bytes DESC;
    pending locks in `performance_schema.metadata_locks` / `sys.schema_table_lock_waits`. Establish a
    bounded metadata-lock wait/abort threshold and kill or resolve the owning application transaction
    before migration; do not let DDL queue indefinitely behind an unknown session.
-4. **Run one migrator.** Verify the source is exactly `0012`, the packaged history has one head, the
-   migrator uses verified TLS and a dedicated identity, and the 0013 data preflight succeeds before
-   its first DDL. Run `alembic upgrade 0013` from one migration process while watching process state,
-   metadata locks, disk/temp capacity, database saturation, and the pre-agreed window. Keep traffic
+4. **Run one archival migrator.** Verify the source is exactly `0012`, the approved artifact's
+   frozen packaged history has
+   one head, the migrator uses verified TLS and a dedicated identity, and the 0013 data preflight
+   succeeds before its first DDL. Run `alembic upgrade 0013` from that source-matched artifact while
+   watching process state, metadata locks, disk/temp capacity, database saturation, and the
+   pre-agreed window. Keep traffic
    drained, then run `alembic upgrade head` to the exact packaged head. Never run migrations from
    multiple application replicas.
 5. **Validate before admission.** Compare critical row counts/checksums to the pre-change record;
    inspect the expected collations, constraints, `BIGINT`, session expiry, and indexes; run
-   `alembic current`, `alembic heads`, and `alembic check`; then start one API candidate and exercise
+   the legacy `alembic current`, `alembic heads`, and `alembic check`, followed by
+   `Sharpbill.Migrator migrate` and `Sharpbill.Migrator validate` to journal and verify the bridge;
+   then start one API candidate and exercise
    authentication, session, RBAC, request-log, and export paths. Restore traffic only after
    `/api/health/ready` returns `200` with `database`, `schema`, `identity_provider`,
    `administration`, and `admission_policy` all `ok`.
@@ -180,7 +214,9 @@ copies where required, key ownership, restore authorization, and legal holds. At
 
 1. Select a backup without relying on the operator who created it.
 2. Restore it into an isolated database with new credentials.
-3. Run integrity checks, Alembic revision checks, and representative application reads.
+3. Run integrity checks, `Sharpbill.Migrator validate`, and representative application reads. For a
+   pre-`0021` legacy restore, first use an operator-owned approved archival artifact as described
+   above.
 4. Measure achieved RPO/RTO and record every exception.
 5. Destroy the isolated recovery environment using the approved data-handling process.
 
@@ -191,27 +227,27 @@ A successful backup job is not restore evidence.
 The audit workstation performed a local data-preserving rehearsal while moving the development
 baseline from MySQL 8.0.46 to digest-pinned MySQL 8.4.10:
 
-1. A logical `appdb` export and its checksum were verified in the separately retained local volume
-   `kingfisher_pre84_backup_20260720` before engine cutover work continued.
-2. The original `kingfisher_mysql_data` directory subsequently underwent MySQL's one-way 8.0-to-8.4
+1. A logical `appdb` export and its checksum were verified in a separately retained pre-8.4 backup
+   volume before engine cutover work continued.
+2. The original pre-rebrand MySQL data directory subsequently underwent MySQL's one-way 8.0-to-8.4
    data-dictionary upgrade. It is retained as an isolated recovery artifact and must never be
    attached to MySQL 8.0.
-3. The verified export was restored into a fresh `kingfisher_mysql84_data` volume. Alembic advanced
+3. The verified export was restored into a fresh MySQL 8.4 volume. Alembic advanced
    it from `0012` to `0013`; `current`, `heads`, and `alembic check` agreed at `0013` with no model
    drift.
 4. Aggregate row counts across all application tables matched the pre-cutover source, and the
    full backend integration suite passed against an ephemeral database on the restored 8.4 service.
-5. Before the remediation migrations, a second logical export was checksum-verified in retained
-   volume `kingfisher_pre0014_backup_20260720`, restored into a disposable MySQL 8.4 instance, and
+5. Before the remediation migrations, a second logical export was checksum-verified in a retained
+   pre-0014 backup volume, restored into a disposable MySQL 8.4 instance, and
    verified at schema `0013` with 19 users, 19 identities, 27 sessions, and 1,782 request logs.
-6. After applying `0014` through `0016`, retained volume
-   `kingfisher_pre0017_backup_20260720` was independently checksum-verified and restore-tested at
+6. After applying `0014` through `0016`, the retained pre-0017 backup volume was independently
+   checksum-verified and restore-tested at
    `0016` with the same four material row counts. Only its explicitly named disposable
    restore-check container and volume were removed afterward.
 7. The live local volume then advanced to `0017`; `current`, `heads`, `alembic check`, all material
    row counts, the new authority columns, and every readiness dimension passed.
-8. Before the next decision batch, a stopped cold snapshot was copied to retained volume
-   `kingfisher_pre0019_backup_20260720`. All 200 files matched the source byte-for-byte by aggregate
+8. Before the next decision batch, a stopped cold snapshot was copied to a retained pre-0019 backup
+   volume. All 200 files matched the source byte-for-byte by aggregate
    hash verification.
 9. The live local volume advanced linearly from `0017` through `0018` and `0019`. Alembic
    current/head/drift checks passed, the API reported database, schema, identity-provider,
@@ -225,8 +261,13 @@ baseline from MySQL 8.0.46 to digest-pinned MySQL 8.4.10:
     per-document action semantics to legal evidence and added non-extending per-capture precise-
     location deadlines. Full ephemeral-MySQL migration tests passed before the live local volume
     advanced; this remains runtime validation rather than a new restore-test boundary.
+12. The C# migration bridge subsequently validated and journaled the existing exact `0021` database,
+    and independently applied the reviewed snapshot to an empty disposable MySQL database. The
+    layered .NET solution's xUnit suites cover domain, application, architecture, migrator,
+    service/API, identity, and repository boundaries; this remains repository evidence, not a
+    production recovery drill.
 
-Those names and artifacts are local to that workstation and must be inventoried before cleanup.
+Those retained recovery artifacts are local to that workstation and must be inventoried before cleanup.
 This proves a local logical restore and application/schema validation only. It does **not** prove a
 production RPO/RTO, encrypted or immutable retention, PITR, cross-boundary recovery, HA failover,
 legal hold, or an independently operated restore drill.
@@ -269,7 +310,7 @@ migration rehearsal.
   is actually inside every configured network before accepting forwarded client/scheme data.
 - Provider signature verification and key retrieval are fail-fast bounded. Keep the documented
   verification/network concurrency, connect/read timeout, key-document size, cache/stale, and
-  outage/unknown-key backoff settings inside the API worker and identity-provider budgets. Alert on
+  outage/unknown-key backoff settings inside the API process and identity-provider budgets. Alert on
   `PROVIDER_UNAVAILABLE`; do not raise the limits to mask an outage or attacker-generated `kid`
   flood. Exercise planned key rotation and stale-cache expiry before each production release.
 - Production startup rejects `ADMIN_EMAILS` and Azure admin object IDs without a configured admin
@@ -329,11 +370,11 @@ migration rehearsal.
   `428 PRECONDITION_REQUIRED`; mismatches return `409 STALE_WRITE`. Refresh, show the intervening
   state to the operator, re-authorize the intended delta, and submit a new decision. Automated
   clients must not convert either response into a blind retry.
-- Lifecycle, role, grant, and singleton-policy check-and-act paths use current locking reads that
-  replace any older SQLAlchemy identity-map state. Keep the `populate_existing`, relationship
-  refresh, and global `site_settings -> user/role` lock order together; removing only the refresh
-  can leave a row physically locked while policy checks still observe an earlier MySQL
-  `REPEATABLE READ` snapshot. Independently committed bulk items reauthorize on every item.
+- Lifecycle, role, grant, and singleton-policy check-and-act paths use explicit Dapper locking
+  reads within one database transaction. Preserve the global lock order—`site_settings`, then
+  role/permission, then user, then session—and keep authorization reads on the same transaction as
+  their protected writes; otherwise MySQL `REPEATABLE READ` can observe stale policy or create a
+  deadlock cycle. Independently committed bulk items reauthorize on every item.
 
 ## Scheduled retention operations
 
@@ -405,17 +446,17 @@ privileged-account misuse, migration failure, and restore. Track follow-up work 
 
 ## Release evidence checklist
 
-- Application unit, integration, migration, frontend, accessibility, and browser tests pass.
+- All backend xUnit suites plus frontend and browser tests pass.
 - Dependency, secret, static-analysis, and deployable-image scans meet the approved policy.
 - The exact image digests and software bill of materials are retained.
 - Readiness reports the expected schema and synthetic login/navigation checks pass.
-- The deployed database reports the exact packaged single Alembic head (`0021` for this revision),
-  and the identity, administration, and admission readiness dimensions are all `ok`.
+- `Sharpbill.Migrator validate` confirms the exact `0021` schema and C# baseline journal, and the
+  identity, administration, and admission readiness dimensions are all `ok`.
 - Privacy lifecycle boundary/hold tests pass, no overdue unheld application record exceeds the
   approved schedule, and the local 2026-07-20 recovery artifacts are disposed by 2026-08-03 unless
   a specific documented hold applies.
 - External review/ruleset, secrets, deployment approval, rollback, backup, and monitoring controls
   are independently evidenced by their owners.
 - All open risk acceptances have an owner and expiry date.
-- Public documentation and product copy match the exact database image, migration head, effective
+- Public documentation and product copy match the exact database image, schema baseline/journal, effective
   provider paths, dev-auth gate, health semantics, test evidence, and deployment limitations.

@@ -20,8 +20,8 @@ const mocks = vi.hoisted(() => ({
     calm: false,
   } as AuthConfig,
   legalManifest: {
-    bundle_version: "2026-07-20-v2",
-    effective_date: "2026-07-20",
+    bundle_version: "2026-07-21-v3",
+    effective_date: "2026-07-21",
     required_at_login: true,
     acceptance_label:
       "I agree to the Terms of Service, EULA, and Acceptable Use Policy, and acknowledge the Privacy Notice.",
@@ -31,7 +31,7 @@ const mocks = vi.hoisted(() => ({
       {
         key: "terms",
         title: "Terms of Service",
-        version: "2026-07-20-v2",
+        version: "2026-07-21-v3",
         sha256: "0000000000000000000000000000000000000000000000000000000000000000",
         url: "/legal/terms-of-service.html",
         acceptance: "agreement",
@@ -39,7 +39,7 @@ const mocks = vi.hoisted(() => ({
       {
         key: "eula",
         title: "End User License Agreement",
-        version: "2026-07-20-v2",
+        version: "2026-07-21-v3",
         sha256: "0000000000000000000000000000000000000000000000000000000000000000",
         url: "/legal/eula.html",
         acceptance: "agreement",
@@ -47,7 +47,7 @@ const mocks = vi.hoisted(() => ({
       {
         key: "acceptable_use",
         title: "Acceptable Use Policy",
-        version: "2026-07-20-v2",
+        version: "2026-07-21-v3",
         sha256: "0000000000000000000000000000000000000000000000000000000000000000",
         url: "/legal/acceptable-use-policy.html",
         acceptance: "agreement",
@@ -55,7 +55,7 @@ const mocks = vi.hoisted(() => ({
       {
         key: "privacy",
         title: "Privacy Notice",
-        version: "2026-07-20-v2",
+        version: "2026-07-21-v3",
         sha256: "0000000000000000000000000000000000000000000000000000000000000000",
         url: "/legal/privacy-notice.html",
         acceptance: "acknowledgement",
@@ -117,7 +117,7 @@ beforeEach(() => {
   };
   mocks.legalManifest = {
     bundle_version: LEGAL_BUNDLE_VERSION,
-    effective_date: "2026-07-20",
+    effective_date: "2026-07-21",
     required_at_login: true,
     acceptance_label:
       "I agree to the Terms of Service, EULA, and Acceptable Use Policy, and acknowledge the Privacy Notice.",

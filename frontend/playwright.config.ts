@@ -1,6 +1,6 @@
 import { defineConfig, devices } from "@playwright/test";
 
-// E2E drives the real running stack (Vite + FastAPI + MySQL) over the local-only dev-login seam.
+// E2E drives the real running stack (Vite + ASP.NET Core + MySQL) over the local-only dev-login seam.
 // Start the stack first (docker compose up), then `npx playwright test`.
 export default defineConfig({
   testDir: "./e2e",

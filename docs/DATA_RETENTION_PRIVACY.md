@@ -2,10 +2,11 @@
 
 - Status: Approved application policy
 - Effective date: 2026-07-20
-- Scope: One KingFisher deployment and its database (one organization)
+- Scope: One Sharpbill deployment and its database (one organization)
 - Owners: Product owner, privacy owner, security owner, and environment operator
-- Repository control status: Implemented and verified through Alembic `0021`; external backup and
-  monitoring controls remain environment-owned
+- Repository control status: Implemented by the ASP.NET Core service and retention worker, with the
+  exact `0021` schema validated by `Sharpbill.Migrator`; external backup and monitoring controls
+  remain environment-owned
 
 This is the repository's data-minimization baseline. It is an engineering policy, not legal advice
 or a substitute for a jurisdiction-specific privacy assessment. A deployment may shorten a period.
@@ -36,18 +37,18 @@ increasing it does not silently extend an expiry already stamped on a record. An
 extension requires the same documented purpose, owner, approval, and expiry as another retention
 exception. See [`LEGAL_DOCUMENTS.md`](LEGAL_DOCUMENTS.md) for the release gate.
 
-Migration `0019` records `deactivated_at`, `erasure_requested_at`, `erasure_due_at`, and `erased_at`
+Frozen historical migration `0019` records `deactivated_at`, `erasure_requested_at`, `erasure_due_at`, and `erased_at`
 on the account; adds deployment-wide `retention_hold` and `retention_hold_reference` settings; seeds
 `privacy.manage` only to the built-in admin role; and removes the redundant identity-provider email
 copy. Database constraints reject contradictory lifecycle timestamps, active/deactivated mismatch,
 or an enabled hold without a nonblank reference.
 
-Migration `0020` adds append-only `legal_acceptances` evidence with exact bundle/document versions
+Frozen historical migration `0020` adds append-only `legal_acceptances` evidence with exact bundle/document versions
 and canonical content digests, acceptance and expiry timestamps, bounded nullable request context,
 database invariants, and indexes for account lookup and bounded retention. A downgrade refuses to
 discard any retained evidence.
 
-Migration `0021` snapshots the bundle effective date, exact acceptance statement, and each
+Frozen historical migration `0021` snapshots the bundle effective date, exact acceptance statement, and each
 document's agreement-or-acknowledgement action on every legal-evidence row. It also gives each
 precise-location capture its own deadline. The retention worker uses the earlier of that stored
 deadline or the current-policy cutoff, so a policy reduction applies to existing data while an
@@ -87,7 +88,7 @@ decision. Security events remain subject to their independent 400-day schedule.
 - Ordinary user, settings, log, and security-event permissions do not imply privacy-administration
   authority. Administrative privacy operations require the dedicated least-privilege
   `privacy.manage` permission, seeded only to the built-in admin role.
-- Exports are bounded and streamed. KingFisher does not retain a generated server-side export file;
+- Exports are bounded and streamed. Sharpbill does not retain a generated server-side export file;
   the recipient and environment owner are responsible for downloaded copies.
 
 ## Holds and exceptions
@@ -108,14 +109,15 @@ bounded, independently committed batches so cleanup cannot hold an unbounded tra
 must monitor last success, rows examined/deleted/anonymized, oldest eligible row, failures, and hold
 state. Re-running a partial cycle must be safe.
 
-Every route that can race anonymization re-reads the account under a current row lock and replaces
-older ORM identity-map state before writing. This prevents a request that began before erasure from
-restoring profile, location, activity, session, approval, role, or grant data onto the retained
-identity-suppression record.
+Every route that can race anonymization re-reads the account through Dapper under a current row lock
+on the same connection and transaction as its protected write. This prevents a request that began
+before erasure from restoring profile, location, activity, session, approval, role, or grant data
+onto the retained identity-suppression record.
 
 A release may claim the repository policy as enforced only when real-MySQL tests prove boundary
 timestamps, hold behavior, idempotent anonymization, and authorization. An environment restore drill
-must separately prove that a restored backup remains isolated until migrations and all retention
+must separately prove that a restored backup remains isolated until `Sharpbill.Migrator validate`
+passes and all retention
 work due as of restore time have completed.
 
 ## Backups and restored data
@@ -127,10 +129,9 @@ environment owner approves and implements it. Legal or incident holds may supers
 through the documented hold process.
 
 The local recovery artifacts created during the 2026-07-20 MySQL/migration rehearsal have an
-approved expiry of **2026-08-03**. Before that date the workstation owner must inventory
-`kingfisher_pre84_backup_20260720`, `kingfisher_pre0014_backup_20260720`,
-`kingfisher_pre0017_backup_20260720`, `kingfisher_pre0019_backup_20260720`, and the isolated
-upgraded source volume `kingfisher_mysql_data`. The pre-0019 cold snapshot contains 200 files whose
+approved expiry of **2026-08-03**. Before that date the workstation owner must inventory the
+retained pre-8.4, pre-0014, pre-0017, and pre-0019 backup volumes plus the isolated upgraded source
+volume. The pre-0019 cold snapshot contains 200 files whose
 aggregate hashes were verified byte-for-byte against its source. On or after the
 expiry, remove them through an approved, target-verified disposal procedure unless a documented
 hold extends a specific artifact. Record artifact name, deletion time, operator, and outcome. This

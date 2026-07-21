@@ -7,7 +7,7 @@
 ## FND-009 — Per-IP rate-limit & audit source-IP collapse to the proxy container IP
 
 ### Context / evidence
-`C:\dev\kingfisher-crm`. `backend/app/main.py:73` keys rate-limit buckets on
+`[repository root]`. `backend/app/main.py:73` keys rate-limit buckets on
 `request.client.host` (the socket peer), and `backend/app/request_logging.py:29` deliberately ignores
 `X-Forwarded-For`. But in the compose topology the browser talks to the Vite/web container, which proxies
 `/api` → `api:8000` (`frontend/vite.config.ts:32`, `changeOrigin:false`, `ws:true`). So the socket peer

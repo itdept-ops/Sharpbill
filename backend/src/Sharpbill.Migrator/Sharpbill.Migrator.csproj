@@ -1,0 +1,25 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <AssemblyName>Sharpbill.Migrator</AssemblyName>
+    <RootNamespace>Sharpbill.Migrator</RootNamespace>
+    <Version>1.0.0</Version>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Dapper" />
+    <PackageReference Include="MySqlConnector" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Compile Remove="Tests/**/*.cs" />
+    <EmbeddedResource
+      Include="../../database/schema-0021.sql"
+      Link="Resources/schema-0021.sql"
+      LogicalName="Sharpbill.Migrator.schema-0021.sql" />
+    <InternalsVisibleTo Include="Sharpbill.Migrator.Tests" />
+  </ItemGroup>
+
+</Project>

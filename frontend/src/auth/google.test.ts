@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-const SCRIPT_SELECTOR = "script[data-kingfisher-google-identity]";
+const SCRIPT_SELECTOR = "script[data-sharpbill-google-identity]";
 
 function installGoogleBrowserApi() {
   window.google = {

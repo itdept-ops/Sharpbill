@@ -13,24 +13,73 @@ services:
       - caddy_data:/data
       - caddy_config:/config
     depends_on:
-      - api
-      - web
+      api:
+        condition: service_healthy
+      web:
+        condition: service_started
 
   api:
-    image: ${ECR_REGISTRY}/kingfisher-api:${IMAGE_TAG}
+    image: ${ECR_REGISTRY}/sharpbill-api:${IMAGE_TAG}
     restart: unless-stopped
+    init: true
+    user: "65532:65532"
     env_file:
       - ./api.env
+    environment:
+      APP_ENV: production
+      ASPNETCORE_ENVIRONMENT: Production
+      ASPNETCORE_URLS: http://0.0.0.0:8000
     expose:
       - "8000"
+    read_only: true
+    tmpfs:
+      - /tmp:size=64m,mode=1777,noexec,nosuid
+    cap_drop:
+      - ALL
+    pids_limit: 256
+    security_opt:
+      - no-new-privileges:true
+    stop_grace_period: 30s
     healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/health')"]
+      # Production traffic admission uses readiness (database, schema, and policy), not mere
+      # process liveness. The signed application binary performs the probe because the chiseled
+      # runtime contains no shell, curl, or wget.
+      test: ["CMD", "/app/api/Sharpbill.Api", "--health-check", "http://127.0.0.1:8000/api/health/ready"]
       interval: 30s
       timeout: 5s
       retries: 3
+      start_period: 30s
+
+  # Run exactly once per release before starting or updating API replicas:
+  # `docker compose --profile operations run --rm migrator migrate`.
+  # Production must use separately governed runtime and migrator database credentials even though
+  # this reference file accepts one api.env file.
+  migrator:
+    profiles: [operations]
+    image: ${ECR_REGISTRY}/sharpbill-api:${IMAGE_TAG}
+    init: true
+    user: "65532:65532"
+    entrypoint: ["/app/migrator/Sharpbill.Migrator"]
+    command: ["migrate"]
+    env_file:
+      - ./api.env
+    environment:
+      APP_ENV: production
+      DOTNET_ENVIRONMENT: Production
+    read_only: true
+    tmpfs:
+      - /tmp:size=64m,mode=1777,noexec,nosuid
+    cap_drop:
+      - ALL
+    pids_limit: 128
+    security_opt:
+      - no-new-privileges:true
+    healthcheck:
+      disable: true
+    restart: "no"
 
   web:
-    image: ${ECR_REGISTRY}/kingfisher-web:${IMAGE_TAG}
+    image: ${ECR_REGISTRY}/sharpbill-web:${IMAGE_TAG}
     restart: unless-stopped
     expose:
       - "80"

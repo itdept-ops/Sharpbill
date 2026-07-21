@@ -1,4 +1,6 @@
-# Fix Packs — Kingfisher CRM audit 2026-07-15
+# Fix Packs — Sharpbill audit 2026-07-15
+
+> Rebranded archival copies: product labels and repository-root references were normalized for Sharpbill; finding scope remains tied to the 2026-07-15 audit.
 
 Each file is a **self-contained prompt** a fresh session (zero prior context) can execute. They cover all 43
 findings from `../code-review-report.html`. Order by the waves in `../remediation-roadmap.md`.

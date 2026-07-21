@@ -9,7 +9,7 @@ export interface Identity {
 }
 
 /** Per-user UI customization axes. Every field optional; a missing key renders at today's
- *  default. Mirrors the backend `UiPrefs` pydantic submodel. */
+ *  default. Mirrors the backend `UiPreferences` transport contract. */
 export interface UiPrefs {
   base_tone?: "abyss" | "ink" | "graphite" | "midnight" | "warm-black";
   background_depth?: "pure-black" | "standard" | "elevated";

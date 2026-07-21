@@ -3,7 +3,7 @@
 **Severity:** Medium (FND-011, FND-012), Low (FND-030) · **Domain:** Security: session & privacy · **Effort:** S
 
 ## Context
-`C:\dev\kingfisher-crm`. The app has a deliberate location-privacy model: precise GPS
+`[repository root]`. The app has a deliberate location-privacy model: precise GPS
 (`last_latitude/longitude/accuracy/at`) is shown only to the user themselves or a `users.manage` holder,
 via the `include_location` flag in `UserOut.from_user` (`backend/app/schemas/user.py:47-86`). Two paths
 leak location-adjacent data around that control, and deactivation leaves stale session rows.

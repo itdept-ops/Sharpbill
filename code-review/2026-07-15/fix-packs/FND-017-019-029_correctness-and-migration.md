@@ -3,7 +3,7 @@
 **Severity:** Medium (FND-017, -019), Low (FND-029) · **Effort:** S each
 
 ## Context
-`C:\dev\kingfisher-crm`, FastAPI + MySQL + Alembic. A grab-bag of independently-shippable correctness fixes.
+`[repository root]`, FastAPI + MySQL + Alembic. A grab-bag of independently-shippable correctness fixes.
 
 ---
 

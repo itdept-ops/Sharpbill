@@ -23,7 +23,7 @@ export function LandingPage() {
       <div className="scanlines" />
 
       <nav className="landing-nav">
-        <span className="brand">◈ KINGFISHER</span>
+        <span className="brand">◈ SHARPBILL</span>
         <span className="spacer" />
         <Link to="/technology">Technology</Link>
         <Link to="/security">Security</Link>
@@ -33,7 +33,7 @@ export function LandingPage() {
 
       <section className="hero">
         <div>
-          <div className="hero-eyebrow cursor">KINGFISHER // ACCESS CONTROL CONSOLE</div>
+          <div className="hero-eyebrow cursor">SHARPBILL // ACCESS CONTROL CONSOLE</div>
           <h1 className="hero-title">
             Access, <span className="lit">proven every request.</span>
           </h1>
@@ -80,7 +80,7 @@ export function LandingPage() {
       </div>
 
       <footer className="landing-footer">
-        <span>KINGFISHER // ACCESS CONTROL</span>
+        <span>SHARPBILL // ACCESS CONTROL</span>
         <span className="spacer" />
         <LegalNav className="footer-legal-nav" />
       </footer>

@@ -17,6 +17,13 @@ htmlcov/
 node_modules/
 dist/
 
+# dotnet
+**/bin/
+**/obj/
+TestResults/
+*.user
+*.suo
+
 # playwright
 /e2e-artifacts/
 test-results/

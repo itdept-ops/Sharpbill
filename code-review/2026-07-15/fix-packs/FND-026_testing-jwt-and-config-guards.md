@@ -3,7 +3,7 @@
 **Severity:** Medium · **Domain:** Testing & QA · **Effort:** S · **Test-only (no source change expected)**
 
 ## Context
-`C:\dev\kingfisher-crm`, FastAPI backend. Two pieces of security-critical logic have no tests, so a silent
+`[repository root]`, FastAPI backend. Two pieces of security-critical logic have no tests, so a silent
 regression would pass CI:
 1. Session-JWT validation (`backend/app/auth/jwt.py:25-32`): `decode_session_token` pins
    `algorithms=["HS256"]` and requires `["exp","iat","sub","jti"]`.

@@ -17,7 +17,7 @@ export function LegalPage({ documentKey }: { documentKey: LegalDocumentKey }) {
 
   useEffect(() => {
     const previousTitle = window.document.title;
-    window.document.title = `${document.title} | KingFisher`;
+    window.document.title = `${document.title} | Sharpbill`;
     return () => {
       window.document.title = previousTitle;
     };
@@ -30,7 +30,7 @@ export function LegalPage({ documentKey }: { documentKey: LegalDocumentKey }) {
 
       <nav className="landing-nav" aria-label="Primary navigation">
         <Link to="/" className="brand">
-          <span aria-hidden="true">◈</span> KINGFISHER
+          <span aria-hidden="true">◈</span> SHARPBILL
         </Link>
         <span className="spacer" />
         <Link to="/">Home</Link>

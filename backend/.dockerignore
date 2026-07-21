@@ -1,8 +1,29 @@
-__pycache__/
-*.pyc
-.venv/
-.pytest_cache/
-.ruff_cache/
+# Source-control and editor state
+.git/
+.gitignore
+.idea/
+.vscode/
+*.suo
+*.user
+
+# Local configuration and credentials
 .env
 .env.*
 !.env.example
+*.pfx
+*.snk
+
+# .NET build/test output
+**/bin/
+**/obj/
+**/TestResults/
+**/coverage/
+**/coverage.*
+artifacts/
+
+# Immutable historical migration provenance is outside the .NET image context.
+alembic/
+
+# Local operating-system noise
+.DS_Store
+Thumbs.db

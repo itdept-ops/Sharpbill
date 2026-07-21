@@ -1,5 +1,5 @@
 const GOOGLE_IDENTITY_SCRIPT_URL = "https://accounts.google.com/gsi/client";
-const GOOGLE_IDENTITY_SCRIPT_SELECTOR = "script[data-kingfisher-google-identity]";
+const GOOGLE_IDENTITY_SCRIPT_SELECTOR = "script[data-sharpbill-google-identity]";
 const GOOGLE_IDENTITY_LOAD_TIMEOUT_MS = 15_000;
 
 // Backend login nonces currently live for ten minutes. Rotate two minutes early so a button that
@@ -10,7 +10,7 @@ let googleScriptPromise: Promise<void> | null = null;
 
 function googleScript(): HTMLScriptElement {
   const existing = document.querySelector<HTMLScriptElement>(GOOGLE_IDENTITY_SCRIPT_SELECTOR);
-  if (existing && existing.dataset.kingfisherGoogleLoaded !== "true") return existing;
+  if (existing && existing.dataset.sharpbillGoogleLoaded !== "true") return existing;
   // A completed script without window.google is corrupt (for example, an extension removed the
   // API). Loading events do not fire twice, so replace it instead of waiting forever.
   existing?.remove();
@@ -19,7 +19,7 @@ function googleScript(): HTMLScriptElement {
   script.src = GOOGLE_IDENTITY_SCRIPT_URL;
   script.async = true;
   script.defer = true;
-  script.dataset.kingfisherGoogleIdentity = "true";
+  script.dataset.sharpbillGoogleIdentity = "true";
   document.head.appendChild(script);
   return script;
 }
@@ -46,7 +46,7 @@ export function loadGoogleIdentityServices(): Promise<void> {
       }
     };
     const onLoad = () => {
-      script.dataset.kingfisherGoogleLoaded = "true";
+      script.dataset.sharpbillGoogleLoaded = "true";
       if (window.google) finish();
       else finish(new Error("Google Identity Services loaded without its browser API"));
     };

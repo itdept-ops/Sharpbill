@@ -3,7 +3,7 @@
 **Severity:** Medium (×3) · **Effort:** XS each · Three small, independent edits in the auth/settings layer.
 
 ## Context
-`C:\dev\kingfisher-crm`, FastAPI backend under `backend/`. Login/provisioning logic is in
+`[repository root]`, FastAPI backend under `backend/`. Login/provisioning logic is in
 `backend/app/auth/service.py`; site settings in `backend/app/routers/settings.py`; role/permission
 management in `backend/app/routers/roles.py`.
 

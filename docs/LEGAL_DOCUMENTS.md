@@ -2,10 +2,10 @@
 
 - Implementation status: versioned acceptance control
 - Legal-text status: counsel-review draft; not approved for production use
-- Current bundle: `2026-07-20-v2`
-- Scope: one KingFisher deployment operated for one organization
+- Current bundle: `2026-07-21-v3`
+- Scope: one Sharpbill deployment operated for one organization
 
-KingFisher presents four public documents as one versioned login bundle:
+Sharpbill presents four public documents as one versioned login bundle:
 
 | Document | User action | Public route |
 |---|---|---|
@@ -53,7 +53,7 @@ requires a separately approved, hold-aware rebaseline with owner, purpose, and e
 
 ### Canonical content digest
 
-Digest schema `kingfisher-legal-document/v1` serializes UTF-8 JSON with the document's status,
+Digest schema `sharpbill-legal-document/v1` serializes UTF-8 JSON with the document's status,
 effective date, title, summary, shared draft warning, and ordered sections; every section includes
 its heading and ordered paragraph/bullet arrays. Navigation routes and visual styling are excluded.
 A frontend invariant recomputes SHA-256 from that canonical form, while the API manifest and
@@ -62,17 +62,17 @@ a digest update fails the invariant, and any manifest/content digest mismatch ca
 web client to disable sign-in. The release process separately requires a new version for changed
 legal text.
 
-## Owner-selected v2 defaults
+## Owner-selected business defaults
 
 The owner supplied the business facts below and delegated conservative Oregon defaults. They are
-implemented in bundle `2026-07-20-v2`, but remain counsel-review draft choices rather than legal
-approval:
+carried forward in bundle `2026-07-21-v3`, but remain counsel-review draft choices rather than
+legal approval:
 
-| Topic | v2 selection |
+| Topic | Current selection |
 |---|---|
-| Operator | `KingFisher`, with no unverified LLC/corporation suffix |
+| Operator | `Sharpbill`, with no unverified LLC/corporation suffix |
 | Location | Hillsboro, Oregon, United States |
-| Draft contacts | `legal@kingfisher.com`, `privacy@kingfisher.com`, and `support@kingfisher.com` |
+| Draft contacts | `legal@sharpbill.invalid`, `privacy@sharpbill.invalid`, and `support@sharpbill.invalid` |
 | Audience | Authorized single-tenant organizational users who are at least 18 |
 | Commercial model | Free service; no paid plans, billing, refunds, renewals, or service credits |
 | Service level | Best effort; no contractual uptime, support-response, recovery, or maintenance SLA |
@@ -87,20 +87,19 @@ approval:
 
 1. Confirm the complete registered legal-entity name and legal form, if any.
 2. Replace the city/state reference with a complete mailing and service-of-process address.
-3. Prove authorized control and active monitoring of every contact mailbox or replace it with an
-   address on a controlled domain. `kingfisher.com` is used by the unrelated UK company Kingfisher
-   plc, so the supplied addresses are unsafe to publish as operative channels without proof.
+3. Replace every `.invalid` placeholder with an actively monitored address on a controlled domain
+   and retain evidence of that domain and mailbox authority before publication.
 4. Inventory and approve the exact hosting/database/backup/monitoring providers, identity providers,
    subprocessors, regions, international processing, and any required data-processing terms.
 5. Confirm the actual controller/processor split for the production dataset and the operational
    workflow for email rights requests and appeals. Execute a separate compliant data-processing
-   agreement before representing KingFisher as a processor for another controller.
+   agreement before representing Sharpbill as a processor for another controller.
 6. Have qualified Oregon counsel assess the warranty disclaimer, US $100 liability cap, indemnity,
    venue, evidence-retention period, and any non-waivable laws for the actual audience.
 7. Verify that the selected insurance, incident response, backup, security, and support practices
    match every public statement before removing the draft banner.
 8. Either keep precise location disabled or add durable consent/notice-version evidence before
-   relying on KingFisher as an auditable consent system; the official UI choice and browser
+   relying on Sharpbill as an auditable consent system; the official UI choice and browser
    permission are not independently persisted by the server.
 
 Until those gates close, the public documents must retain their prominent draft banner and must not
@@ -111,17 +110,21 @@ be represented as a finished contract or jurisdiction-specific legal opinion.
 - `2026-07-20-v1` was the initial generic counsel-review draft, preserved by source commit
   `92105a9`. No local acceptance evidence existed when v2 work began.
 - `2026-07-20-v2` is a substantive replacement populated with the owner-selected Oregon facts and
-  forces renewed acceptance. Alembic `0021` adds the exact displayed statement/action semantics and
-  per-capture location deadline to the evidence architecture.
+  forces renewed acceptance. Frozen historical Alembic migration `0021` added the exact displayed
+  statement/action semantics and per-capture location deadline to the evidence architecture; the
+  C# migrator now validates that compatibility baseline.
+- `2026-07-21-v3` rebrands the operator and canonical schema for Sharpbill, moves all unverified
+  draft contacts to the deliberately non-operative `sharpbill.invalid` domain, and forces renewed
+  acceptance without rewriting v1/v2 evidence.
 
-Final canonical SHA-256 digests for v2 (including the shared draft warning) are:
+Current canonical SHA-256 digests for v3 (including the shared draft warning) are:
 
 | Document | SHA-256 |
 |---|---|
-| Terms of Service | `f5a30fded3b6b4715f13d0711c9168dd643aac48ff14164e95bc7610734fb912` |
-| End User License Agreement | `2715b0daa99c2a553b08448eb81307affcfd2ca5ece005563eb4ad83d7fae6b3` |
-| Acceptable Use Policy | `1290bb3dbcf3b79fb2051693ae7be6898b421daf24af1ddb037098cc1ee07217` |
-| Privacy Notice | `53e22a3bff270fb2215631f061cd001f89a96971e6fa3bb8374ff2f829931695` |
+| Terms of Service | `37cbe7a0ff06fb3ba8c5914ad33065fd125b9c94b7a46852a9f9ce77643d1891` |
+| End User License Agreement | `2bb333bb3d3314edb2cf945c0bc34212cc27d0f7aff35c414b16e4ec60c7cad2` |
+| Acceptable Use Policy | `b7715b13d4063b6c092fb85b779ed0be07b9a89fab8df5bd64a0f1cd1b015663` |
+| Privacy Notice | `20f67642f41b1639ddae3eeb19ca32d0372568c8969aaebb5747265ec577d024` |
 
 ## Publishing a replacement bundle
 

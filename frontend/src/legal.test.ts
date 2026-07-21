@@ -24,14 +24,14 @@ describe("canonical legal document digests", () => {
     expect(digest).toBe(LEGAL_DOCUMENT_SHA256[key]);
   });
 
-  it("locks the owner-selected Oregon v2 business terms", () => {
+  it("locks the Sharpbill v3 business terms", () => {
     const canonicalBundle = LEGAL_DOCUMENT_ORDER.map((key) => canonicalizeLegalDocument(key)).join(
       "\n",
     );
     const terms = canonicalizeLegalDocument("terms");
     const privacy = canonicalizeLegalDocument("privacy");
 
-    expect(LEGAL_BUNDLE_VERSION).toBe("2026-07-20-v2");
+    expect(LEGAL_BUNDLE_VERSION).toBe("2026-07-21-v3");
     expect(LEGAL_DOCUMENT_STATUS).toBe("counsel-review-draft");
     expect(LEGAL_DOCUMENT_ORDER.every((key) => LEGAL_DOCUMENTS[key].version === LEGAL_BUNDLE_VERSION)).toBe(
       true,

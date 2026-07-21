@@ -1,7 +1,9 @@
-# Kingfisher CRM — Remediation Roadmap
+# Sharpbill — Remediation Roadmap
 
 **Audit:** 2026-07-15 · **Overall grade:** B− · **Findings:** 1 High, 26 Medium, 16 Low (grouped)
 **Ordering principle:** risk × effort. Wave 0 is high-value / low-effort quick wins; later waves are grouped so related edits land in one session with the right tests.
+
+> Rebranded archival copy: product labels were normalized to Sharpbill; findings and evidence remain tied to the 2026-07-15 review.
 
 Each finding has a self-contained prompt in `fix-packs/`. IDs map 1:1 to the report's findings register.
 

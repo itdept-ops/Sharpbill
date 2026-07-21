@@ -22,7 +22,7 @@ function ConsoleNavigation({
   return (
     <>
       <div className="rail-brand">
-        <span className="logo-glyph" aria-hidden="true">◈</span> KINGFISHER
+        <span className="logo-glyph" aria-hidden="true">◈</span> SHARPBILL
       </div>
       <div className="rail-section">Operations</div>
       <NavLink to="/dashboard" className="rail-item" onClick={onNavigate}>▸ Dashboard</NavLink>
@@ -101,7 +101,7 @@ function ShellInner() {
           {menuOpen ? "✕" : "☰"}
         </button>
         <span className="breadcrumb">
-          KF://<span className="path"> {breadcrumb(location.pathname)}</span>
+          SB://<span className="path"> {breadcrumb(location.pathname)}</span>
         </span>
         <span className="spacer" />
         {import.meta.env.DEV && <span className="env-pill">DEV</span>}

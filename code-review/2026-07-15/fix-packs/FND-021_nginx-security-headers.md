@@ -3,7 +3,7 @@
 **Severity:** Medium · **Domain:** Frontend / Ops · **Effort:** S · **Scope:** `frontend/nginx.conf` only
 
 ## Context
-`C:\dev\kingfisher-crm`. The production frontend image (`frontend/Dockerfile:21-23`, `prod` stage) serves
+`[repository root]`. The production frontend image (`frontend/Dockerfile:21-23`, `prod` stage) serves
 the built SPA with nginx. The config ships with no security headers:
 
 ```

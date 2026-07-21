@@ -1,0 +1,28 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <ItemGroup>
+    <ProjectReference Include="..\Sharpbill.Domain\Sharpbill.Domain.csproj" />
+    <ProjectReference Include="..\Sharpbill.Application\Sharpbill.Application.csproj" />
+    <ProjectReference Include="..\Sharpbill.Contracts\Sharpbill.Contracts.csproj" />
+  </ItemGroup>
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+    <PackageReference Include="Dapper" />
+    <PackageReference Include="GeoTimeZone" />
+    <PackageReference Include="Microsoft.Extensions.Http.Resilience" />
+    <PackageReference Include="MySqlConnector" />
+    <PackageReference Include="System.IdentityModel.Tokens.Jwt" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <EmbeddedResource Include="Data\rg_cities1000.csv" LogicalName="Sharpbill.Geo.rg_cities1000.csv" />
+  </ItemGroup>
+
+</Project>

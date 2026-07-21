@@ -1,6 +1,6 @@
 # How this was built — one operator, a fleet of adversarial agents
 
-KingFisher is an access-control console: verified SSO keyed to a provider's immutable identity,
+Sharpbill is an access-control console: verified SSO keyed to a provider's immutable identity,
 database-backed RBAC enforced on every request, live presence, per-device sessions, a one-click
 kill-switch, bounded access telemetry, and a durable security-event outbox. That's the *product*.
 External outbox delivery and immutable retention remain environment controls. This is the more
@@ -76,15 +76,15 @@ before it shipped, and each has a test named after the failure it prevents.
 
 ## What verifies it
 
-- **Backend:** the full HTTP stack under `pytest` against a real MySQL database, schema built by the
-  actual Alembic migrations — an integration suite spanning auth, token replay, RBAC guards,
-  per-device sessions, presence/kick, rate limiting, CSV-safety, location privacy, and request
-  logging, plus access-log backpressure, scheduled bounded retention, optimistic write conflicts,
-  least-privilege exports, strict production identity/proxy configuration, security-event outbox
-  semantics, tenant-scoped Microsoft identity keys, database-controlled provider-wide onboarding,
-  privacy lifecycle/hold/anonymization controls, and schema invariants through Alembic head `0019`.
+- **Backend:** the rewritten .NET 10 solution has xUnit suites split across domain,
+  application, architecture, migrator, and integration projects. It verifies business invariants,
+  transport contracts, dependency direction, identity/session behavior, authorization services,
+  HTTP boundaries, Dapper repository behavior against real MySQL, and the schema bridge. The
+  dedicated `Sharpbill.Migrator` dry-runs and applies the reviewed `0021` snapshot to an empty
+  database, or validates and journals an existing exact `0021` database without replaying partial
+  history. Alembic `0001`…`0021` remains frozen as historical schema provenance.
 - **Frontend:** Vitest + Testing Library over the code that gates access in the browser.
-- **End-to-end:** a Playwright job boots the local stack (Vite + FastAPI + MySQL via Docker Compose)
+- **End-to-end:** a Playwright job boots the local stack (Vite + ASP.NET Core + MySQL via Docker Compose)
   and checks, in a browser, that an admin can sign in and drive selected console workflows — and
   that a plain user is redirected away from the admin directory. This is representative application
   coverage, not a live-provider, penetration, load, recovery, or deployment test.

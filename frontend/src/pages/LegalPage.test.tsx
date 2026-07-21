@@ -24,8 +24,8 @@ describe("LegalPage", () => {
     expect(screen.getAllByText(LEGAL_BUNDLE_VERSION)).toHaveLength(2);
     expect(screen.getByRole("heading", { level: 2, name: /Data the service processes/i })).toBeInTheDocument();
     expect(screen.getByText(/2,555 days/)).toBeInTheDocument();
-    expect(screen.getByText(/KingFisher, based in Hillsboro, Oregon/i)).toBeInTheDocument();
-    expect(screen.getAllByText(/privacy@kingfisher\.com/i).length).toBeGreaterThan(0);
+    expect(screen.getByText(/Sharpbill, based in Hillsboro, Oregon/i)).toBeInTheDocument();
+    expect(screen.getAllByText(/privacy@sharpbill\.invalid/i).length).toBeGreaterThan(0);
     expect(screen.getByText(/at least 18 years old/i)).toBeInTheDocument();
     expect(screen.getByRole("navigation", { name: "Legal" })).toBeInTheDocument();
   });

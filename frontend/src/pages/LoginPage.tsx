@@ -360,7 +360,7 @@ export function LoginPage() {
             <span className="logo-glyph" style={{ color: "var(--green)", fontSize: 22 }} aria-hidden="true">
               ◈
             </span>
-            <strong style={{ letterSpacing: "0.06em" }}>KINGFISHER</strong>
+            <strong style={{ letterSpacing: "0.06em" }}>SHARPBILL</strong>
           </div>
 
           {providerLabel && (

@@ -3,7 +3,7 @@
 **Severity:** Medium (×3), Low (FND-039) · **Domain:** Performance & scalability · **Effort:** M
 
 ## Context
-`C:\dev\kingfisher-crm`, FastAPI + MySQL (SQLAlchemy 2.x). Two DB writes happen on the common request
+`[repository root]`, FastAPI + MySQL (SQLAlchemy 2.x). Two DB writes happen on the common request
 path, an audit table grows unbounded, a hot query is unindexed, and an unused relationship is eager-loaded.
 
 ---

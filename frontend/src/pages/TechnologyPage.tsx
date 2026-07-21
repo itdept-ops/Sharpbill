@@ -13,12 +13,12 @@ const STACK = [
   {
     head: "// BACKEND",
     badge: "API",
-    items: ["Python 3.13 · FastAPI", "Digest-pinned Wolfi runtime", "SQLAlchemy 2.x ORM", "Alembic migrations", "Pydantic v2 validation", "PyMySQL driver"],
+    items: [".NET 10 · ASP.NET Core", "Layered services + dependency injection", "Composable middleware pipeline", "Dapper · MySqlConnector", "C# schema migrator", "Digest-pinned chiseled runtime"],
   },
   {
     head: "// DATA",
     badge: "RDBMS",
-    items: ["MySQL 8.4 LTS · utf8mb4", "Roles / permissions / identities", "Per-request authorization reads", "Versioned, seeded migrations"],
+    items: ["MySQL 8.4 LTS · utf8mb4", "Roles / permissions / identities", "Per-request authorization reads", "Reviewed 0021 baseline · journaled migrations"],
   },
   {
     head: "// PLATFORM",
@@ -30,7 +30,7 @@ const STACK = [
 const FLOW = [
   ["Browser", "React SPA, cookie-only session"],
   ["Edge", "Vite proxy (dev) / Caddy reference (not wired)"],
-  ["API", "FastAPI · verify · authorize · serve"],
+  ["API", "ASP.NET Core · verify · authorize · serve"],
   ["Data", "MySQL 8.4 LTS · roles read every request"],
 ];
 
@@ -43,7 +43,7 @@ export function TechnologyPage() {
 
       <nav className="landing-nav">
         <Link to="/" className="brand">
-          ◈ KINGFISHER
+          ◈ SHARPBILL
         </Link>
         <span className="spacer" />
         <Link to="/security">Security</Link>
@@ -58,7 +58,7 @@ export function TechnologyPage() {
             Built the modern way — <span className="lit">agentically.</span>
           </h1>
           <p>
-            KingFisher is a full-stack access-control console designed, built, and reviewed through
+            Sharpbill is a full-stack access-control console designed, built, and reviewed through
             a multi-agent workflow: models handle the grind — code, tests, docs,
             adversarial review — while the architect steers intent. What follows is the actual
             repository baseline, not a claim of production deployment.
@@ -149,7 +149,7 @@ export function TechnologyPage() {
         </div>
 
         <footer className="landing-footer" style={{ marginTop: 40, border: "none" }}>
-          <span>KINGFISHER // ACCESS CONTROL</span>
+          <span>SHARPBILL // ACCESS CONTROL</span>
           <span className="spacer" />
           <Link to={user ? "/dashboard" : "/login"}>Enter console →</Link>
         </footer>

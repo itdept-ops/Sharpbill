@@ -1,4 +1,4 @@
-name: kingfisher
+name: sharpbill
 
 x-bounded-logging: &bounded-logging
   driver: local
@@ -33,18 +33,21 @@ services:
   api:
     build:
       context: ./backend
-      target: dev
+      target: prod
+    init: true
     environment:
       # Inside the compose network the DB host is the service name "mysql", never localhost.
       # Keep the API's environment allowlisted: in particular, do not expose MYSQL_ROOT_PASSWORD.
       APP_ENV: ${APP_ENV:-local}
+      ASPNETCORE_ENVIRONMENT: ${ASPNETCORE_ENVIRONMENT:-Development}
+      ASPNETCORE_URLS: http://0.0.0.0:8000
       DB_HOST: mysql
       DB_PORT: "3306"
       DB_NAME: ${MYSQL_DATABASE}
       DB_USER: ${MYSQL_USER}
       DB_PASSWORD: ${MYSQL_PASSWORD}
       DB_REQUIRE_TLS: ${DB_REQUIRE_TLS:-false}
-      DB_TLS_CA_PATH: ${DB_TLS_CA_PATH:-/opt/kingfisher/certs/rds-global-bundle.pem}
+      DB_TLS_CA_PATH: ${DB_TLS_CA_PATH:-/opt/sharpbill/certs/rds-global-bundle.pem}
       DB_POOL_SIZE: ${DB_POOL_SIZE:-5}
       DB_MAX_OVERFLOW: ${DB_MAX_OVERFLOW:-5}
       DB_POOL_TIMEOUT_SECONDS: ${DB_POOL_TIMEOUT_SECONDS:-10}
@@ -54,8 +57,8 @@ services:
       DB_WRITE_TIMEOUT_SECONDS: ${DB_WRITE_TIMEOUT_SECONDS:-30}
       SESSION_JWT_SECRET: ${SESSION_JWT_SECRET}
       SESSION_JWT_PREVIOUS_SECRETS: ${SESSION_JWT_PREVIOUS_SECRETS:-}
-      SESSION_JWT_ISSUER: ${SESSION_JWT_ISSUER:-kingfisher-crm}
-      SESSION_JWT_AUDIENCE: ${SESSION_JWT_AUDIENCE:-kingfisher-crm-web}
+      SESSION_JWT_ISSUER: ${SESSION_JWT_ISSUER:-sharpbill}
+      SESSION_JWT_AUDIENCE: ${SESSION_JWT_AUDIENCE:-sharpbill-web}
       SESSION_TTL_HOURS: ${SESSION_TTL_HOURS:-8}
       COOKIE_SECURE: ${COOKIE_SECURE:-false}
       MAX_ACTIVE_SESSIONS_PER_USER: ${MAX_ACTIVE_SESSIONS_PER_USER:-20}
@@ -102,18 +105,14 @@ services:
       PUBLIC_ORIGIN: ${PUBLIC_ORIGIN:-}
       DEV_AUTH_ENABLED: ${DEV_AUTH_ENABLED:-false}
       DEV_AUTH_SECRET: ${DEV_AUTH_SECRET:-}
-    volumes:
-      - ./backend:/app
     ports:
       - "127.0.0.1:${API_HOST_PORT:-8000}:8000"
     healthcheck:
       # Container health is process liveness. Traffic readiness remains available at
       # /api/health/ready and includes database + exact schema-head validation.
-      test:
-        - CMD
-        - python
-        - -c
-        - "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/health/live', timeout=3).read()"
+      # The probe is part of the published .NET executable, so hardened images do not need a
+      # shell, curl, or wget.
+      test: ["CMD", "/app/api/Sharpbill.Api", "--health-check", "http://127.0.0.1:8000/api/health/live"]
       interval: 10s
       timeout: 5s
       retries: 6
@@ -121,6 +120,37 @@ services:
     depends_on:
       mysql:
         condition: service_healthy
+    logging: *bounded-logging
+
+  # Migrations are an explicit, one-shot operation: `docker compose run --rm migrator migrate`.
+  # The API intentionally does not receive schema authority or mutate the database on startup.
+  migrator:
+    profiles: [tools]
+    build:
+      context: ./backend
+      target: migrator
+    environment:
+      APP_ENV: ${APP_ENV:-local}
+      DB_HOST: mysql
+      DB_PORT: "3306"
+      DB_NAME: ${MYSQL_DATABASE}
+      DB_USER: ${MYSQL_USER}
+      DB_PASSWORD: ${MYSQL_PASSWORD}
+      DB_REQUIRE_TLS: ${DB_REQUIRE_TLS:-false}
+      DB_TLS_CA_PATH: ${DB_TLS_CA_PATH:-/opt/sharpbill/certs/rds-global-bundle.pem}
+      DB_CONNECT_TIMEOUT_SECONDS: ${DB_CONNECT_TIMEOUT_SECONDS:-5}
+    depends_on:
+      mysql:
+        condition: service_healthy
+    read_only: true
+    tmpfs:
+      - /tmp:size=64m,mode=1777,noexec,nosuid
+    cap_drop:
+      - ALL
+    pids_limit: 128
+    security_opt:
+      - no-new-privileges:true
+    restart: "no"
     logging: *bounded-logging
 
   web:

@@ -3,7 +3,7 @@
 **Severity:** High · **Domain:** Dependencies / supply chain · **Effort:** XS
 
 ## Context (zero prior knowledge assumed)
-Repo: `C:\dev\kingfisher-crm`, a FastAPI + React app. The frontend lives in `frontend/`.
+Repo: `[repository root]`, a FastAPI + React app. The frontend lives in `frontend/`.
 `npm audit` on `frontend/` reports **8 vulnerabilities**; the only **production** one is:
 
 - `react-router-dom@6.30.1` (and its deps `react-router`, `@remix-run/router`) — **High**, open-redirect / XSS:

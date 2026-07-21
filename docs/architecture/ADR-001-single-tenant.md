@@ -6,7 +6,7 @@
 
 ## Decision
 
-KingFisher is a single-tenant access-control console. One running application and its database
+Sharpbill is a single-tenant access-control console. One running application and its database
 belong to exactly one organization. A shared database, shared application instance, or shared
 identity namespace across customers is not supported.
 

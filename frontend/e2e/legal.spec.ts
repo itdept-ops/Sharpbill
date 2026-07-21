@@ -1,6 +1,23 @@
 import { expect, test } from "@playwright/test";
 
 test("login consent choices share one responsive, independent control pattern", async ({ page }, testInfo) => {
+  // OAuth client IDs are deliberately blank in the default local stack. This visual test needs
+  // one provider control to exercise the consent gate, so preserve the real API response and add
+  // a deterministic public client ID only at the browser boundary. Provider token exchange is
+  // covered separately and no external identity service is contacted here.
+  await page.route("**/api/auth/config", async (route) => {
+    const response = await route.fetch();
+    const config = await response.json();
+    await route.fulfill({
+      response,
+      json: {
+        ...config,
+        google: true,
+        google_client_id: "123456-e2e.apps.googleusercontent.com",
+      },
+    });
+  });
+
   await page.goto("/login");
 
   const choices = page.getByRole("group", { name: "Before you continue" });
@@ -119,9 +136,9 @@ test("signed-out legal acceptance gate and draft documents are reachable", async
   await expect(page.getByRole("note", { name: "Draft legal notice" })).toContainText(
     "DRAFT — PENDING LEGAL COUNSEL REVIEW",
   );
-  await expect(page.getByText("2026-07-20-v2").first()).toBeVisible();
-  await expect(page.getByText(/KingFisher, based in Hillsboro, Oregon/i)).toBeVisible();
-  await expect(page.getByText(/privacy@kingfisher\.com/i).first()).toBeVisible();
+  await expect(page.getByText("2026-07-21-v3").first()).toBeVisible();
+  await expect(page.getByText(/Sharpbill, based in Hillsboro, Oregon/i)).toBeVisible();
+  await expect(page.getByText(/privacy@sharpbill\.invalid/i).first()).toBeVisible();
   await expect(page.getByText(/at least 18 years old/i)).toBeVisible();
 
   await page.emulateMedia({ media: "print" });

@@ -1,13 +1,13 @@
-# KingFisher — Access Control Console
+# Sharpbill — Access Control Console
 
 **An access-control console for local development and evaluation** — single sign-on that verifies
 the provider's *immutable* identity, a database-backed **roles + permissions** system, a **live
 presence** roster with a **session kill-switch**, deep user management, an admin request-activity
-log, and a Matrix/terminal ("DATASTREAM") interface. FastAPI + React + MySQL, run locally with
+log, and a Matrix/terminal ("DATASTREAM") interface. ASP.NET Core + React + MySQL, run locally with
 Docker Compose.
 
-![CI](https://github.com/itdept-ops/kingfisher-crm/actions/workflows/ci.yml/badge.svg)
-&nbsp;·&nbsp; FastAPI · React 18 + TypeScript · MySQL 8 · Docker · Alembic · WebSockets
+![CI](https://github.com/itdept-ops/Sharpbill/actions/workflows/ci.yml/badge.svg)
+&nbsp;·&nbsp; .NET 10 · ASP.NET Core · React 18 + TypeScript · MySQL 8 · Docker · WebSockets
 
 > **Supported boundary:** the repository and default Compose stack are for loopback-only local
 > development and evaluation. They are not an approved production release or a compliance
@@ -20,7 +20,7 @@ Docker Compose.
 > genuine privilege-escalation bugs in this very RBAC. The story, with the actual bugs, is in
 > **[CASE_STUDY.md](CASE_STUDY.md)**.
 
-![KingFisher console — a tour of the access-control console](docs/img/demo.gif)
+![Sharpbill console — a tour of the access-control console](docs/img/demo.gif)
 
 ---
 
@@ -120,7 +120,7 @@ Each user picks a **UI accent color** (presets or a custom picker) from their pr
 console recolors from a single `--accent-rgb` CSS variable while staying dark. The choice is stored
 per account and follows them across devices.
 
-Seed realistic demo data (local): `docker compose exec api python -m app.scripts.seed_demo`.
+Seed realistic demo data (local): `docker compose run --rm migrator seed-demo`.
 
 ---
 
@@ -173,20 +173,27 @@ per-request permission gate.
 
 ## Architecture
 
-- **Backend** — Python 3.13 on a digest-pinned Wolfi image, **FastAPI**, **SQLAlchemy 2.x**,
-  **Alembic** migrations, and PyMySQL.
-  All routes live under `/api`. Errors share a `{"detail": {"code", "message"}}` envelope.
+- **Backend** — **.NET 10 + ASP.NET Core** with explicit Domain, Contracts, Application,
+  Infrastructure, Workers, and API projects. Controllers are thin; application services and
+  repository ports are injected through the built-in DI container; middleware owns cross-cutting
+  HTTP concerns. Persistence uses **Dapper + MySqlConnector**. All routes live under `/api`, and
+  errors preserve the `{"detail": {"code", "message"}}` envelope. The C# runtime cutover is
+  complete; no Python service is part of the active application or container path.
 - **Frontend** — **React 18 + TypeScript + Vite**, React Router v6, hand-written CSS
   (the "DATASTREAM" terminal theme). Vite proxies `/api` (incl. WebSocket upgrade) to the API.
-- **Database** — digest-pinned **MySQL 8.4.10 LTS** (`utf8mb4`), schema owned entirely by one
-  linear Alembic history (migrations `0001`…`0021`). The data model supports one organization per
-  isolated deployment; it is not a shared multi-tenant SaaS schema.
-- **Runtime** — **Docker Compose** (mysql + api + web with hot reload). CI runs on **Node 24**.
+- **Database** — digest-pinned **MySQL 8.4.10 LTS** (`utf8mb4`). `Sharpbill.Migrator` applies the
+  reviewed `0021` snapshot to an empty database, or validates and journals an existing exact `0021`
+  database. The frozen Alembic migrations `0001`…`0021` remain immutable historical schema
+  provenance; the ASP.NET Core API never mutates schema on startup. One database represents one
+  organization, not a shared multi-tenant SaaS schema.
+- **Runtime** — **Docker Compose** (`mysql` + explicit one-shot `migrator` + published non-root
+  `api` + Vite development `web`). Run `dotnet watch` directly from the SDK when backend hot reload
+  is needed. CI pins the .NET 10 SDK and Node 24.
 
 ```
-Browser ──HTTP/WS──▶  Vite dev server ──proxy /api──▶  FastAPI  ──▶  MySQL
-                              │                           │
-                        React SPA                  SQLAlchemy + Alembic
+Browser ──HTTP/WS──▶  Vite dev server ──proxy /api──▶  ASP.NET Core  ──▶  MySQL
+                              │                              │
+                        React SPA                 services + Dapper
 ```
 
 Identity flow: provider ID token → **verified server-side** → app issues its own short **HS256
@@ -244,8 +251,8 @@ review. They do not establish production readiness or legal/regulatory complianc
   the session cookie is also `SameSite=Lax`.
 - **Rate limiting.** Per-IP throttling on nonce/sign-in routes plus a global `/api` backstop,
   keyed on the socket peer or a client address accepted only from configured trusted proxies,
-  returns `429` with `Retry-After`. The limiter is process-local, so the production image runs one
-  worker until an edge or shared limiter is supplied.
+  returns `429` with `Retry-After`. The limiter is process-local, so the reference production
+  topology runs one API replica until an edge or shared limiter is supplied.
 - **Bounded readiness.** Process-only liveness never touches dependencies. Database-backed
   readiness has a separate probe bucket and brief nonblocking single-flight cache, so public probes
   cannot bypass application throttling and pile up database checks.
@@ -253,8 +260,8 @@ review. They do not establish production readiness or legal/regulatory complianc
   control: open admits verified identities, approval creates pending accounts, and closed rejects
   new non-bootstrap identities. Google `hd` and Microsoft `tid` are verified context, not domain
   allowlists. Provider toggles still fail closed before token verification.
-- **Input bounds.** The ASGI boundary enforces a configurable total request-body limit even when
-  `Content-Length` is absent (1 MiB by default), and identity/location DTOs impose field and
+- **Input bounds.** ASP.NET Core middleware enforces a configurable total request-body limit even
+  when `Content-Length` is absent (1 MiB by default), and identity/location DTOs impose field and
   finite-number limits.
 - **Production startup and admission guards.** Production mode requires secure cookies, verified
   database TLS, a canonical HTTPS `PUBLIC_ORIGIN`, and at least one configured identity provider.
@@ -272,15 +279,16 @@ review. They do not establish production readiness or legal/regulatory complianc
 ```bash
 cp .env.example .env
 # REQUIRED: set MYSQL_DATA_VOLUME to an explicit new MySQL 8.4 volume name, for example
-# MYSQL_DATA_VOLUME=kingfisher_mysql84_data. For existing data, use only a separately restored
+# MYSQL_DATA_VOLUME=sharpbill_mysql84_data. For existing data, use only a separately restored
 # and validated 8.4 volume; never point MySQL 8.4 at an 8.0 data directory implicitly.
-python -c "import secrets; print(secrets.token_hex(32))"   # paste into SESSION_JWT_SECRET
+openssl rand -hex 32   # paste into SESSION_JWT_SECRET
 # For automated local dev-login only: generate a DIFFERENT value for DEV_AUTH_SECRET,
 # set DEV_AUTH_ENABLED=true, and send it in X-Dev-Auth-Secret. Keep this disabled otherwise.
 
-docker compose up --build -d
-docker compose exec api alembic upgrade head
-docker compose exec api python -m app.scripts.seed_demo   # optional: demo users + roles
+docker compose up -d mysql
+docker compose run --rm migrator migrate
+docker compose run --rm migrator seed-demo   # optional: local demo users + roles
+docker compose up --build -d api web
 
 #   http://localhost:5173          → the app (landing page)
 #   http://localhost:8000/api/docs → API docs
@@ -292,20 +300,23 @@ The host ports default to `5173`, `8000`, and loopback-only `3306`; override
 `WEB_HOST_PORT`, `API_HOST_PORT`, or `MYSQL_HOST_PORT` in `.env` if needed.
 
 `/api/health/live` answers only whether the API process is alive. `/api/health/ready` returns `200`
-only when MySQL is reachable, the database is at the exact packaged Alembic head, at least one
-configured provider is enabled in site settings (or the explicitly enabled local dev path is
+only when MySQL is reachable, the database matches the exact `0021` compatibility baseline, at
+least one configured provider is enabled in site settings (or the explicitly enabled local dev path is
 usable), the signup default is not the protected admin role, and an active administrator can use
 an effective provider or a valid bootstrap path remains. A new stack can therefore be live while
 readiness intentionally returns `503` until migrations and identity/admin admission are configured.
 
-An upgrade that crosses migration `0013` includes potentially blocking/rebuilding MySQL DDL. Do
-not run it against a populated environment as an ordinary rolling startup action; follow the
+An upgrade of a legacy database that crosses frozen migration `0013` includes potentially
+blocking/rebuilding MySQL DDL. The C# migrator deliberately refuses that partial history. A
+database below `0021` requires an operator-owned, explicitly approved, source-matched archival
+migration artifact whose provenance and digest have been verified; this repository neither builds
+nor publishes that artifact. Use it only on an isolated clone and follow the
 [0013 DDL maintenance-window procedure](docs/ENTERPRISE_OPERATIONS.md#0013-ddl-maintenance-window)
 with measured table sizes, metadata-lock checks, a verified backup, drained writes, and post-change
 readiness validation.
 
 Development-only reset (permanently deletes the Compose database volume):
-`docker compose down -v && docker compose up -d && docker compose exec api alembic upgrade head`.
+`docker compose down -v`, followed by the Quick start database and migrator commands above.
 Never use that command against data that must be retained.
 
 ---
@@ -395,23 +406,22 @@ Never use that command against data that must be retained.
 
 ## Testing & CI
 
-- **Backend** — `pytest` runs the full HTTP stack against a dedicated `*_test` MySQL database, with
-  a local-only destructive-test guard and schema built by the real Alembic migrations (never
-  `create_all`). Coverage spans auth, token
-  replay, RBAC guards, presence/kick, bulk actions, CSV-injection, location privacy, pagination,
-  rate limiting, bounded/scheduled retention, erasure/hold workflows, optimistic write preconditions,
-  least-privilege exports, security-event outbox behavior, and migration invariants through the
-  packaged head `0021`.
+- **Backend** — the xUnit suites cover domain invariants, application policies and contract
+  serialization, enforced layer dependencies, the dedicated migrator, service behavior, HTTP
+  boundaries, identity, and Dapper repositories against real MySQL where integration state is
+  required. CI exercises the migrator's dry-run, empty-database apply, exact-schema validation, and
+  journal bridge before running the suite with coverage collection.
 - **Frontend** — `vitest` + Testing Library over the code that gates access in the browser (the API
   client's error/401 handling, `RequirePermission`, badges).
-- **E2E** — a Playwright job boots the local stack (Vite + FastAPI + MySQL via Docker Compose) and
+- **E2E** — a Playwright job boots the local stack (Vite + ASP.NET Core + MySQL via Docker Compose) and
   drives representative flows through the secret-gated dev-login: admin sign-in and user editing,
   plus a plain user's denial from the admin directory. This exercises the application boundary; it
   does not test live provider tenants or external production controls.
-- **CI** (`.github/workflows/ci.yml`, Python 3.13 + Node 24) — immutable action revisions and
-  read-only permissions; hash-locked Python install; Ruff, Mypy, Bandit, full Python dependency
-  audit, single-head migration/upgrade/drift checks, and an 85% branch-coverage floor; locked npm
-  install, TypeScript/ESLint, Vitest, build, and full dependency audit; production-image builds with
+- **CI** (`.github/workflows/ci.yml`, .NET 10 + Node 24) — immutable action revisions and
+  read-only permissions; centrally pinned NuGet restore with transitive vulnerability rejection, formatting
+  and analyzer enforcement, warnings-as-errors Release builds, migration dry-run/apply/validation,
+  xUnit/TRX coverage evidence with a zero-test guard; locked npm install, TypeScript/ESLint, Vitest,
+  build, and full dependency audit; production-image builds with
   a blocking High/Critical Trivy scan and uploaded SPDX SBOMs; and an ephemeral Compose/Playwright
   access-control flow with a masked, independent dev-auth secret. There is no deploy job. The
   workflow is repository test evidence, not proof that GitHub rulesets, review requirements,
@@ -422,7 +432,8 @@ Never use that command against data that must be retained.
 ## Project layout
 
 ```
-backend/   FastAPI app, SQLAlchemy models, Alembic migrations (0001 schema … 0021), pytest suite
+backend/   layered .NET 10 solution, ASP.NET Core API, workers, C# migrator, xUnit suites,
+           and frozen Alembic 0001…0021 schema provenance
 frontend/  React + Vite SPA (DATASTREAM terminal theme)
 deploy/    production compose + Caddyfile (reference; not used locally)
 docs/img/  README screenshots
@@ -434,12 +445,13 @@ docs/img/  README screenshots
 ## Common commands
 
 ```bash
-docker compose exec api alembic upgrade head             # apply migrations
-docker compose exec api alembic check                    # verify model/schema drift gate
-docker compose exec api python -m app.scripts.seed_demo  # seed demo data (local only)
-docker compose exec api pytest                           # backend tests
-docker compose exec api ruff check .                     # backend lint
-docker compose exec api mypy app                         # backend type gate
+docker compose run --rm migrator migrate                 # apply or bridge the reviewed schema
+docker compose run --rm migrator validate                # read-only exact-schema validation
+docker compose run --rm migrator seed-demo               # seed demo data (local only)
+(cd backend && dotnet restore Sharpbill.slnx)
+(cd backend && dotnet format Sharpbill.slnx --verify-no-changes --no-restore)
+(cd backend && dotnet build Sharpbill.slnx -c Release --no-restore)
+(cd backend && dotnet test Sharpbill.slnx -c Release --no-build)
 docker compose exec web npm run lint                     # frontend typecheck + lint
 docker compose logs -f api web                           # tail logs
 ```

@@ -3,7 +3,7 @@
 **Severity:** Medium · **Domain:** Security: Authentication · **Effort:** M
 
 ## Context
-`C:\dev\kingfisher-crm`, FastAPI backend. Microsoft ID tokens are verified in
+`[repository root]`, FastAPI backend. Microsoft ID tokens are verified in
 `backend/app/auth/microsoft.py`; admin bootstrap decision is in `backend/app/auth/service.py`.
 Identity is correctly keyed on the immutable `oid` for *account* lookup, but the *admin-bootstrap*
 decision keys on the email claim.

@@ -4,7 +4,7 @@
 **Do these together** — they touch the same two routers and share one new test module.
 
 ## Context
-`C:\dev\kingfisher-crm`, FastAPI backend under `backend/`. RBAC model: a user has one role (roles hold
+`[repository root]`, FastAPI backend under `backend/`. RBAC model: a user has one role (roles hold
 permissions) plus optional direct grants. `user.permission_keys` = role perms ∪ direct grants
 (`backend/app/models/user.py:76`). The `admin` role holds all built-in permissions; system roles are
 protected. Permission gates live in `backend/app/auth/deps.py:67` (`require_permission`).

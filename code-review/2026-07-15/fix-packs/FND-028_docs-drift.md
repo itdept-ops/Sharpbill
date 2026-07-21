@@ -3,7 +3,7 @@
 **Severity:** Low · **Domain:** Documentation & DX · **Effort:** XS · **Docs-only, no code change**
 
 ## Context
-`C:\dev\kingfisher-crm`. Several README/CASE_STUDY claims no longer match the code. Fix the docs to match
+`[repository root]`. Several README/CASE_STUDY claims no longer match the code. Fix the docs to match
 reality (do **not** change code to match the docs unless the product genuinely intends the described feature).
 
 ## Drifts to fix (each verified against source)

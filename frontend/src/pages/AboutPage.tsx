@@ -11,7 +11,7 @@ const STATS: [string, string][] = [
 ];
 
 const SKILLS = [
-  "C#/.NET", "TypeScript", "Python", "SQL", "Angular", "RxJS", "PostgreSQL",
+  "C#/.NET 10", "ASP.NET Core", "TypeScript", "Python", "SQL", "Angular", "RxJS", "MySQL", "PostgreSQL",
   "Docker", "AWS", "CI/CD · OIDC", "Networking", "Security",
 ];
 
@@ -25,7 +25,7 @@ export function AboutPage() {
 
       <nav className="landing-nav">
         <Link to="/" className="brand">
-          ◈ KINGFISHER
+          ◈ SHARPBILL
         </Link>
         <span className="spacer" />
         <Link to="/">Home</Link>
@@ -64,9 +64,9 @@ export function AboutPage() {
             <p>
               <strong>Junior Fortunato</strong> is a founder, U.S. Army veteran, and full-stack
               engineer who ships production systems solo — designing, building, deploying, and
-              operating end to end across <strong>C#/.NET, Angular, TypeScript, Python, and SQL</strong>.
-              One person at the keyboard, a team of agents on the grind, and live software to show
-              for it.
+              operating end to end across <strong>C#/.NET, ASP.NET Core, TypeScript, SQL, and cloud infrastructure</strong>.
+              Sharpbill's layered .NET 10 backend is one working example: one person at the keyboard,
+              a team of agents on the grind, and live software to show for it.
             </p>
           </div>
 

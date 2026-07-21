@@ -1,0 +1,18 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/Sharpbill.Api/Sharpbill.Api.csproj" />
+    <Project Path="src/Sharpbill.Application/Sharpbill.Application.csproj" />
+    <Project Path="src/Sharpbill.Contracts/Sharpbill.Contracts.csproj" />
+    <Project Path="src/Sharpbill.Domain/Sharpbill.Domain.csproj" />
+    <Project Path="src/Sharpbill.Infrastructure/Sharpbill.Infrastructure.csproj" />
+    <Project Path="src/Sharpbill.Migrator/Sharpbill.Migrator.csproj" />
+    <Project Path="src/Sharpbill.Workers/Sharpbill.Workers.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/Sharpbill.Application.Tests/Sharpbill.Application.Tests.csproj" />
+    <Project Path="tests/Sharpbill.ArchitectureTests/Sharpbill.ArchitectureTests.csproj" />
+    <Project Path="tests/Sharpbill.Domain.Tests/Sharpbill.Domain.Tests.csproj" />
+    <Project Path="tests/Sharpbill.IntegrationTests/Sharpbill.IntegrationTests.csproj" />
+    <Project Path="src/Sharpbill.Migrator/Tests/Sharpbill.Migrator.Tests.csproj" />
+  </Folder>
+</Solution>

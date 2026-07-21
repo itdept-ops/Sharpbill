@@ -17,7 +17,7 @@ export class AppErrorBoundary extends Component<Props, State> {
 
   componentDidCatch(error: Error, info: ErrorInfo): void {
     // This is the single integration point for a future browser error-reporting service.
-    console.error("KingFisher UI error", error, info.componentStack);
+    console.error("Sharpbill UI error", error, info.componentStack);
   }
 
   private retry = () => this.setState({ error: null });
