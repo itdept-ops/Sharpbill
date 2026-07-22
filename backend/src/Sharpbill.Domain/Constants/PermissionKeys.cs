@@ -43,4 +43,7 @@ public static class DomainLimits
     public const int MaxSecurityEventMetadataBytes = 4_096;
     public const int MaxSecurityEventMetadataDepth = 4;
     public const int MaxSecurityEventListItems = 50;
+    public const int MaxOutstandingLoginNonces = 5_000;
+    // One shard for each possible leading base64url character.
+    public const int LoginNonceAdmissionShards = 64;
 }

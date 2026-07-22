@@ -107,6 +107,12 @@ public sealed class RetentionServiceTests
         public Task AddAsync(LoginNonce nonce, CancellationToken cancellationToken) =>
             throw new NotSupportedException();
 
+        public Task<bool> TryAddWithinCapacityAsync(
+            LoginNonce nonce,
+            DateTime now,
+            int maximumOutstanding,
+            CancellationToken cancellationToken) => throw new NotSupportedException();
+
         public Task<bool> ConsumeAsync(
             string nonce,
             DateTime now,

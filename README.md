@@ -223,8 +223,10 @@ review. They do not establish production readiness or legal/regulatory complianc
   stale-key outage tolerance, and circuit/unknown-`kid` backoff. A disabled provider is rejected
   from database state before any outbound verification work.
 - **Single-use login state.** Both browser provider flows bind a database-backed, single-use nonce
-  into the provider ID token. A second, process-local replay guard also rejects a reused token
-  within its validity window; multi-instance enforcement still belongs at a shared control plane.
+  into the provider ID token. Issuance uses 64 database-coordinated admission shards whose quotas
+  total 5,000 active nonces, avoiding a global login lock while preserving a cross-replica bound.
+  A second, process-local replay guard rejects a reused raw token within its validity window; that
+  supplemental raw-token cache still belongs at a shared control plane for multi-replica operation.
 - **No privilege amplification.** You can only grant a role/permission you already hold; system
   roles are admin-only to edit; the `admin` role is locked.
 - **Least-privilege exports and evidence.** Directory CSV export requires `users.export`, separate

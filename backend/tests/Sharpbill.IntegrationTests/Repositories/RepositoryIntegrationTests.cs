@@ -6,6 +6,7 @@ using Sharpbill.Application.Abstractions;
 using Sharpbill.Application.Policies;
 using Sharpbill.Contracts.Operations;
 using Sharpbill.Contracts.Users;
+using Sharpbill.Domain.Constants;
 using Sharpbill.Domain.Entities;
 using Sharpbill.Domain.Enums;
 using Sharpbill.Domain.ValueObjects;
@@ -336,6 +337,83 @@ public sealed class RepositoryIntegrationTests
                 _ = await cleanup.ExecuteAsync(
                     "DELETE FROM users WHERE id = @UserId",
                     new { UserId = userId });
+            }
+        }
+    }
+
+    [Fact]
+    public async Task ShardedNonceAdmissionIsAtomicWhenDatabaseIsConfiguredAsync()
+    {
+        string? connectionString = GetConfiguredDatabase();
+        if (connectionString is null)
+        {
+            return;
+        }
+
+        const string alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_";
+        string firstNonce = string.Empty;
+        string secondNonce = string.Empty;
+        try
+        {
+            int shard;
+            await using (var inspection = new MySqlConnection(connectionString))
+            {
+                await inspection.OpenAsync(CancellationToken.None);
+                string[] occupiedPrefixes = (await inspection.QueryAsync<string>(
+                    "SELECT DISTINCT LEFT(nonce, 1) FROM login_nonces " +
+                    "WHERE expires_at > UTC_TIMESTAMP(6)")).AsList().ToArray();
+                shard = Enumerable.Range(0, alphabet.Length)
+                    .First(index => !occupiedPrefixes.Contains(
+                        alphabet[index].ToString(),
+                        StringComparer.Ordinal));
+            }
+
+            firstNonce = Sharpbill.Infrastructure.Services.Identity.NonceService
+                .CreateNonceForShard(shard);
+            secondNonce = Sharpbill.Infrastructure.Services.Identity.NonceService
+                .CreateNonceForShard(shard);
+            await using var firstSession = new DatabaseSession(new TestConnectionFactory(connectionString));
+            await using var secondSession = new DatabaseSession(new TestConnectionFactory(connectionString));
+            var firstRepository = new NonceRepository(firstSession);
+            var secondRepository = new NonceRepository(secondSession);
+            DateTime now = DateTime.UtcNow;
+            Task<bool>[] admissions =
+            [
+                firstRepository.TryAddWithinCapacityAsync(
+                    new LoginNonce
+                    {
+                        Nonce = firstNonce,
+                        CreatedAt = now,
+                        ExpiresAt = now.AddMinutes(10),
+                    },
+                    now,
+                    DomainLimits.LoginNonceAdmissionShards,
+                    CancellationToken.None),
+                secondRepository.TryAddWithinCapacityAsync(
+                    new LoginNonce
+                    {
+                        Nonce = secondNonce,
+                        CreatedAt = now,
+                        ExpiresAt = now.AddMinutes(10),
+                    },
+                    now,
+                    DomainLimits.LoginNonceAdmissionShards,
+                    CancellationToken.None),
+            ];
+
+            bool[] results = await Task.WhenAll(admissions);
+
+            Assert.Single(results, static admitted => admitted);
+        }
+        finally
+        {
+            if (!string.IsNullOrEmpty(firstNonce))
+            {
+                await using var cleanup = new MySqlConnection(connectionString);
+                await cleanup.OpenAsync(CancellationToken.None);
+                _ = await cleanup.ExecuteAsync(
+                    "DELETE FROM login_nonces WHERE nonce IN @Nonces",
+                    new { Nonces = new[] { firstNonce, secondNonce } });
             }
         }
     }

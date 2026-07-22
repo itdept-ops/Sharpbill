@@ -31,6 +31,11 @@ public interface INonceRepository
 {
     Task<int> CountActiveAsync(DateTime now, CancellationToken cancellationToken);
     Task AddAsync(LoginNonce nonce, CancellationToken cancellationToken);
+    Task<bool> TryAddWithinCapacityAsync(
+        LoginNonce nonce,
+        DateTime now,
+        int maximumOutstanding,
+        CancellationToken cancellationToken);
     Task<bool> ConsumeAsync(string nonce, DateTime now, CancellationToken cancellationToken);
     Task<int> PruneExpiredAsync(DateTime now, int limit, CancellationToken cancellationToken);
 }

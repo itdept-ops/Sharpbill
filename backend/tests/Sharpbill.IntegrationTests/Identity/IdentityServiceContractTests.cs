@@ -89,7 +89,6 @@ public sealed class IdentityServiceContractTests
         var unitOfWork = new TrackingUnitOfWork();
         var service = new NonceService(
             repository,
-            new StubSettingsRepository(),
             unitOfWork,
             new FixedClock(FixedNow),
             Options.Create(CreateOptions()),
@@ -101,7 +100,7 @@ public sealed class IdentityServiceContractTests
         Assert.DoesNotContain('=', issued.Nonce);
         Assert.True(await service.ConsumeAsync(issued.Nonce, CancellationToken.None));
         Assert.False(await service.ConsumeAsync(issued.Nonce, CancellationToken.None));
-        Assert.Equal(3, unitOfWork.Commits);
+        Assert.Equal(2, unitOfWork.Commits);
         Assert.Equal(0, unitOfWork.Rollbacks);
     }
 
@@ -123,7 +122,6 @@ public sealed class IdentityServiceContractTests
 
         var service = new NonceService(
             repository,
-            new StubSettingsRepository(),
             new TrackingUnitOfWork(),
             new FixedClock(FixedNow),
             Options.Create(CreateOptions()),
@@ -135,6 +133,37 @@ public sealed class IdentityServiceContractTests
         Assert.Equal(503, exception.StatusCode);
         Assert.Equal("LOGIN_STATE_CAPACITY", exception.Code);
         Assert.Equal("30", exception.Headers["Retry-After"]);
+    }
+
+    [Theory]
+    [InlineData(0)]
+    [InlineData(7)]
+    [InlineData(8)]
+    [InlineData(31)]
+    [InlineData(63)]
+    public void NonceAdmissionEncodesTheRequestedShard(int shard)
+    {
+        string nonce = NonceService.CreateNonceForShard(shard);
+
+        Assert.Equal(shard, Sharpbill.Infrastructure.Repositories.NonceRepository.GetShardIndex(nonce));
+        Assert.Equal(43, nonce.Length);
+        Assert.DoesNotContain('=', nonce);
+    }
+
+    [Fact]
+    public void NonceAdmissionPartitionsTheGlobalCapacityExactly()
+    {
+        int[] capacities = Enumerable.Range(
+                0,
+                DomainLimits.LoginNonceAdmissionShards)
+            .Select(shard => Sharpbill.Infrastructure.Repositories.NonceRepository.GetShardCapacity(
+                DomainLimits.MaxOutstandingLoginNonces,
+                shard))
+            .ToArray();
+
+        Assert.Equal(DomainLimits.MaxOutstandingLoginNonces, capacities.Sum());
+        Assert.Equal(8, capacities.Count(static capacity => capacity == 79));
+        Assert.Equal(56, capacities.Count(static capacity => capacity == 78));
     }
 
     [Fact]
@@ -496,14 +525,42 @@ public sealed class IdentityServiceContractTests
     private sealed class InMemoryNonceRepository : INonceRepository
     {
         private readonly Dictionary<string, LoginNonce> _nonces = new(StringComparer.Ordinal);
+        private readonly object _sync = new();
 
-        public Task<int> CountActiveAsync(DateTime now, CancellationToken cancellationToken) =>
-            Task.FromResult(_nonces.Values.Count(nonce => nonce.ExpiresAt > now));
+        public Task<int> CountActiveAsync(DateTime now, CancellationToken cancellationToken)
+        {
+            lock (_sync)
+            {
+                return Task.FromResult(_nonces.Values.Count(nonce => nonce.ExpiresAt > now));
+            }
+        }
 
         public Task AddAsync(LoginNonce nonce, CancellationToken cancellationToken)
         {
-            _nonces.Add(nonce.Nonce, nonce);
+            lock (_sync)
+            {
+                _nonces.Add(nonce.Nonce, nonce);
+            }
+
             return Task.CompletedTask;
+        }
+
+        public Task<bool> TryAddWithinCapacityAsync(
+            LoginNonce nonce,
+            DateTime now,
+            int maximumOutstanding,
+            CancellationToken cancellationToken)
+        {
+            lock (_sync)
+            {
+                if (_nonces.Values.Count(value => value.ExpiresAt > now) >= maximumOutstanding)
+                {
+                    return Task.FromResult(false);
+                }
+
+                _nonces.Add(nonce.Nonce, nonce);
+                return Task.FromResult(true);
+            }
         }
 
         public Task<bool> ConsumeAsync(
@@ -511,9 +568,12 @@ public sealed class IdentityServiceContractTests
             DateTime now,
             CancellationToken cancellationToken)
         {
-            bool consumed = _nonces.TryGetValue(nonce, out LoginNonce? value) &&
-                value.ExpiresAt > now && _nonces.Remove(nonce);
-            return Task.FromResult(consumed);
+            lock (_sync)
+            {
+                bool consumed = _nonces.TryGetValue(nonce, out LoginNonce? value) &&
+                    value.ExpiresAt > now && _nonces.Remove(nonce);
+                return Task.FromResult(consumed);
+            }
         }
 
         public Task<int> PruneExpiredAsync(
@@ -521,38 +581,23 @@ public sealed class IdentityServiceContractTests
             int limit,
             CancellationToken cancellationToken)
         {
-            string[] expired = _nonces.Values
-                .Where(nonce => nonce.ExpiresAt <= now)
-                .OrderBy(static nonce => nonce.ExpiresAt)
-                .ThenBy(static nonce => nonce.Nonce, StringComparer.Ordinal)
-                .Take(limit)
-                .Select(static nonce => nonce.Nonce)
-                .ToArray();
-            foreach (string nonce in expired)
+            lock (_sync)
             {
-                _nonces.Remove(nonce);
+                string[] expired = _nonces.Values
+                    .Where(nonce => nonce.ExpiresAt <= now)
+                    .OrderBy(static nonce => nonce.ExpiresAt)
+                    .ThenBy(static nonce => nonce.Nonce, StringComparer.Ordinal)
+                    .Take(limit)
+                    .Select(static nonce => nonce.Nonce)
+                    .ToArray();
+                foreach (string nonce in expired)
+                {
+                    _nonces.Remove(nonce);
+                }
+
+                return Task.FromResult(expired.Length);
             }
-
-            return Task.FromResult(expired.Length);
         }
-    }
-
-    private sealed class StubSettingsRepository : ISettingsRepository
-    {
-        private static readonly SiteSettings Settings = new()
-        {
-            DefaultRoleId = 2,
-            UpdatedAt = FixedNow,
-        };
-
-        public Task<SiteSettings?> GetAsync(bool forUpdate, CancellationToken cancellationToken) =>
-            Task.FromResult<SiteSettings?>(Settings);
-
-        public Task<SiteSettings?> GetForShareAsync(CancellationToken cancellationToken) =>
-            Task.FromResult<SiteSettings?>(Settings);
-
-        public Task UpdateAsync(SiteSettings settings, CancellationToken cancellationToken) =>
-            Task.CompletedTask;
     }
 
     private sealed class StubLegalService : ILegalService
