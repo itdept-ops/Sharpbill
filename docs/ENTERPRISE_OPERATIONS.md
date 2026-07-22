@@ -90,7 +90,10 @@ provider callbacks below 2 seconds, excluding a measured upstream provider outag
 budget burn, readiness failure, authentication failure-rate changes, database saturation, nonce
 issue/consume imbalance, session cleanup lag, migration mismatch, and audit-event loss.
 
-Request IDs must be propagated through the edge, application logs, and any external telemetry.
+The application generates the authoritative `X-Request-ID` for every request and propagates it
+through responses, logs, and external telemetry. A valid caller-supplied `X-Request-ID` is retained
+only as the distinct `client_request_id` field and returned as `X-Client-Request-ID`; never treat the
+client value as unique or authoritative.
 Never log session cookies, provider tokens, authorization headers, secrets, or raw request bodies.
 
 ## Health semantics

@@ -17,6 +17,7 @@ public sealed class TimeProviderClock(TimeProvider timeProvider) : IClock
 public sealed record RequestContext
 {
     public string? RequestId { get; init; }
+    public string? ClientRequestId { get; init; }
     public string? IpAddress { get; init; }
     public string? UserAgent { get; init; }
     public Guid? SessionJti { get; init; }

@@ -43,6 +43,47 @@ public sealed class ApiBoundaryTests(SharpbillApiFactory factory) : IClassFixtur
     }
 
     [Fact]
+    public async Task DuplicateClientCorrelationIdsReceiveUniqueServerRequestIdsAsync()
+    {
+        const string clientRequestId = "client-correlation-42";
+        using var firstRequest = new HttpRequestMessage(HttpMethod.Get, "/api/health/live");
+        using var secondRequest = new HttpRequestMessage(HttpMethod.Get, "/api/health/live");
+        firstRequest.Headers.Add("X-Request-ID", clientRequestId);
+        secondRequest.Headers.Add("X-Request-ID", clientRequestId);
+
+        using HttpResponseMessage firstResponse = await _client.SendAsync(firstRequest);
+        using HttpResponseMessage secondResponse = await _client.SendAsync(secondRequest);
+        string firstServerId = Assert.Single(firstResponse.Headers.GetValues("X-Request-ID"));
+        string secondServerId = Assert.Single(secondResponse.Headers.GetValues("X-Request-ID"));
+
+        Assert.Equal(HttpStatusCode.OK, firstResponse.StatusCode);
+        Assert.Equal(HttpStatusCode.OK, secondResponse.StatusCode);
+        Assert.Matches("^[a-f0-9]{32}$", firstServerId);
+        Assert.Matches("^[a-f0-9]{32}$", secondServerId);
+        Assert.NotEqual(firstServerId, secondServerId);
+        Assert.NotEqual(clientRequestId, firstServerId);
+        Assert.Equal(
+            clientRequestId,
+            Assert.Single(firstResponse.Headers.GetValues("X-Client-Request-ID")));
+        Assert.Equal(
+            clientRequestId,
+            Assert.Single(secondResponse.Headers.GetValues("X-Client-Request-ID")));
+    }
+
+    [Fact]
+    public async Task InvalidClientCorrelationIdIsNotPropagatedAsync()
+    {
+        using var request = new HttpRequestMessage(HttpMethod.Get, "/api/health/live");
+        request.Headers.TryAddWithoutValidation("X-Request-ID", "contains spaces");
+
+        using HttpResponseMessage response = await _client.SendAsync(request);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.True(response.Headers.Contains("X-Request-ID"));
+        Assert.False(response.Headers.Contains("X-Client-Request-ID"));
+    }
+
+    [Fact]
     public async Task LivenessIgnoresAnOtherwiseValidSessionCookieAsync()
     {
         IOptions<SharpbillOptions> options =
@@ -166,6 +207,10 @@ public sealed class ApiBoundaryTests(SharpbillApiFactory factory) : IClassFixtur
         using HttpResponseMessage response = await _client.SendAsync(request);
 
         Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+        await WaitUntilAsync(
+            () => buffer.Items.Any(static item =>
+                string.Equals(item.Path, "/API/users/bulk", StringComparison.Ordinal)),
+            TimeSpan.FromSeconds(2));
         Assert.Contains(buffer.Items, static item =>
             string.Equals(item.Path, "/API/users/bulk", StringComparison.Ordinal));
     }
@@ -181,6 +226,9 @@ public sealed class ApiBoundaryTests(SharpbillApiFactory factory) : IClassFixtur
         using HttpResponseMessage response = await _client.GetAsync(path);
 
         Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+        await WaitUntilAsync(
+            () => buffer.Items.Any(static log => log.Path.Length == 255),
+            TimeSpan.FromSeconds(2));
         RequestLog item = Assert.Single(buffer.Items, static log => log.Path.Length == 255);
         Assert.Equal("GET", item.Method);
         Assert.True(item.IpAddress is null || item.IpAddress.Length <= 45);
@@ -200,6 +248,15 @@ public sealed class ApiBoundaryTests(SharpbillApiFactory factory) : IClassFixtur
         Assert.Equal(HttpStatusCode.RequestEntityTooLarge, response.StatusCode);
         Assert.Contains("\"code\":\"REQUEST_TOO_LARGE\"", body, StringComparison.Ordinal);
         Assert.Contains("Request body exceeds the allowed size", body, StringComparison.Ordinal);
+    }
+
+    private static async Task WaitUntilAsync(Func<bool> condition, TimeSpan timeout)
+    {
+        using var cancellation = new CancellationTokenSource(timeout);
+        while (!condition())
+        {
+            await Task.Delay(TimeSpan.FromMilliseconds(10), cancellation.Token);
+        }
     }
 
     private sealed class UnknownLengthContent(int byteCount) : HttpContent

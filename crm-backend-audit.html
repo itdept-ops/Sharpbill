@@ -45,8 +45,8 @@
       <div class="summary-grid" aria-label="Audit snapshot">
         <div class="metric"><strong>ASP.NET Core/.NET 10</strong><span>Layered Domain, Application, Contracts, Infrastructure, API, Workers, and Migrator projects.</span></div>
         <div class="metric"><strong>MySQL 8.4 + Dapper</strong><span>Pooled MySqlConnector access; C# migrator validates the <code>0021</code> schema baseline.</span></div>
-        <div class="metric"><strong>130 local tests passed</strong><span>Latest local Release solution execution passed; five real-MySQL repository tests are wired against MySQL.</span></div>
-        <div class="metric"><strong>Current hosted CI: passed</strong><span>Run 29879636621 passed frontend, backend/real-MySQL, full E2E access-control, image, scan, and supply-chain jobs.</span></div>
+        <div class="metric"><strong>132 local tests passed</strong><span>Latest local Release solution execution passed; five real-MySQL repository tests are wired against MySQL.</span></div>
+        <div class="metric"><strong>Current hosted CI: passed</strong><span>Run 29880201498 passed frontend, backend/real-MySQL, full E2E access-control, image, scan, and supply-chain jobs.</span></div>
       </div>
       <h3>Five most important risks</h3>
       <ol>
@@ -113,12 +113,12 @@
           <tr><td><a href="#SB-004"><code>SB-004</code></a></td><td><span class="badge medium">MEDIUM</span></td><td>High</td><td><span class="badge confirmed">Confirmed</span></td><td>GitHub governance</td><td>No main ruleset/protection; GitHub scanning alerts unavailable.</td><td>Unchecked or unreviewed changes can reach the default branch.</td><td>Small</td></tr>
           <tr><td><a href="#SB-005"><code>SB-005</code></a></td><td><span class="badge medium">MEDIUM</span></td><td>High</td><td><span class="badge confirmed">Confirmed</span> <span class="badge fixed">FIXED</span></td><td>CI tests</td><td>CI supplies the real-MySQL connection and fails closed if it is absent.</td><td>False-positive pass removed and hosted test job verified.</td><td>Complete</td></tr>
           <tr><td><a href="#SB-006"><code>SB-006</code></a></td><td><span class="badge medium">MEDIUM</span></td><td>High</td><td><span class="badge confirmed">Confirmed</span> <span class="badge fixed">FIXED</span></td><td>Session validation</td><td>Authorization reads use compatible shared locks; conditional activity writes occur after snapshot release.</td><td>Same-user read serialization removed and hosted-verified.</td><td>Complete</td></tr>
-          <tr><td><a href="#SB-007"><code>SB-007</code></a></td><td><span class="badge medium">MEDIUM</span></td><td>High</td><td><span class="badge confirmed">Confirmed</span> <span class="badge fixed">FIXED LOCALLY</span></td><td>OIDC nonce</td><td>Nonce admission uses 64 short, database-coordinated quota shards instead of process/settings-row serialization.</td><td>Cross-replica capacity remains bounded without a global login lock.</td><td>Complete</td></tr>
+          <tr><td><a href="#SB-007"><code>SB-007</code></a></td><td><span class="badge medium">MEDIUM</span></td><td>High</td><td><span class="badge confirmed">Confirmed</span> <span class="badge fixed">FIXED</span></td><td>OIDC nonce</td><td>Nonce admission uses 64 short, database-coordinated quota shards instead of process/settings-row serialization.</td><td>Cross-replica capacity remains bounded without a global login lock; hosted E2E passed.</td><td>Complete</td></tr>
           <tr><td><a href="#SB-008"><code>SB-008</code></a></td><td><span class="badge medium">MEDIUM</span></td><td>High</td><td><span class="badge confirmed">Confirmed</span></td><td>Retention / request logs</td><td>Operational telemetry is lossy and retention lacks critical health metrics/alerts.</td><td>Delayed detection of deletion/backlog or missing activity telemetry.</td><td>Medium</td></tr>
           <tr><td><a href="#SB-009"><code>SB-009</code></a></td><td><span class="badge medium">MEDIUM</span></td><td>Medium</td><td><span class="badge probable">Probable</span></td><td>Scale coordination</td><td>Rate limits, presence, replay memory, and scheduling assumptions are process-local.</td><td>Multi-replica behavior can multiply limits or diverge.</td><td>Large</td></tr>
           <tr><td><a href="#SB-010"><code>SB-010</code></a></td><td><span class="badge medium">MEDIUM</span></td><td>Medium</td><td><span class="badge probable">Probable</span></td><td>User directory</td><td><code>users.read</code> can return more profile/access data than a minimum directory view may need.</td><td>Unnecessary internal PII/access-data aggregation.</td><td>Medium</td></tr>
           <tr><td><a href="#SB-011"><code>SB-011</code></a></td><td><span class="badge medium">MEDIUM</span></td><td>Medium</td><td><span class="badge probable">Probable</span></td><td>Logs / exports / retries</td><td>Large log/export and transient-lock paths lack capacity/resilience proof.</td><td>Slow admin investigations or resource pressure under volume.</td><td>Medium</td></tr>
-          <tr><td><a href="#SB-012"><code>SB-012</code></a></td><td><span class="badge low">LOW</span></td><td>High</td><td><span class="badge confirmed">Confirmed</span></td><td>Request context</td><td>Client-selected correlation IDs are accepted as request identifiers.</td><td>Limited loss of log-correlation uniqueness.</td><td>Small</td></tr>
+          <tr><td><a href="#SB-012"><code>SB-012</code></a></td><td><span class="badge low">LOW</span></td><td>High</td><td><span class="badge confirmed">Confirmed</span> <span class="badge fixed">FIXED LOCALLY</span></td><td>Request context</td><td>Every request receives a unique server ID; sanitized caller correlation is retained separately.</td><td>Authoritative correlation uniqueness restored.</td><td>Complete</td></tr>
         </tbody>
       </table></div>
     </section>
@@ -290,7 +290,7 @@ Hosted proof: GitHub Actions run 29879636621 passed all four jobs</code></pre>
 
       <article class="finding medium-find" id="SB-007" aria-labelledby="SB-007-heading">
         <h3 id="SB-007-heading"><code>SB-007</code> — OIDC nonce issuance used global serialized lock hot paths</h3>
-        <span class="badge medium">MEDIUM</span><span class="badge confirmed">Confirmed</span><span class="badge fixed">FIXED LOCALLY</span><span class="badge informational">Confidence: High</span>
+        <span class="badge medium">MEDIUM</span><span class="badge confirmed">Confirmed</span><span class="badge fixed">FIXED</span><span class="badge informational">Confidence: High</span>
         <dl class="finding-grid">
           <dt>Category / mappings</dt><dd>Authentication resilience and database concurrency. CWE-400. OWASP ASVS authentication/availability controls; OWASP API Top 10 2023 API4 relevance.</dd>
           <dt>Component and path</dt><dd>Nonce service, nonce repository admission control, nonce rate limiter.</dd>
@@ -300,7 +300,7 @@ Hosted proof: GitHub Actions run 29879636621 passed all four jobs</code></pre>
           <dt>Compensating controls</dt><dd>Atomic delete-on-consume replay protection, a 5,000-active-nonce ceiling, expiration pruning, and the 30/minute/IP API limiter remain in place.</dd>
           <dt>Recommendation / implementation outline</dt><dd>Replace singleton-settings locking with a dedicated atomic quota/admission design that preserves replay resistance and capacity guarantees; use database atomic update, a distributed limiter, or an explicitly designed nonce store. Do not weaken nonce validation to remove the lock.</dd>
           <dt>Proof, effort, owner, compatibility</dt><dd>Unit coverage proves shard encoding and that 64 shard quotas sum exactly to 5,000. A real-MySQL race test proves only one concurrent claimant can consume the final slot in a shard. The rebuilt API returned HTTP 201 with a valid nonce. Multi-instance burst/fault profiling remains recommended capacity evidence. Owner: backend/identity/data. No schema or public API change.</dd>
-          <dt>Fix action / remediation status</dt><dd><strong>Fixed locally on 2026-07-21.</strong> Removed the process-wide semaphore and all nonce dependence on <code>site_settings</code>. Cryptographically random nonces are distributed across 64 quota shards. Each shard uses a database-scoped advisory lock and short owned transaction, held through commit; callers try shards in a randomized order. Capacity remains partitioned to exactly 5,000 and consume remains an atomic delete.</dd>
+          <dt>Fix action / remediation status</dt><dd><strong>Fixed and hosted-verified on 2026-07-21.</strong> Removed the process-wide semaphore and all nonce dependence on <code>site_settings</code>. Cryptographically random nonces are distributed across 64 quota shards. Each shard uses a database-scoped advisory lock and short owned transaction, held through commit; callers try shards in a randomized order. Capacity remains partitioned to exactly 5,000 and consume remains an atomic delete. GitHub Actions run 29880201498 passed backend real-MySQL, E2E, and supply-chain jobs.</dd>
         </dl>
         <h4>Evidence</h4>
         <pre><code>backend/src/Sharpbill.Infrastructure/Services/Identity/NonceService.cs
@@ -312,7 +312,8 @@ IdentityServiceContractTests.NonceAdmissionPartitionsTheGlobalCapacityExactly
 RepositoryIntegrationTests.ShardedNonceAdmissionIsAtomicWhenDatabaseIsConfiguredAsync
   concurrent final-slot race passes against Compose MySQL
 backend/src/Sharpbill.Api/Configuration/RateLimitingExtensions.cs:98-101
-  /api/auth/nonce local per-IP limiter remains defense in depth</code></pre>
+  /api/auth/nonce local per-IP limiter remains defense in depth
+Hosted proof: GitHub Actions run 29880201498 passed all four jobs</code></pre>
       </article>
 
       <article class="finding medium-find" id="SB-008" aria-labelledby="SB-008-heading">
@@ -412,22 +413,25 @@ backend/src/Sharpbill.Infrastructure/Services/Business/BusinessServiceSupport.cs
 
       <article class="finding low-find" id="SB-012" aria-labelledby="SB-012-heading">
         <h3 id="SB-012-heading"><code>SB-012</code> — Client-selected request IDs weaken correlation uniqueness</h3>
-        <span class="badge low">LOW</span><span class="badge confirmed">Confirmed</span><span class="badge informational">Confidence: High</span>
+        <span class="badge low">LOW</span><span class="badge confirmed">Confirmed</span><span class="badge fixed">FIXED LOCALLY</span><span class="badge informational">Confidence: High</span>
         <dl class="finding-grid">
           <dt>Category / mappings</dt><dd>Observability integrity. CWE: not applicable to an access-control defect. OWASP ASVS logging/monitoring control family; OWASP API Top 10: no direct category.</dd>
           <dt>Component and path</dt><dd>Request-context middleware and structured request logging.</dd>
-          <dt>Root cause / execution path</dt><dd>The request context accepts a requester-supplied <code>X-Request-ID</code> as the correlation identifier rather than always generating a server-controlled unique ID.</dd>
+          <dt>Root cause / execution path</dt><dd>The original request context accepted a requester-supplied <code>X-Request-ID</code> as the authoritative correlation identifier rather than always generating a server-controlled unique ID.</dd>
           <dt>Why it matters / scenario</dt><dd>A client can deliberately reuse another value or choose a collision-prone value, making cross-log correlation less reliable. This does not bypass authentication or authorization; actor and source IP are also recorded.</dd>
           <dt>Likelihood / impact / affected scope</dt><dd>Likelihood: direct behavior. Technical impact: ambiguous correlation. Business impact: modestly slower incident triage. Affected: logs/traces that treat this field as unique.</dd>
           <dt>Compensating controls</dt><dd>Structured logs include independent request context and user/source information; no sensitive body/query content is intentionally logged.</dd>
           <dt>Recommendation / implementation outline</dt><dd>Generate a server request ID for every request. Preserve a sanitized client correlation ID in a distinct field if interoperability requires it, and document which identifier is authoritative.</dd>
-          <dt>Proof, effort, owner, compatibility</dt><dd>Send duplicate client headers and verify unique server IDs plus preserved client metadata. Effort: small. Owner: backend/operations. May require a short observability/dashboard transition; no database migration.</dd>
+          <dt>Proof, effort, owner, compatibility</dt><dd>Integration tests send duplicate valid client headers and prove distinct 32-hex server IDs while preserving the client value separately. Invalid client values are not propagated. Owner: backend/operations. No schema migration; consumers should use response <code>X-Request-ID</code> as authoritative.</dd>
+          <dt>Fix action / remediation status</dt><dd><strong>Fixed locally on 2026-07-21.</strong> Middleware always generates the authoritative server request ID. A valid legacy caller <code>X-Request-ID</code> is stored as <code>client_request_id</code>, tagged separately on the activity and structured request log, and echoed only as <code>X-Client-Request-ID</code>. Invalid or multi-value input is discarded.</dd>
         </dl>
         <h4>Evidence</h4>
-        <pre><code>backend/src/Sharpbill.Api/Middleware/RequestContextMiddleware.cs:14-43
-  establishes request context from the incoming request identifier
-backend/src/Sharpbill.Api/Middleware/RequestLoggingMiddleware.cs:42-107
-  emits structured request context without body/query logging</code></pre>
+        <pre><code>backend/src/Sharpbill.Api/Middleware/RequestContextMiddleware.cs
+  generates server ID and separates sanitized client correlation metadata
+backend/src/Sharpbill.Api/Middleware/RequestLoggingMiddleware.cs
+  emits request_id and client_request_id as distinct structured fields
+ApiBoundaryTests.DuplicateClientCorrelationIdsReceiveUniqueServerRequestIdsAsync
+ApiBoundaryTests.InvalidClientCorrelationIdIsNotPropagatedAsync</code></pre>
       </article>
     </section>
 
@@ -452,10 +456,10 @@ backend/src/Sharpbill.Api/Middleware/RequestLoggingMiddleware.cs:42-107
           <tr><td>Database integrity</td><td>Constraints, transactions, parameterization</td><td><span class="badge effective">Effective</span></td><td>Parameterized Dapper, FKs/checks/unique constraints, explicit isolation, rollback, and sharded nonce admission.</td><td>Retain SB-006/SB-007 race and capacity regression coverage.</td></tr>
           <tr><td>Migration safety</td><td>Dedicated migrator/schema validation</td><td><span class="badge effective">Effective</span></td><td>SB-001 is fixed and hosted E2E migration/validation passed; production migration/restore evidence is outside the requested scope.</td><td>Retain production evidence as explicitly deferred.</td></tr>
           <tr><td>Background reliability</td><td>Outbox, retention, request log workers</td><td><span class="badge partial">Partial</span></td><td>Bounded transactional batches and SKIP LOCKED; no external dispatcher/leader/alerts.</td><td>Address SB-002, SB-008, and SB-009.</td></tr>
-          <tr><td>Observability</td><td>Logs, metrics, traces, alerts</td><td><span class="badge partial">Partial</span></td><td>JSON logs, health endpoints, local worker counters; no operated telemetry evidence.</td><td>Centralize telemetry and SLO/alert/on-call evidence (SB-003).</td></tr>
+          <tr><td>Observability</td><td>Logs, metrics, traces, alerts</td><td><span class="badge partial">Partial</span></td><td>JSON logs, unique server request IDs, distinct client correlation, health endpoints, and local worker counters; no operated telemetry evidence.</td><td>Centralize telemetry and SLO/alert/on-call evidence (SB-003).</td></tr>
           <tr><td>Backup and recovery</td><td>PITR/restore/DR</td><td><span class="badge not-verified">Not verified</span></td><td>Local rehearsal documented; production proof explicitly excluded.</td><td>Run independent restore drill and measure RPO/RTO.</td></tr>
           <tr><td>Dependency security</td><td>Vulnerability/SBOM/image controls</td><td><span class="badge partial">Partial</span></td><td>NuGet/npm/image scans and SBOMs; hosted alerting/provenance governance incomplete.</td><td>Enable equivalent alerts, immutable release evidence, digest promotion.</td></tr>
-          <tr><td>Test coverage</td><td>Critical behavior in required CI</td><td><span class="badge effective">Effective</span></td><td>130 local tests pass; five real-DB repository tests are wired; the full hosted gate is verified through the preceding group.</td><td>Establish risk-based coverage and performance thresholds.</td></tr>
+          <tr><td>Test coverage</td><td>Critical behavior in required CI</td><td><span class="badge effective">Effective</span></td><td>132 local tests pass; five real-DB repository tests are wired; the full hosted gate is verified through the preceding group.</td><td>Establish risk-based coverage and performance thresholds.</td></tr>
           <tr><td>Deployment safety</td><td>Protected promotion/rollback</td><td><span class="badge missing">Missing</span></td><td>Reference-only deploy Compose; unprotected main; no environment/rollback evidence.</td><td>Implement governed promotion and evidence SB-003/SB-004 closure.</td></tr>
         </tbody>
       </table></div>
@@ -471,8 +475,8 @@ backend/src/Sharpbill.Api/Middleware/RequestLoggingMiddleware.cs:42-107
           <tr><td>Immediate — before next deployment</td><td>SB-004, SB-005</td><td>Urgent · Platform/security + test owner</td><td>Protect main; require reviews/checks; wire ephemeral real-MySQL integration tests and fail on missing DB config; enable equivalent security scanning/alert coverage.</td><td>Prevents bypassed/red gate and false test confidence. Small-to-medium effort; no client impact.</td></tr>
           <tr><td>Immediate — before production approval</td><td>SB-003</td><td>Urgent · Platform/DBA/security/operations</td><td>Produce approved environment/IaC, identities/grants, secrets, ingress/TLS, backups/PITR, restore, observability, deployment approval, and rollback evidence.</td><td>Converts unknown production risk into testable controls. Large effort; requires external owners/change windows.</td></tr>
           <tr><td>Near term — within 30 days</td><td>SB-002, SB-008</td><td>High · Security/platform/data</td><td>Deploy external outbox dispatcher and WORM/SIEM destination; add retention/queue delivery metrics, loss/lag/dead-letter/tamper alerts and runbooks.</td><td>Protects forensic evidence and lifecycle detection. Large cross-team effort; coordinate retention/legal policy.</td></tr>
-          <tr><td>Completed / hosted check pending for SB-007</td><td>SB-006, SB-007</td><td>Backend/data/identity</td><td>SB-006 is hosted-verified. SB-007 uses sharded database admission without the semaphore or singleton settings lock; local race, capacity, Docker, and endpoint checks pass.</td><td>Improves interactive availability without weakening revocation, replay protection, or the capacity ceiling.</td></tr>
-          <tr><td>Near term — within 30 days</td><td>SB-010, SB-011, SB-012</td><td>High · Product/privacy/backend/operations</td><td>Approve data classification and response projections; stream/throttle exports; profile log access; server-generate IDs.</td><td>Improves minimization and operability. Medium effort; API/deprecation coordination may be needed.</td></tr>
+          <tr><td>Completed 2026-07-21</td><td>SB-006, SB-007</td><td>Backend/data/identity</td><td>Shared session snapshots and sharded nonce admission are hosted-verified; local race, capacity, Docker, and endpoint checks also pass.</td><td>Improves interactive availability without weakening revocation, replay protection, or the capacity ceiling.</td></tr>
+          <tr><td>In progress</td><td>SB-010, SB-011, SB-012</td><td>High · Product/privacy/backend/operations</td><td>SB-012 server-owned correlation is locally complete; approve data classification and response projections, stream/throttle exports, and profile log access.</td><td>Improves minimization and operability. Remaining work needs product/API or representative-volume decisions.</td></tr>
           <tr><td>Medium term — within 90 days</td><td>SB-009</td><td>High · Platform/backend</td><td>Decide and enforce one-replica limitation or externalize limiter, replay state, presence fanout, and scheduler leadership.</td><td>Enables safe horizontal scale. Large infrastructure/design effort.</td></tr>
           <tr><td>Strategic improvements</td><td>SB-002 to SB-011</td><td>Program · Engineering leadership</td><td>Establish SLOs, capacity model, chaos/recovery drills, penetration testing, dependency provenance/signing, privacy/legal approval workflow, and a shared-tenancy decision record.</td><td>Sustained enterprise assurance. Ongoing investment; governance and product coordination.</td></tr>
         </tbody>
@@ -523,7 +527,7 @@ backend/src/Sharpbill.Api/Middleware/RequestLoggingMiddleware.cs:42-107
         <div>
           <h3>Safe checks executed</h3>
           <ul>
-            <li><code>dotnet test Sharpbill.slnx --configuration Release --no-restore --nologo</code> — 130 passed, 0 failed after the nonce-concurrency remediation.</li>
+            <li><code>dotnet test Sharpbill.slnx --configuration Release --no-restore --nologo</code> — 132 passed, 0 failed after the request-correlation remediation.</li>
             <li>Five <code>RepositoryIntegrationTests</code> — passed against local Compose MySQL, including same-user shared snapshots and atomic sharded nonce admission.</li>
             <li><code>dotnet package list --project Sharpbill.slnx --vulnerable --include-transitive --format json --no-restore</code> — no vulnerable package entries returned.</li>
             <li><code>docker compose config --quiet</code> — local Compose configuration valid.</li>

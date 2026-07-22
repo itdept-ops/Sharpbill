@@ -55,6 +55,7 @@ public sealed partial class RequestLoggingMiddleware(
         string method = context.Request.Method[..Math.Min(context.Request.Method.Length, 10)];
         string boundedPath = path[..Math.Min(path.Length, 255)];
         string? ipAddress = Truncate(context.Connection.RemoteIpAddress?.ToString(), 45);
+        string? clientRequestId = RequestContextMiddleware.GetClientRequestId(context);
         double durationMilliseconds = Math.Round(
             timeProvider.GetElapsedTime(startedAt).TotalMilliseconds,
             2,
@@ -68,7 +69,8 @@ public sealed partial class RequestLoggingMiddleware(
             statusCode,
             durationMilliseconds,
             userId,
-            ipAddress);
+            ipAddress,
+            clientRequestId);
         bool accepted = buffer.TryWrite(new RequestLog
         {
             Id = 0,
@@ -94,7 +96,7 @@ public sealed partial class RequestLoggingMiddleware(
     [LoggerMessage(
         EventId = 1201,
         Level = LogLevel.Information,
-        Message = "{Event} {Method} {Path} returned {StatusCode} in {DurationMs} ms for request {RequestId} user {UserId} client {ClientIp}")]
+        Message = "{Event} {Method} {Path} returned {StatusCode} in {DurationMs} ms for request {RequestId} client request {ClientRequestId} user {UserId} client {ClientIp}")]
     private static partial void LogRequest(
         ILogger logger,
         string @event,
@@ -104,7 +106,8 @@ public sealed partial class RequestLoggingMiddleware(
         int statusCode,
         double durationMs,
         int? userId,
-        string? clientIp);
+        string? clientIp,
+        string? clientRequestId);
 
     private static string? Truncate(string? value, int maximumLength) =>
         string.IsNullOrEmpty(value) ? null : value[..Math.Min(value.Length, maximumLength)];
