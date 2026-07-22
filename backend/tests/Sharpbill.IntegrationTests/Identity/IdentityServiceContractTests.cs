@@ -272,6 +272,42 @@ public sealed class IdentityServiceContractTests
     }
 
     [Fact]
+    public async Task SessionValidationReleasesSharedSnapshotBeforeConditionalActivityWritesAsync()
+    {
+        var calls = new List<string>();
+        User staleUser = CreateUser() with { LastSeenAt = FixedNow.AddMinutes(-1) };
+        UserSession staleSession = CreateSession() with { LastSeenAt = FixedNow.AddMinutes(-1) };
+        var sessions = new StubSessionRepository(staleSession, calls);
+        var presence = new StubPresenceRepository(calls);
+        var unitOfWork = new TrackingUnitOfWork(calls);
+        var service = new SessionService(
+            sessions,
+            new StubUserRepository(calls, staleUser),
+            presence,
+            new CapturingSecurityEventRepository(),
+            new StubLegalService(),
+            unitOfWork,
+            new FixedClock(FixedNow),
+            new Sharpbill.Infrastructure.Runtime.RequestContextAccessor(),
+            new SessionJwtIssuer(Options.Create(CreateOptions())),
+            Options.Create(CreateOptions()));
+
+        SessionValidationResult result = await service.ValidateAsync(
+            staleUser.Id,
+            staleSession.Jti,
+            FixedNow.AddMinutes(-2),
+            CancellationToken.None);
+
+        Assert.True(result.IsValid);
+        Assert.Equal(FixedNow, result.User?.LastSeenAt);
+        Assert.Equal(
+            ["begin", "user-auth-shared", "session-auth-shared", "commit", "user-touch", "session-touch"],
+            calls);
+        Assert.Equal(FixedNow.AddSeconds(-15), presence.StaleBefore);
+        Assert.Equal(FixedNow.AddSeconds(-15), sessions.StaleBefore);
+    }
+
+    [Fact]
     public async Task AdministrativeSessionListingMasksDeviceEvidenceWithoutManagePermissionAsync()
     {
         User viewer = CreateUser() with
@@ -390,6 +426,7 @@ public sealed class IdentityServiceContractTests
         CapturingSecurityEventRepository? events = null) => new(
         new StubSessionRepository(session),
         users,
+        new StubPresenceRepository(),
         events ?? new CapturingSecurityEventRepository(),
         new StubLegalService(),
         new TrackingUnitOfWork(),
@@ -428,21 +465,27 @@ public sealed class IdentityServiceContractTests
         public DateTime UtcNow { get; } = now;
     }
 
-    private sealed class TrackingUnitOfWork : IUnitOfWork
+    private sealed class TrackingUnitOfWork(List<string>? calls = null) : IUnitOfWork
     {
         public int Commits { get; private set; }
         public int Rollbacks { get; private set; }
 
-        public Task BeginAsync(CancellationToken cancellationToken) => Task.CompletedTask;
+        public Task BeginAsync(CancellationToken cancellationToken)
+        {
+            calls?.Add("begin");
+            return Task.CompletedTask;
+        }
 
         public Task CommitAsync(CancellationToken cancellationToken)
         {
+            calls?.Add("commit");
             Commits++;
             return Task.CompletedTask;
         }
 
         public Task RollbackAsync(CancellationToken cancellationToken)
         {
+            calls?.Add("rollback");
             Rollbacks++;
             return Task.CompletedTask;
         }
@@ -525,12 +568,24 @@ public sealed class IdentityServiceContractTests
             CancellationToken cancellationToken) => throw new NotSupportedException();
     }
 
-    private sealed class StubSessionRepository(UserSession? session) : ISessionRepository
+    private sealed class StubSessionRepository(
+        UserSession? session,
+        List<string>? calls = null) : ISessionRepository
     {
+        public DateTime? StaleBefore { get; private set; }
+
         public Task<UserSession?> FindByJtiAsync(
             Guid jti,
             bool forUpdate,
             CancellationToken cancellationToken) => Task.FromResult(session);
+
+        public Task<UserSession?> FindByJtiForAuthenticationAsync(
+            Guid jti,
+            CancellationToken cancellationToken)
+        {
+            calls?.Add("session-auth-shared");
+            return Task.FromResult(session);
+        }
 
         public Task<UserSession?> FindAsync(
             int sessionId,
@@ -554,7 +609,13 @@ public sealed class IdentityServiceContractTests
         public Task TouchAsync(
             int sessionId,
             DateTime seenAt,
-            CancellationToken cancellationToken) => Task.CompletedTask;
+            DateTime staleBefore,
+            CancellationToken cancellationToken)
+        {
+            StaleBefore = staleBefore;
+            calls?.Add("session-touch");
+            return Task.CompletedTask;
+        }
 
         public Task RevokeAsync(
             int sessionId,
@@ -572,13 +633,42 @@ public sealed class IdentityServiceContractTests
             CancellationToken cancellationToken) => Task.FromResult(0);
     }
 
+    private sealed class StubPresenceRepository(List<string>? calls = null) : IPresenceRepository
+    {
+        public DateTime? StaleBefore { get; private set; }
+
+        public Task<PresenceResponse> GetOnlineAsync(
+            DateTime cutoff,
+            int rosterLimit,
+            int windowSeconds,
+            CancellationToken cancellationToken) => throw new NotSupportedException();
+
+        public Task TouchAsync(
+            int userId,
+            DateTime seenAt,
+            DateTime staleBefore,
+            CancellationToken cancellationToken)
+        {
+            StaleBefore = staleBefore;
+            calls?.Add("user-touch");
+            return Task.CompletedTask;
+        }
+    }
+
     private sealed class StubUserRepository : IUserRepository
     {
         private readonly IReadOnlyDictionary<int, User> _users;
+        private readonly List<string>? _calls;
 
         public StubUserRepository(User? user)
             : this(user is null ? [] : [user])
         {
+        }
+
+        public StubUserRepository(List<string> calls, params User[] users)
+            : this(users)
+        {
+            _calls = calls;
         }
 
         public StubUserRepository(params User[] users)
@@ -594,8 +684,11 @@ public sealed class IdentityServiceContractTests
 
         public Task<User?> FindForAuthenticationAsync(
             int userId,
-            CancellationToken cancellationToken) =>
-            Task.FromResult(_users.GetValueOrDefault(userId));
+            CancellationToken cancellationToken)
+        {
+            _calls?.Add("user-auth-shared");
+            return Task.FromResult(_users.GetValueOrDefault(userId));
+        }
 
         public Task<User?> FindByEmailAsync(
             string email,

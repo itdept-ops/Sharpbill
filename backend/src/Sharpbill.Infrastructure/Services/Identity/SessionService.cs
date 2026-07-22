@@ -14,6 +14,7 @@ namespace Sharpbill.Infrastructure.Services.Identity;
 public sealed class SessionService(
     ISessionRepository sessionRepository,
     IUserRepository userRepository,
+    IPresenceRepository presenceRepository,
     ISecurityEventRepository securityEventRepository,
     ILegalService legalService,
     IUnitOfWork unitOfWork,
@@ -222,16 +223,21 @@ public sealed class SessionService(
         DateTime issuedAt,
         CancellationToken cancellationToken)
     {
+        User? user;
+        UserSession? session;
+        bool refreshUserPresence = false;
+        bool refreshSessionPresence = false;
+        DateTime now = clock.UtcNow;
+        DateTime staleBefore = now.AddSeconds(-PresenceRefreshSeconds);
+
         await unitOfWork.BeginAsync(cancellationToken).ConfigureAwait(false);
         try
         {
-            DateTime now = clock.UtcNow;
-            User? user = await userRepository.FindForAuthenticationAsync(
+            user = await userRepository.FindForAuthenticationAsync(
                 userId,
                 cancellationToken).ConfigureAwait(false);
-            UserSession? session = await sessionRepository.FindByJtiAsync(
+            session = await sessionRepository.FindByJtiForAuthenticationAsync(
                 jti,
-                true,
                 cancellationToken).ConfigureAwait(false);
             if (user is null || !IsAuthenticatable(user))
             {
@@ -258,27 +264,43 @@ public sealed class SessionService(
                     "This session was signed out");
             }
 
-            if (user.LastSeenAt is null ||
-                now - user.LastSeenAt > TimeSpan.FromSeconds(PresenceRefreshSeconds))
+            refreshUserPresence = user.LastSeenAt is null || user.LastSeenAt < staleBefore;
+            if (refreshUserPresence)
             {
                 user = user with { LastSeenAt = now, UpdatedAt = now };
-                await userRepository.UpdateAsync(user, cancellationToken).ConfigureAwait(false);
             }
 
-            if (session.LastSeenAt is null ||
-                now - session.LastSeenAt > TimeSpan.FromSeconds(PresenceRefreshSeconds))
-            {
-                await sessionRepository.TouchAsync(session.Id, now, cancellationToken).ConfigureAwait(false);
-            }
+            refreshSessionPresence = session.LastSeenAt is null || session.LastSeenAt < staleBefore;
 
             await unitOfWork.CommitAsync(cancellationToken).ConfigureAwait(false);
-            return SessionValidationResult.Valid(IdentityUserMapper.ToResponse(user, online: true));
         }
         catch
         {
             await unitOfWork.RollbackAsync(CancellationToken.None).ConfigureAwait(false);
             throw;
         }
+
+        // Activity writes are deliberately performed after releasing the authorization snapshot's
+        // shared locks. Conditional updates retain the refresh throttle under concurrent requests.
+        if (refreshUserPresence)
+        {
+            await presenceRepository.TouchAsync(
+                userId,
+                now,
+                staleBefore,
+                cancellationToken).ConfigureAwait(false);
+        }
+
+        if (refreshSessionPresence)
+        {
+            await sessionRepository.TouchAsync(
+                session!.Id,
+                now,
+                staleBefore,
+                cancellationToken).ConfigureAwait(false);
+        }
+
+        return SessionValidationResult.Valid(IdentityUserMapper.ToResponse(user!, online: true));
     }
 
     private async Task EnforceConcurrentSessionCapAsync(

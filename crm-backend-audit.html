@@ -40,21 +40,21 @@
   <main class="shell">
     <section id="summary" aria-labelledby="summary-heading">
       <h2 id="summary-heading">1. Executive summary</h2>
-      <p class="lede">Sharpbill is a layered ASP.NET Core/.NET 10 application with disciplined dependency injection, Dapper/MySQL persistence, a dedicated C# migrator, server-side session validation, OIDC, RBAC, and a Docker Compose development stack. The reviewed application code has meaningful security strengths; no confirmed authentication bypass, IDOR, SQL injection, or cross-tenant bypass was found in the inspected scope. That is not sufficient for enterprise production approval: the current <code>main</code> CI release gate is red before browser tests run, audit evidence is not independently delivered to immutable storage, and production control-plane evidence is unavailable.</p>
-      <div class="notice"><strong>Recommendation: Do not approve.</strong> SB-001 and SB-005 are fixed locally and awaiting hosted Actions verification. Production approval still depends on SB-002 and the evidence explicitly deferred under SB-003. This is a release-readiness recommendation, not a claim that an unknown external environment lacks those controls.</div>
+      <p class="lede">Sharpbill is a layered ASP.NET Core/.NET 10 application with disciplined dependency injection, Dapper/MySQL persistence, a dedicated C# migrator, server-side session validation, OIDC, RBAC, and a Docker Compose development stack. The reviewed application code has meaningful security strengths; no confirmed authentication bypass, IDOR, SQL injection, or cross-tenant bypass was found in the inspected scope. The full hosted release gate is now green. Enterprise production approval still requires an independently operated immutable audit destination and the production control-plane evidence that was explicitly excluded from this remediation.</p>
+      <div class="notice"><strong>Recommendation: Conditional hold.</strong> SB-001 and SB-005 are fixed and verified by GitHub Actions run 29879026056. Production approval still depends on SB-002 and the evidence explicitly deferred under SB-003. This is a release-readiness recommendation, not a claim that an unknown external environment lacks those controls.</div>
       <div class="summary-grid" aria-label="Audit snapshot">
         <div class="metric"><strong>ASP.NET Core/.NET 10</strong><span>Layered Domain, Application, Contracts, Infrastructure, API, Workers, and Migrator projects.</span></div>
         <div class="metric"><strong>MySQL 8.4 + Dapper</strong><span>Pooled MySqlConnector access; C# migrator validates the <code>0021</code> schema baseline.</span></div>
-        <div class="metric"><strong>121 local tests passed</strong><span>Latest local Release solution execution passed; three real-MySQL repository tests executed against Compose MySQL.</span></div>
-        <div class="metric"><strong>Current hosted CI: failed</strong><span>Run 29873722564 failed during migrator authentication; the E2E/API/browser stages were skipped.</span></div>
+        <div class="metric"><strong>123 local tests passed</strong><span>Latest local Release solution execution passed; four real-MySQL repository tests are wired against MySQL.</span></div>
+        <div class="metric"><strong>Current hosted CI: passed</strong><span>Run 29879026056 passed frontend, backend/real-MySQL, full E2E access-control, image, scan, and supply-chain jobs.</span></div>
       </div>
       <h3>Five most important risks</h3>
       <ol>
-        <li><a href="#SB-001">SB-001</a>: fixed locally; hosted Docker/MySQL end-to-end verification is pending the grouped main push.</li>
         <li><a href="#SB-002">SB-002</a>: security events have no implemented external dispatcher or immutable off-box evidence sink.</li>
         <li><a href="#SB-003">SB-003</a>: production deployment, recovery, observability, and operational-control evidence is not available for verification.</li>
         <li><a href="#SB-004">SB-004</a>: <code>main</code> has no branch protection/ruleset and hosted security-alert services are disabled or not enabled.</li>
-        <li><a href="#SB-006">SB-006</a> and <a href="#SB-007">SB-007</a>: login/session persistence uses exclusive-lock hot paths that can constrain enterprise concurrency.</li>
+        <li><a href="#SB-007">SB-007</a>: OIDC nonce issuance still uses process-wide and singleton-row serialization.</li>
+        <li><a href="#SB-008">SB-008</a>: retention and request-log health remains incompletely observable.</li>
       </ol>
       <div class="two-col">
         <div><h3>Business impact summary</h3><p>A failed required release gate means an unverified build may be deployed. The lack of independently retained security evidence weakens investigation after credential, database, or administrator compromise. Missing production evidence prevents confident statements about recovery objectives, backup safety, rollout control, and customer-data protection. Database lock hot paths and local-only coordination can degrade availability as authenticated traffic or login bursts rise.</p></div>
@@ -88,7 +88,7 @@
           <tr><td>Authorization</td><td>Fallback authenticated policy, named permission policies, RBAC/direct grants, hierarchy and optimistic-version checks.</td><td>No confirmed object/function authorization bypass in reviewed paths.</td></tr>
           <tr><td>Async work</td><td>In-process <code>RequestLogBufferWorker</code> and <code>RetentionWorker</code>; transactional security-event outbox primitives only.</td><td>No external queue/broker or outbox delivery worker in repository.</td></tr>
           <tr><td>Runtime</td><td>Docker Compose local stack (API, MySQL, web, one-shot migrator); Caddy/Compose production reference only.</td><td>Local runtime validated; production deployment is not implemented here.</td></tr>
-          <tr><td>Quality</td><td>xUnit, architecture/integration tests, Vitest/Playwright frontend tests, GitHub Actions.</td><td>Useful checks exist, but real-DB test wiring and required E2E release evidence are defective.</td></tr>
+          <tr><td>Quality</td><td>xUnit, architecture/integration tests, Vitest/Playwright frontend tests, GitHub Actions.</td><td>Real-DB tests fail closed in CI and the required full-stack release gate is green.</td></tr>
         </tbody>
       </table></div>
       <h3>Trust-boundary and sensitive-data flow</h3>
@@ -107,12 +107,12 @@
         <caption>Findings sorted by severity and practical impact</caption>
         <thead><tr><th scope="col">ID</th><th scope="col">Severity</th><th scope="col">Confidence</th><th scope="col">Status</th><th scope="col">Component</th><th scope="col">Finding</th><th scope="col">Business impact</th><th scope="col">Effort</th></tr></thead>
         <tbody>
-          <tr><td><a href="#SB-001"><code>SB-001</code></a></td><td><span class="badge high">HIGH</span></td><td>High</td><td><span class="badge confirmed">Confirmed</span> <span class="badge fixed">FIXED LOCALLY</span></td><td>CI / migrator</td><td>Local-only RSA public-key retrieval is now enabled while production remains VerifyFull.</td><td>Hosted E2E recheck pending.</td><td>Complete</td></tr>
+          <tr><td><a href="#SB-001"><code>SB-001</code></a></td><td><span class="badge high">HIGH</span></td><td>High</td><td><span class="badge confirmed">Confirmed</span> <span class="badge fixed">FIXED</span></td><td>CI / migrator</td><td>Local-only RSA public-key retrieval is enabled while production remains VerifyFull.</td><td>Hosted E2E gate restored.</td><td>Complete</td></tr>
           <tr><td><a href="#SB-002"><code>SB-002</code></a></td><td><span class="badge high">HIGH</span></td><td>High</td><td><span class="badge confirmed">Confirmed</span></td><td>Security events / outbox</td><td>No implemented external dispatcher or immutable evidence sink.</td><td>Forensics and accountability can be lost after DB/admin compromise.</td><td>Large</td></tr>
           <tr><td><a href="#SB-003"><code>SB-003</code></a></td><td><span class="badge high">HIGH</span></td><td>High</td><td><span class="badge not-verified">Not verified</span></td><td>Production operations</td><td>Production deployment, recovery, telemetry, and least-privilege evidence not supplied.</td><td>Enterprise operation cannot be approved on repository evidence.</td><td>Large</td></tr>
           <tr><td><a href="#SB-004"><code>SB-004</code></a></td><td><span class="badge medium">MEDIUM</span></td><td>High</td><td><span class="badge confirmed">Confirmed</span></td><td>GitHub governance</td><td>No main ruleset/protection; GitHub scanning alerts unavailable.</td><td>Unchecked or unreviewed changes can reach the default branch.</td><td>Small</td></tr>
-          <tr><td><a href="#SB-005"><code>SB-005</code></a></td><td><span class="badge medium">MEDIUM</span></td><td>High</td><td><span class="badge confirmed">Confirmed</span> <span class="badge fixed">FIXED LOCALLY</span></td><td>CI tests</td><td>CI now supplies the real-MySQL connection and fails closed if it is absent.</td><td>False-positive pass removed.</td><td>Complete</td></tr>
-          <tr><td><a href="#SB-006"><code>SB-006</code></a></td><td><span class="badge medium">MEDIUM</span></td><td>High</td><td><span class="badge confirmed">Confirmed</span></td><td>Session validation</td><td>Authenticated requests take an exclusive user-row lock.</td><td>Same-user concurrency can serialize and degrade availability.</td><td>Medium</td></tr>
+          <tr><td><a href="#SB-005"><code>SB-005</code></a></td><td><span class="badge medium">MEDIUM</span></td><td>High</td><td><span class="badge confirmed">Confirmed</span> <span class="badge fixed">FIXED</span></td><td>CI tests</td><td>CI supplies the real-MySQL connection and fails closed if it is absent.</td><td>False-positive pass removed and hosted test job verified.</td><td>Complete</td></tr>
+          <tr><td><a href="#SB-006"><code>SB-006</code></a></td><td><span class="badge medium">MEDIUM</span></td><td>High</td><td><span class="badge confirmed">Confirmed</span> <span class="badge fixed">FIXED LOCALLY</span></td><td>Session validation</td><td>Authorization reads use compatible shared locks; conditional activity writes occur after snapshot release.</td><td>Same-user read serialization removed.</td><td>Complete</td></tr>
           <tr><td><a href="#SB-007"><code>SB-007</code></a></td><td><span class="badge medium">MEDIUM</span></td><td>High</td><td><span class="badge confirmed">Confirmed</span></td><td>OIDC nonce</td><td>Nonce issuance serializes globally on process and singleton settings lock.</td><td>Login bursts can become a bottleneck.</td><td>Medium</td></tr>
           <tr><td><a href="#SB-008"><code>SB-008</code></a></td><td><span class="badge medium">MEDIUM</span></td><td>High</td><td><span class="badge confirmed">Confirmed</span></td><td>Retention / request logs</td><td>Operational telemetry is lossy and retention lacks critical health metrics/alerts.</td><td>Delayed detection of deletion/backlog or missing activity telemetry.</td><td>Medium</td></tr>
           <tr><td><a href="#SB-009"><code>SB-009</code></a></td><td><span class="badge medium">MEDIUM</span></td><td>Medium</td><td><span class="badge probable">Probable</span></td><td>Scale coordination</td><td>Rate limits, presence, replay memory, and scheduling assumptions are process-local.</td><td>Multi-replica behavior can multiply limits or diverge.</td><td>Large</td></tr>
@@ -128,7 +128,7 @@
 
       <article class="finding high-find" id="SB-001" aria-labelledby="SB-001-heading">
         <h3 id="SB-001-heading"><code>SB-001</code> — Current main cannot complete the Docker/MySQL end-to-end gate</h3>
-        <span class="badge high">HIGH</span><span class="badge confirmed">Confirmed</span><span class="badge fixed">FIXED LOCALLY</span><span class="badge informational">Confidence: High</span>
+        <span class="badge high">HIGH</span><span class="badge confirmed">Confirmed</span><span class="badge fixed">FIXED</span><span class="badge informational">Confidence: High</span>
         <dl class="finding-grid">
           <dt>Category / mappings</dt><dd>Release engineering and database connectivity. CWE: not applicable to a standalone code vulnerability. OWASP ASVS/API Top 10: secure delivery/verification control; no direct API category.</dd>
           <dt>Component and path</dt><dd>GitHub Actions E2E job; one-shot C# migrator against Compose MySQL.</dd>
@@ -138,7 +138,7 @@
           <dt>Compensating controls</dt><dd>Backend, frontend, image, SBOM, and scan jobs passed in the same run; local Compose configuration parses; production configuration requires verified TLS. These do not make the skipped E2E path pass.</dd>
           <dt>Recommendation / implementation outline</dt><dd>Centralize connection policy. Prefer verified TLS whenever practical; for the isolated non-production Compose case, explicitly permit public-key retrieval only there, never in production. Cover both API and migrator builders with the same policy and test fixture.</dd>
           <dt>Proof, effort, owner, compatibility</dt><dd>Re-run the exact Compose migration, seed, API readiness, and Playwright job on a clean runner; add a test for local MySQL 8.4 authentication and a production-TLS negative test. Effort: small. Owner: backend + platform. No schema migration expected; coordinate only configuration rollout.</dd>
-          <dt>Fix action / remediation status</dt><dd><strong>Fixed locally on 2026-07-21.</strong> The API and migrator now enable <code>AllowPublicKeyRetrieval</code> only for <code>APP_ENV=local</code> with TLS disabled; production keeps <code>VerifyFull</code> and public-key retrieval disabled. Added positive local and negative production tests. Rebuilt Docker images; <code>migrator migrate</code> and <code>validate</code> pass against local MySQL 8.4. Hosted Actions verification remains pending.</dd>
+          <dt>Fix action / remediation status</dt><dd><strong>Fixed and hosted-verified on 2026-07-21.</strong> The API and migrator enable <code>AllowPublicKeyRetrieval</code> only for <code>APP_ENV=local</code> with TLS disabled; production keeps <code>VerifyFull</code> and public-key retrieval disabled. Added positive local and negative production tests. Rebuilt Docker images; local migration/validation passed, and GitHub Actions run 29879026056 completed the migration, API, web, Playwright, image, and supply-chain gates successfully.</dd>
         </dl>
         <h4>Evidence</h4>
         <pre><code>GitHub Actions run 29873722564 (2026-07-21): failed.
@@ -151,7 +151,8 @@ backend/src/Sharpbill.Migrator/ConnectionStringResolver.cs
   fixed: local disabled-TLS connections enable public-key retrieval
 backend/src/Sharpbill.Infrastructure/Database/MySqlConnectionFactory.cs
   fixed: the same local-only policy is applied to the API; production remains VerifyFull
-Local proof: migrator migrate + validate passed against Compose MySQL 8.4</code></pre>
+Local proof: migrator migrate + validate passed against Compose MySQL 8.4
+Hosted proof: GitHub Actions run 29879026056 passed all four jobs</code></pre>
       </article>
 
       <article class="finding high-find" id="SB-002" aria-labelledby="SB-002-heading">
@@ -231,17 +232,17 @@ GET dependabot/alerts → Dependabot alerts are disabled
 
       <article class="finding medium-find" id="SB-005" aria-labelledby="SB-005-heading">
         <h3 id="SB-005-heading"><code>SB-005</code> — CI silently treats real-MySQL repository integration tests as passing</h3>
-        <span class="badge medium">MEDIUM</span><span class="badge confirmed">Confirmed</span><span class="badge fixed">FIXED LOCALLY</span><span class="badge informational">Confidence: High</span>
+        <span class="badge medium">MEDIUM</span><span class="badge confirmed">Confirmed</span><span class="badge fixed">FIXED</span><span class="badge informational">Confidence: High</span>
         <dl class="finding-grid">
           <dt>Category / mappings</dt><dd>Testing and data integrity. CWE: not applicable. OWASP ASVS verification/secure-development control family; OWASP API Top 10: not directly applicable.</dd>
           <dt>Component and path</dt><dd><code>RepositoryIntegrationTests</code> and backend CI MySQL service configuration.</dd>
           <dt>Root cause / execution path</dt><dd>Two database tests return successfully if <code>SHARPBILL_TEST_DATABASE</code> is empty. CI provisions MySQL and sets <code>DB_*</code> variables but does not set that explicit test connection string, so the substantive repository round-trip and nonce/outbox transition assertions do not execute.</dd>
           <dt>Why it matters / scenario</dt><dd>A regression in SQL mapping, database collation, optimistic writes, escaped filtering, nonce atomicity, or outbox transition can report green in CI without having exercised the actual MySQL path.</dd>
           <dt>Likelihood / impact / affected scope</dt><dd>Likelihood: demonstrated by code and CI configuration. Technical impact: false test coverage. Business impact: database defects can evade release checks. Affected: repository/migration changes and any workflow relying on the reported test count.</dd>
-          <dt>Compensating controls</dt><dd>CI runs migration dry-run/apply/validate; 121 solution tests pass locally; three repository tests execute against Compose MySQL and pass with transactional rollback.</dd>
+          <dt>Compensating controls</dt><dd>CI runs migration dry-run/apply/validate; 123 solution tests pass locally; four repository tests are wired to execute against MySQL.</dd>
           <dt>Recommendation / implementation outline</dt><dd>Construct an ephemeral connection string after migration and set <code>SHARPBILL_TEST_DATABASE</code> for the test invocation. Replace silent returns with an explicit test skip only for intentional developer mode, and fail CI when database configuration is absent.</dd>
           <dt>Proof, effort, owner, compatibility</dt><dd>Make the CI test report show executed DB assertions; deliberately remove the variable and expect a failing CI guard. Keep the test database ephemeral and never use production credentials. Effort: small. Owner: backend/test/platform. No schema or client compatibility impact.</dd>
-          <dt>Fix action / remediation status</dt><dd><strong>Fixed locally on 2026-07-21.</strong> Backend CI now supplies <code>SHARPBILL_TEST_DATABASE</code>. The test helper throws when CI is active and the variable is missing, while intentional local runs may omit the external database. Three real-MySQL repository tests passed locally. Hosted Actions verification remains pending.</dd>
+          <dt>Fix action / remediation status</dt><dd><strong>Fixed and hosted-verified on 2026-07-21.</strong> Backend CI supplies <code>SHARPBILL_TEST_DATABASE</code>. The test helper throws when CI is active and the variable is missing, while intentional local runs may omit the external database. GitHub Actions run 29879026056 passed the backend job with the real MySQL service and the full release workflow.</dd>
         </dl>
         <h4>Evidence</h4>
         <pre><code>backend/tests/Sharpbill.IntegrationTests/Repositories/RepositoryIntegrationTests.cs:20-22
@@ -253,31 +254,37 @@ GET dependabot/alerts → Dependabot alerts are disabled
 .github/workflows/ci.yml:88-104
   migrates/validates then runs the solution test command
 RepositoryIntegrationTests.cs
-  now fails closed in CI when the database connection is absent</code></pre>
+  now fails closed in CI when the database connection is absent
+Hosted proof: GitHub Actions run 29879026056 backend job passed</code></pre>
       </article>
 
       <article class="finding medium-find" id="SB-006" aria-labelledby="SB-006-heading">
-        <h3 id="SB-006-heading"><code>SB-006</code> — Every authenticated request serializes on the user row</h3>
-        <span class="badge medium">MEDIUM</span><span class="badge confirmed">Confirmed</span><span class="badge informational">Confidence: High</span>
+        <h3 id="SB-006-heading"><code>SB-006</code> — Authentication validation used exclusive-lock hot paths</h3>
+        <span class="badge medium">MEDIUM</span><span class="badge confirmed">Confirmed</span><span class="badge fixed">FIXED LOCALLY</span><span class="badge informational">Confidence: High</span>
         <dl class="finding-grid">
           <dt>Category / mappings</dt><dd>Database concurrency and availability. CWE-400 (resource exhaustion/availability pressure). OWASP ASVS availability/resilience controls; OWASP API Top 10 2023 API4 Unrestricted Resource Consumption relevance.</dd>
           <dt>Component and path</dt><dd>Session authentication handler, session validation service, user repository.</dd>
-          <dt>Root cause / execution path</dt><dd>For each authenticated request, the handler validates the session. Validation begins a transaction, reads the user/session, and conditionally updates activity. Although one lookup uses <code>FOR SHARE</code>, the final user hydration query unconditionally uses <code>FOR UPDATE</code>, serializing concurrent requests for the same user.</dd>
+          <dt>Root cause / execution path</dt><dd>For each authenticated request, the handler validates the session. The original implementation requested <code>FOR SHARE</code> but unconditionally upgraded the final user read and session read to <code>FOR UPDATE</code>, then wrote activity inside the authorization transaction. That serialized concurrent requests for the same user/session.</dd>
           <dt>Why it matters / scenario</dt><dd>A dashboard with parallel API calls, multiple browser tabs, a mobile client retry, or an administrator editing the user concurrently can queue behind an exclusive lock. Lock waits increase latency and can amplify deadlocks or timeout failures.</dd>
           <dt>Likelihood / impact / affected scope</dt><dd>Likelihood: direct code path; volume threshold needs load validation. Technical impact: same-user request serialization. Business impact: slow or unavailable interactive CRM use for active users. Affected: authenticated API requests and administrative user/session operations.</dd>
-          <dt>Compensating controls</dt><dd>Server-side session-state validation supports revocation; transactions roll back safely; pools and timeouts are bounded. These controls do not remove the exclusive lock on the normal read path.</dd>
+          <dt>Compensating controls</dt><dd>Server-side session-state validation, transactional authorization snapshots, bounded pools, and command timeouts remain in place.</dd>
           <dt>Recommendation / implementation outline</dt><dd>Use a consistent shared/optimistic authorization snapshot for normal validation and acquire an exclusive lock only around a proven conditional last-seen update. Preserve revocation/deactivation semantics and test stale/session-revoked behavior.</dd>
-          <dt>Proof, effort, owner, compatibility</dt><dd>Run 50+ parallel same-user requests while simultaneously revoking a session and changing a role; record p95/p99 latency, lock waits, deadlocks, and correctness. Effort: medium. Owner: backend/data. No schema migration expected; behavior change needs regression/security review.</dd>
+          <dt>Proof, effort, owner, compatibility</dt><dd>Automated contract coverage verifies authorization snapshot commit precedes activity writes. A real-MySQL test proves two same-user authentication snapshots coexist and stale activity writes are throttled. Representative 50+ request load and lock-wait profiling remains a capacity-validation recommendation, not a code-fix blocker. Owner: backend/data. No schema or public API change.</dd>
+          <dt>Fix action / remediation status</dt><dd><strong>Fixed locally on 2026-07-21.</strong> User, role, permission, identity, and session authorization reads now use compatible shared locks. The transaction commits before conditional user/session last-seen writes, eliminating shared-to-exclusive upgrades while preserving revocation/deactivation snapshot semantics. Database predicates suppress redundant activity updates during concurrent requests.</dd>
         </dl>
         <h4>Evidence</h4>
         <pre><code>backend/src/Sharpbill.Api/Authentication/SessionAuthenticationHandler.cs:69-87
   calls ValidateAsync on authenticated requests
-backend/src/Sharpbill.Infrastructure/Services/Identity/SessionService.cs:219-281
-  opens transaction, validates user/session, conditionally updates activity
+backend/src/Sharpbill.Infrastructure/Services/Identity/SessionService.cs
+  validates under shared locks, commits, then performs stale-only activity writes
 backend/src/Sharpbill.Infrastructure/Repositories/UserRepository.cs:49-57
   auth lookup requests FOR SHARE
-backend/src/Sharpbill.Infrastructure/Repositories/UserRepository.cs:470-480
-  final user query unconditionally applies FOR UPDATE</code></pre>
+backend/src/Sharpbill.Infrastructure/Repositories/UserRepository.cs
+  final authentication user query now applies the requested FOR SHARE clause
+backend/src/Sharpbill.Infrastructure/Repositories/SessionRepository.cs
+  adds a FOR SHARE authentication read and stale-only session touch
+RepositoryIntegrationTests.AuthenticationSnapshotsRemainConcurrentAndPresenceWritesAreThrottledAsync
+  passes against local Compose MySQL</code></pre>
       </article>
 
       <article class="finding medium-find" id="SB-007" aria-labelledby="SB-007-heading">
@@ -431,20 +438,20 @@ backend/src/Sharpbill.Api/Middleware/RequestLoggingMiddleware.cs:42-107
           <tr><td>Tenant isolation</td><td>Shared-tenant isolation</td><td><span class="badge not-verified">Not verified</span></td><td>Declared one-organization-per-deployment model; no tenant key by design.</td><td>Prohibit shared deployments or redesign schema/auth/query/ops before offering them.</td></tr>
           <tr><td>Field-level access</td><td>Directory/profile minimization</td><td><span class="badge partial">Partial</span></td><td>Location/provider subjects restricted; users.read response is broad (SB-010).</td><td>Approve field classification and split projections.</td></tr>
           <tr><td>Administrative access</td><td>RBAC, hierarchy, privileged changes</td><td><span class="badge effective">Effective</span></td><td>Permission checks, actor/target validation, optimistic versions, security events.</td><td>Require platform-side review/approval evidence for production admin operations.</td></tr>
-          <tr><td>Session and token security</td><td>Cookie/token lifecycle</td><td><span class="badge effective">Effective</span></td><td>Signed session token with DB state/revocation; secure production options validation.</td><td>Address SB-006 concurrency without weakening revocation.</td></tr>
+          <tr><td>Session and token security</td><td>Cookie/token lifecycle</td><td><span class="badge effective">Effective</span></td><td>Signed session token with DB state/revocation; shared authorization snapshots; stale-only activity writes.</td><td>Retain revocation-race and concurrency coverage as scale grows.</td></tr>
           <tr><td>Sensitive-data protection</td><td>Transport/config safeguards</td><td><span class="badge partial">Partial</span></td><td>Production TLS/secure cookie/public origin checks; at-rest encryption/keys are external.</td><td>Provide managed-DB/key/secret evidence (SB-003).</td></tr>
           <tr><td>Audit logging</td><td>Independent immutable security evidence</td><td><span class="badge missing">Missing</span></td><td>Transactional DB outbox, but no dispatcher/WORM/SIEM (SB-002).</td><td>Implement and operate independent evidence delivery.</td></tr>
           <tr><td>Bulk export</td><td>Authorization, bounds, scalability</td><td><span class="badge partial">Partial</span></td><td>Separate permission and row limits; security-event export is in-memory (SB-011).</td><td>Stream and rate/concurrency-limit exports.</td></tr>
           <tr><td>Data deletion</td><td>Retention, hold, lifecycle</td><td><span class="badge partial">Partial</span></td><td>Bounded hold-aware worker and policy; health/alert proof missing (SB-008).</td><td>Add lifecycle metrics, alerts, and evidence of legal/policy approvals.</td></tr>
           <tr><td>API protection</td><td>CSRF, body limits, error control, rate limits</td><td><span class="badge partial">Partial</span></td><td>Good same-origin/CSRF/body/error controls; scaling coordination is local (SB-009).</td><td>Externalize/enforce at ingress for multi-replica operation.</td></tr>
           <tr><td>Webhook security</td><td>Inbound/outbound webhook controls</td><td><span class="badge not-verified">Not verified</span></td><td>No webhook module was found in reviewed scope.</td><td>Threat-model signatures/replay/idempotency before introducing webhooks.</td></tr>
-          <tr><td>Database integrity</td><td>Constraints, transactions, parameterization</td><td><span class="badge effective">Effective</span></td><td>Parameterized Dapper, FKs/checks/unique constraints, REPEATABLE READ, rollback.</td><td>Load test locking hot paths (SB-006/SB-007).</td></tr>
-          <tr><td>Migration safety</td><td>Dedicated migrator/schema validation</td><td><span class="badge partial">Partial</span></td><td>SB-001 is fixed locally; production migration/restore evidence is outside the requested scope.</td><td>Confirm the hosted E2E run, then retain production evidence as deferred.</td></tr>
+          <tr><td>Database integrity</td><td>Constraints, transactions, parameterization</td><td><span class="badge effective">Effective</span></td><td>Parameterized Dapper, FKs/checks/unique constraints, REPEATABLE READ, rollback.</td><td>Retain SB-006 regression coverage and address the SB-007 nonce hot path.</td></tr>
+          <tr><td>Migration safety</td><td>Dedicated migrator/schema validation</td><td><span class="badge effective">Effective</span></td><td>SB-001 is fixed and hosted E2E migration/validation passed; production migration/restore evidence is outside the requested scope.</td><td>Retain production evidence as explicitly deferred.</td></tr>
           <tr><td>Background reliability</td><td>Outbox, retention, request log workers</td><td><span class="badge partial">Partial</span></td><td>Bounded transactional batches and SKIP LOCKED; no external dispatcher/leader/alerts.</td><td>Address SB-002, SB-008, and SB-009.</td></tr>
           <tr><td>Observability</td><td>Logs, metrics, traces, alerts</td><td><span class="badge partial">Partial</span></td><td>JSON logs, health endpoints, local worker counters; no operated telemetry evidence.</td><td>Centralize telemetry and SLO/alert/on-call evidence (SB-003).</td></tr>
           <tr><td>Backup and recovery</td><td>PITR/restore/DR</td><td><span class="badge not-verified">Not verified</span></td><td>Local rehearsal documented; production proof explicitly excluded.</td><td>Run independent restore drill and measure RPO/RTO.</td></tr>
           <tr><td>Dependency security</td><td>Vulnerability/SBOM/image controls</td><td><span class="badge partial">Partial</span></td><td>NuGet/npm/image scans and SBOMs; hosted alerting/provenance governance incomplete.</td><td>Enable equivalent alerts, immutable release evidence, digest promotion.</td></tr>
-          <tr><td>Test coverage</td><td>Critical behavior in required CI</td><td><span class="badge partial">Partial</span></td><td>121 local tests pass; SB-005 real-DB CI wiring is fixed locally.</td><td>Confirm hosted execution and establish risk-based thresholds.</td></tr>
+          <tr><td>Test coverage</td><td>Critical behavior in required CI</td><td><span class="badge effective">Effective</span></td><td>123 local tests pass; SB-005 real-DB wiring and the full hosted gate are verified.</td><td>Establish risk-based coverage and performance thresholds.</td></tr>
           <tr><td>Deployment safety</td><td>Protected promotion/rollback</td><td><span class="badge missing">Missing</span></td><td>Reference-only deploy Compose; unprotected main; no environment/rollback evidence.</td><td>Implement governed promotion and evidence SB-003/SB-004 closure.</td></tr>
         </tbody>
       </table></div>
@@ -456,11 +463,11 @@ backend/src/Sharpbill.Api/Middleware/RequestLoggingMiddleware.cs:42-107
         <caption>Prioritized, owner-oriented remediation plan</caption>
         <thead><tr><th scope="col">When</th><th scope="col">Related findings</th><th scope="col">Priority / owner</th><th scope="col">Action and dependencies</th><th scope="col">Risk reduction / effort / compatibility</th></tr></thead>
         <tbody>
-          <tr><td>Immediate — before next deployment</td><td>SB-001</td><td>Urgent · Backend + platform</td><td>Fix isolated local MySQL connection policy; run the full Compose migration/seed/API/browser job from a clean runner; make it required after governance is enabled.</td><td>Restores factual release evidence. Small effort; no schema change expected.</td></tr>
+          <tr><td>Completed 2026-07-21</td><td>SB-001</td><td>Backend + platform</td><td>Fixed isolated local MySQL connection policy; full Compose migration/seed/API/browser and supply-chain workflow passed on a clean GitHub runner.</td><td>Release evidence restored without weakening production TLS.</td></tr>
           <tr><td>Immediate — before next deployment</td><td>SB-004, SB-005</td><td>Urgent · Platform/security + test owner</td><td>Protect main; require reviews/checks; wire ephemeral real-MySQL integration tests and fail on missing DB config; enable equivalent security scanning/alert coverage.</td><td>Prevents bypassed/red gate and false test confidence. Small-to-medium effort; no client impact.</td></tr>
           <tr><td>Immediate — before production approval</td><td>SB-003</td><td>Urgent · Platform/DBA/security/operations</td><td>Produce approved environment/IaC, identities/grants, secrets, ingress/TLS, backups/PITR, restore, observability, deployment approval, and rollback evidence.</td><td>Converts unknown production risk into testable controls. Large effort; requires external owners/change windows.</td></tr>
           <tr><td>Near term — within 30 days</td><td>SB-002, SB-008</td><td>High · Security/platform/data</td><td>Deploy external outbox dispatcher and WORM/SIEM destination; add retention/queue delivery metrics, loss/lag/dead-letter/tamper alerts and runbooks.</td><td>Protects forensic evidence and lifecycle detection. Large cross-team effort; coordinate retention/legal policy.</td></tr>
-          <tr><td>Near term — within 30 days</td><td>SB-006, SB-007</td><td>High · Backend/data/identity</td><td>Profile lock contention; narrow session locking; redesign nonce admission without singleton settings lock; add load/fault tests.</td><td>Improves interactive availability. Medium effort; security regression review required.</td></tr>
+          <tr><td>In progress</td><td>SB-006, SB-007</td><td>High · Backend/data/identity</td><td>SB-006 shared-lock and conditional-touch remediation is locally complete; redesign nonce admission without singleton settings lock and add burst/fault coverage.</td><td>Improves interactive availability without weakening revocation or replay protection.</td></tr>
           <tr><td>Near term — within 30 days</td><td>SB-010, SB-011, SB-012</td><td>High · Product/privacy/backend/operations</td><td>Approve data classification and response projections; stream/throttle exports; profile log access; server-generate IDs.</td><td>Improves minimization and operability. Medium effort; API/deprecation coordination may be needed.</td></tr>
           <tr><td>Medium term — within 90 days</td><td>SB-009</td><td>High · Platform/backend</td><td>Decide and enforce one-replica limitation or externalize limiter, replay state, presence fanout, and scheduler leadership.</td><td>Enables safe horizontal scale. Large infrastructure/design effort.</td></tr>
           <tr><td>Strategic improvements</td><td>SB-002 to SB-011</td><td>Program · Engineering leadership</td><td>Establish SLOs, capacity model, chaos/recovery drills, penetration testing, dependency provenance/signing, privacy/legal approval workflow, and a shared-tenancy decision record.</td><td>Sustained enterprise assurance. Ongoing investment; governance and product coordination.</td></tr>
@@ -512,11 +519,11 @@ backend/src/Sharpbill.Api/Middleware/RequestLoggingMiddleware.cs:42-107
         <div>
           <h3>Safe checks executed</h3>
           <ul>
-            <li><code>dotnet test Sharpbill.slnx --configuration Release --no-restore --nologo</code> — 121 passed, 0 failed after the first remediation group.</li>
+            <li><code>dotnet test Sharpbill.slnx --configuration Release --no-restore --nologo</code> — 123 passed, 0 failed after the session-concurrency remediation.</li>
             <li><code>dotnet package list --project Sharpbill.slnx --vulnerable --include-transitive --format json --no-restore</code> — no vulnerable package entries returned.</li>
             <li><code>docker compose config --quiet</code> — local Compose configuration valid.</li>
             <li><code>docker compose ps --format json</code> — local API/MySQL healthy; web process running at the audit snapshot.</li>
-            <li><code>gh run view 29873722564 --json jobs</code> and <code>--log-failed</code> — current CI failure evidence.</li>
+            <li><code>gh run view 29879026056 --json jobs</code> — all four hosted jobs passed, including real-MySQL backend tests and full Docker/Playwright E2E.</li>
             <li>Read-only source searches and GitHub REST reads for protection, rulesets, security-alert endpoints, environments, and Actions policy.</li>
           </ul>
         </div>

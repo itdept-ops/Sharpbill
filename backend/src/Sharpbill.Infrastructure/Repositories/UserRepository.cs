@@ -472,7 +472,7 @@ public sealed class UserRepository(
             FROM users u
             WHERE u.id = @UserId
             LIMIT 1
-            FOR UPDATE
+            {accessLockClause}
             """;
         UserRow? row = await connection.QuerySingleOrDefaultAsync<UserRow>(Command(
             userSql,

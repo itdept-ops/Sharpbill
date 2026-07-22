@@ -249,6 +249,97 @@ public sealed class RepositoryIntegrationTests
         }
     }
 
+    [Fact]
+    public async Task AuthenticationSnapshotsRemainConcurrentAndPresenceWritesAreThrottledAsync()
+    {
+        string? connectionString = GetConfiguredDatabase();
+        if (connectionString is null)
+        {
+            return;
+        }
+
+        int userId = 0;
+        DateTime now = DateTime.UtcNow;
+        try
+        {
+            await using (var setup = new DatabaseSession(new TestConnectionFactory(connectionString)))
+            {
+                var roles = new RoleRepository(setup);
+                Role standardRole = await roles.FindByNameAsync(
+                    "user",
+                    false,
+                    CancellationToken.None) ?? throw new InvalidOperationException("Seed role is missing.");
+                var users = new UserRepository(setup, TestOptions());
+                userId = await users.AddAsync(new User
+                {
+                    Id = 0,
+                    Email = $"concurrency-{Guid.NewGuid():N}@example.invalid",
+                    DisplayName = "Authentication concurrency probe",
+                    RoleId = standardRole.Id,
+                    RoleName = standardRole.Name,
+                    IsActive = true,
+                    IsApproved = true,
+                    AccessVersion = 1,
+                    LastSeenAt = now.AddMinutes(-1),
+                    CreatedAt = now,
+                    UpdatedAt = now,
+                    RolePermissionKeys = standardRole.PermissionKeys,
+                }, CancellationToken.None);
+            }
+
+            await using var firstSession = new DatabaseSession(new TestConnectionFactory(connectionString));
+            await using var secondSession = new DatabaseSession(new TestConnectionFactory(connectionString));
+            await firstSession.BeginAsync(CancellationToken.None);
+            await secondSession.BeginAsync(CancellationToken.None);
+            try
+            {
+                var firstUsers = new UserRepository(firstSession, TestOptions());
+                var secondUsers = new UserRepository(secondSession, TestOptions());
+                Assert.NotNull(await firstUsers.FindForAuthenticationAsync(userId, CancellationToken.None));
+
+                using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+                Assert.NotNull(await secondUsers.FindForAuthenticationAsync(userId, timeout.Token));
+            }
+            finally
+            {
+                await firstSession.RollbackAsync(CancellationToken.None);
+                await secondSession.RollbackAsync(CancellationToken.None);
+            }
+
+            DateTime firstSeenAt = now.AddSeconds(1);
+            await using (var activity = new DatabaseSession(new TestConnectionFactory(connectionString)))
+            {
+                var presence = new PresenceRepository(activity);
+                await presence.TouchAsync(
+                    userId,
+                    firstSeenAt,
+                    firstSeenAt.AddSeconds(-15),
+                    CancellationToken.None);
+                await presence.TouchAsync(
+                    userId,
+                    firstSeenAt.AddSeconds(1),
+                    firstSeenAt.AddSeconds(-14),
+                    CancellationToken.None);
+                DateTime persisted = await activity.Connection.ExecuteScalarAsync<DateTime>(
+                    "SELECT last_seen_at FROM users WHERE id = @UserId",
+                    new { UserId = userId });
+                Assert.Equal(ToMySqlTimestampPrecision(firstSeenAt),
+                    DateTime.SpecifyKind(persisted, DateTimeKind.Utc));
+            }
+        }
+        finally
+        {
+            if (userId != 0)
+            {
+                await using var cleanup = new MySqlConnection(connectionString);
+                await cleanup.OpenAsync(CancellationToken.None);
+                _ = await cleanup.ExecuteAsync(
+                    "DELETE FROM users WHERE id = @UserId",
+                    new { UserId = userId });
+            }
+        }
+    }
+
     private static IOptions<SharpbillOptions> TestOptions() => Options.Create(new SharpbillOptions
     {
         AppEnvironment = "local",

@@ -38,6 +38,9 @@ public interface INonceRepository
 public interface ISessionRepository
 {
     Task<UserSession?> FindByJtiAsync(Guid jti, bool forUpdate, CancellationToken cancellationToken);
+    Task<UserSession?> FindByJtiForAuthenticationAsync(
+        Guid jti,
+        CancellationToken cancellationToken);
     Task<UserSession?> FindAsync(int sessionId, bool forUpdate, CancellationToken cancellationToken);
     Task<IReadOnlyList<UserSession>> ListActiveAsync(
         int userId,
@@ -45,7 +48,11 @@ public interface ISessionRepository
         CancellationToken cancellationToken);
     Task<int> CountActiveAsync(int userId, DateTime now, CancellationToken cancellationToken);
     Task<int> AddAsync(UserSession session, CancellationToken cancellationToken);
-    Task TouchAsync(int sessionId, DateTime seenAt, CancellationToken cancellationToken);
+    Task TouchAsync(
+        int sessionId,
+        DateTime seenAt,
+        DateTime staleBefore,
+        CancellationToken cancellationToken);
     Task RevokeAsync(int sessionId, DateTime revokedAt, CancellationToken cancellationToken);
     Task<int> RevokeAllAsync(int userId, DateTime revokedAt, CancellationToken cancellationToken);
     Task<int> PruneAsync(DateTime cutoff, int limit, CancellationToken cancellationToken);
@@ -179,7 +186,11 @@ public interface IPresenceRepository
         int rosterLimit,
         int windowSeconds,
         CancellationToken cancellationToken);
-    Task TouchAsync(int userId, DateTime seenAt, CancellationToken cancellationToken);
+    Task TouchAsync(
+        int userId,
+        DateTime seenAt,
+        DateTime staleBefore,
+        CancellationToken cancellationToken);
 }
 
 public interface IDashboardRepository

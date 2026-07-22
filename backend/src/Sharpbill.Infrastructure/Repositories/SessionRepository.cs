@@ -16,13 +16,26 @@ public sealed class SessionRepository(DatabaseSession session) : DapperRepositor
         Guid jti,
         bool forUpdate,
         CancellationToken cancellationToken) =>
-        FindCoreAsync("jti = @Value", jti.ToString("D"), forUpdate, cancellationToken);
+        FindCoreAsync(
+            "jti = @Value",
+            jti.ToString("D"),
+            forUpdate ? "FOR UPDATE" : string.Empty,
+            cancellationToken);
+
+    public Task<UserSession?> FindByJtiForAuthenticationAsync(
+        Guid jti,
+        CancellationToken cancellationToken) =>
+        FindCoreAsync("jti = @Value", jti.ToString("D"), "FOR SHARE", cancellationToken);
 
     public Task<UserSession?> FindAsync(
         int sessionId,
         bool forUpdate,
         CancellationToken cancellationToken) =>
-        FindCoreAsync("id = @Value", sessionId, forUpdate, cancellationToken);
+        FindCoreAsync(
+            "id = @Value",
+            sessionId,
+            forUpdate ? "FOR UPDATE" : string.Empty,
+            cancellationToken);
 
     public async Task<IReadOnlyList<UserSession>> ListActiveAsync(
         int userId,
@@ -94,18 +107,26 @@ public sealed class SessionRepository(DatabaseSession session) : DapperRepositor
         }, cancellationToken)).ConfigureAwait(false);
     }
 
-    public async Task TouchAsync(int sessionId, DateTime seenAt, CancellationToken cancellationToken)
+    public async Task TouchAsync(
+        int sessionId,
+        DateTime seenAt,
+        DateTime staleBefore,
+        CancellationToken cancellationToken)
     {
         const string sql = """
             UPDATE user_sessions
             SET last_seen_at = @SeenAt
-            WHERE id = @SessionId AND revoked_at IS NULL AND expires_at > @SeenAt
+            WHERE id = @SessionId
+              AND revoked_at IS NULL
+              AND expires_at > @SeenAt
+              AND (last_seen_at IS NULL OR last_seen_at < @StaleBefore)
             """;
         var connection = await OpenAsync(cancellationToken).ConfigureAwait(false);
         _ = await connection.ExecuteAsync(Command(sql, new
         {
             SessionId = sessionId,
             SeenAt = RepositoryMapping.ToDatabaseUtc(seenAt),
+            StaleBefore = RepositoryMapping.ToDatabaseUtc(staleBefore),
         }, cancellationToken)).ConfigureAwait(false);
     }
 
@@ -181,7 +202,7 @@ public sealed class SessionRepository(DatabaseSession session) : DapperRepositor
     private async Task<UserSession?> FindCoreAsync(
         string predicate,
         object value,
-        bool forUpdate,
+        string lockClause,
         CancellationToken cancellationToken)
     {
         string sql = $"""
@@ -189,7 +210,7 @@ public sealed class SessionRepository(DatabaseSession session) : DapperRepositor
             FROM user_sessions
             WHERE {predicate}
             LIMIT 1
-            {(forUpdate ? "FOR UPDATE" : string.Empty)}
+            {lockClause}
             """;
         var connection = await OpenAsync(cancellationToken).ConfigureAwait(false);
         SessionRow? row = await connection.QuerySingleOrDefaultAsync<SessionRow>(Command(

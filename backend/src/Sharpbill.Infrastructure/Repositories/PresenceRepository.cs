@@ -59,21 +59,28 @@ public sealed class PresenceRepository(DatabaseSession session)
         };
     }
 
-    public async Task TouchAsync(int userId, DateTime seenAt, CancellationToken cancellationToken)
+    public async Task TouchAsync(
+        int userId,
+        DateTime seenAt,
+        DateTime staleBefore,
+        CancellationToken cancellationToken)
     {
         const string sql = """
             UPDATE users
-            SET last_seen_at = CASE
-                WHEN last_seen_at IS NULL OR last_seen_at < @SeenAt THEN @SeenAt
-                ELSE last_seen_at
-            END
-            WHERE id = @UserId AND is_active = 1 AND is_approved = 1 AND erased_at IS NULL
+            SET last_seen_at = @SeenAt,
+                updated_at = GREATEST(updated_at, @SeenAt)
+            WHERE id = @UserId
+              AND is_active = 1
+              AND is_approved = 1
+              AND erased_at IS NULL
+              AND (last_seen_at IS NULL OR last_seen_at < @StaleBefore)
             """;
         var connection = await OpenAsync(cancellationToken).ConfigureAwait(false);
         _ = await connection.ExecuteAsync(Command(sql, new
         {
             UserId = userId,
             SeenAt = RepositoryMapping.ToDatabaseUtc(seenAt),
+            StaleBefore = RepositoryMapping.ToDatabaseUtc(staleBefore),
         }, cancellationToken)).ConfigureAwait(false);
     }
 

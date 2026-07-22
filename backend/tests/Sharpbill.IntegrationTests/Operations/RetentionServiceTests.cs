@@ -142,6 +142,10 @@ public sealed class RetentionServiceTests
             bool forUpdate,
             CancellationToken cancellationToken) => throw new NotSupportedException();
 
+        public Task<UserSession?> FindByJtiForAuthenticationAsync(
+            Guid jti,
+            CancellationToken cancellationToken) => throw new NotSupportedException();
+
         public Task<UserSession?> FindAsync(
             int sessionId,
             bool forUpdate,
@@ -163,6 +167,7 @@ public sealed class RetentionServiceTests
         public Task TouchAsync(
             int sessionId,
             DateTime seenAt,
+            DateTime staleBefore,
             CancellationToken cancellationToken) => throw new NotSupportedException();
 
         public Task RevokeAsync(
