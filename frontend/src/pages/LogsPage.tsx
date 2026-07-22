@@ -14,22 +14,25 @@ function statusClass(code: number): string {
 
 export function LogsPage() {
   const [rows, setRows] = useState<RequestLog[]>([]);
-  const [total, setTotal] = useState(0);
+  const [total, setTotal] = useState<number | null>(null);
+  const [nextCursor, setNextCursor] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [method, setMethod] = useState("");
   const [banner, setBanner] = useState<{ msg: string; ok?: boolean } | null>(null);
 
-  const load = useCallback((signal?: AbortSignal) => {
+  const load = useCallback((beforeId: number | null, append: boolean, signal?: AbortSignal) => {
     setLoading(true);
     const q = new URLSearchParams({ limit: "200" });
+    if (beforeId != null) q.set("before_id", String(beforeId));
     if (search.trim()) q.set("search", search.trim());
     if (method) q.set("method", method);
     api
       .get<RequestLogList>(`/api/admin/logs?${q.toString()}`, { signal })
       .then((r) => {
-        setRows(r.items);
+        setRows((current) => append ? [...current, ...r.items] : r.items);
         setTotal(r.total);
+        setNextCursor(r.next_cursor);
       })
       .catch((e) => {
         if (!(e instanceof DOMException && e.name === "AbortError")) {
@@ -43,7 +46,10 @@ export function LogsPage() {
 
   useEffect(() => {
     const controller = new AbortController();
-    const timer = setTimeout(() => load(controller.signal), 200);
+    setRows([]);
+    setTotal(null);
+    setNextCursor(null);
+    const timer = setTimeout(() => load(null, false, controller.signal), 200);
     return () => {
       clearTimeout(timer);
       controller.abort();
@@ -51,12 +57,17 @@ export function LogsPage() {
   }, [load]);
 
   const filtered = search.trim() !== "" || method !== "";
+  const countLabel = total != null
+    ? `${total} recorded`
+    : nextCursor != null
+      ? `${rows.length}+ shown`
+      : `${rows.length} shown`;
 
   return (
     <div>
       <h1 className="page-title">SYS://admin / request log</h1>
       <p className="page-sub">
-        {total} recorded · endpoint · user · IP — most recent first
+        {countLabel} · endpoint · user · IP — most recent first
       </p>
 
       {banner && (
@@ -71,7 +82,7 @@ export function LogsPage() {
       <div className="filters">
         <input
           className="field-input search"
-          placeholder="filter by endpoint path…"
+          placeholder="filter by endpoint path prefix…"
           aria-label="Filter logs by endpoint path"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
@@ -90,7 +101,7 @@ export function LogsPage() {
           ))}
         </select>
         <span className="spacer" />
-        <button className="btn btn-ghost btn-sm" onClick={() => load()}>
+        <button className="btn btn-ghost btn-sm" disabled={loading} onClick={() => load(null, false)}>
           Refresh
         </button>
       </div>
@@ -108,7 +119,7 @@ export function LogsPage() {
             </tr>
           </thead>
           <tbody>
-            {loading && (
+            {loading && rows.length === 0 && (
               <tr>
                 <td colSpan={6} className="muted">
                   Loading…
@@ -143,6 +154,17 @@ export function LogsPage() {
           </tbody>
         </table>
       </div>
+      {nextCursor != null && (
+        <div style={{ marginTop: "0.75rem", textAlign: "center" }}>
+          <button
+            className="btn btn-ghost btn-sm"
+            disabled={loading}
+            onClick={() => load(nextCursor, true)}
+          >
+            {loading ? "Loading…" : "Load older"}
+          </button>
+        </div>
+      )}
     </div>
   );
 }

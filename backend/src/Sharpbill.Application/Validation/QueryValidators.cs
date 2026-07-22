@@ -58,6 +58,14 @@ public sealed class RequestLogQueryValidator : IValidator<RequestLogQuery>
     {
         ArgumentNullException.ThrowIfNull(value);
         var errors = UserQueryValidator.Pagination(value.Limit, value.Offset, 500);
+        if (value.Offset != 0)
+        {
+            errors.Add(new(
+                "offset",
+                "CURSOR_REQUIRED",
+                "offset paging is not supported; use before_id from next_cursor"));
+        }
+
         if (value.BeforeId is < 1)
         {
             errors.Add(new("before_id", "OUT_OF_RANGE", "before_id must be positive"));

@@ -27,7 +27,9 @@ public sealed record RequestLogListResponse
     [JsonPropertyName("items")]
     public IReadOnlyList<RequestLogResponse> Items { get; init; } = [];
     [JsonPropertyName("total")]
-    public int Total { get; init; }
+    public long? Total { get; init; }
+    [JsonPropertyName("total_is_exact")]
+    public bool TotalIsExact { get; init; }
     [JsonPropertyName("next_cursor")]
     public long? NextCursor { get; init; }
 }
@@ -71,6 +73,7 @@ public sealed record RequestLogQuery
     public int Limit { get; init; } = 100;
     public int Offset { get; init; }
     public long? BeforeId { get; init; }
+    public bool IncludeTotal { get; init; }
     public string? Search { get; init; }
     public string? Method { get; init; }
     public int? UserId { get; init; }

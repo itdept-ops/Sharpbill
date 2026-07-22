@@ -8,6 +8,20 @@ public sealed class QueryValidatorTests
     private readonly SecurityEventQueryValidator _validator = new();
 
     [Fact]
+    public void RequestLogQueryRequiresCursorInsteadOfOffset()
+    {
+        var validator = new RequestLogQueryValidator();
+
+        var offsetResult = validator.Validate(new RequestLogQuery { Offset = 1 });
+        var cursorResult = validator.Validate(new RequestLogQuery { BeforeId = 1 });
+
+        Assert.False(offsetResult.IsValid);
+        Assert.Contains(offsetResult.Errors, static error =>
+            error is { Field: "offset", Code: "CURSOR_REQUIRED" });
+        Assert.True(cursorResult.IsValid);
+    }
+
+    [Fact]
     public void SecurityEventQueryAcceptsLegacyFilterContract()
     {
         var result = _validator.Validate(new SecurityEventQuery

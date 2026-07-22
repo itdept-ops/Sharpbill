@@ -461,6 +461,79 @@ public sealed class RepositoryIntegrationTests
         }
     }
 
+    [Fact]
+    public async Task RequestLogsUseCursorPrefixSearchAndOptionalCountWhenDatabaseIsConfiguredAsync()
+    {
+        string? connectionString = GetConfiguredDatabase();
+        if (connectionString is null)
+        {
+            return;
+        }
+
+        await using var session = new DatabaseSession(new TestConnectionFactory(connectionString));
+        await session.BeginAsync(CancellationToken.None);
+        try
+        {
+            string marker = $"cursor-{Guid.NewGuid():N}";
+            string prefix = $"/api/{marker}";
+            DateTime now = DateTime.UtcNow;
+            var requestLogs = new RequestLogRepository(session);
+            await requestLogs.AddBatchAsync(
+                [
+                    CreateRequestLog($"{prefix}/oldest", now),
+                    CreateRequestLog($"/api/contains/{marker}", now.AddMilliseconds(1)),
+                    CreateRequestLog($"{prefix}/newest", now.AddMilliseconds(2)),
+                ],
+                CancellationToken.None);
+
+            RequestLogListResponse first = await requestLogs.ListAsync(
+                new RequestLogQuery
+                {
+                    Limit = 1,
+                    Search = prefix,
+                    IncludeTotal = true,
+                },
+                CancellationToken.None);
+            RequestLogResponse newest = Assert.Single(first.Items);
+            Assert.EndsWith("/newest", newest.Path, StringComparison.Ordinal);
+            Assert.Equal(2, first.Total);
+            Assert.True(first.TotalIsExact);
+            Assert.NotNull(first.NextCursor);
+
+            RequestLogListResponse second = await requestLogs.ListAsync(
+                new RequestLogQuery
+                {
+                    Limit = 1,
+                    Search = prefix,
+                    BeforeId = first.NextCursor,
+                },
+                CancellationToken.None);
+            RequestLogResponse oldest = Assert.Single(second.Items);
+            Assert.EndsWith("/oldest", oldest.Path, StringComparison.Ordinal);
+            Assert.Null(second.Total);
+            Assert.False(second.TotalIsExact);
+            Assert.Null(second.NextCursor);
+
+            RequestLogListResponse containsOnly = await requestLogs.ListAsync(
+                new RequestLogQuery { Search = marker },
+                CancellationToken.None);
+            Assert.Empty(containsOnly.Items);
+        }
+        finally
+        {
+            await session.RollbackAsync(CancellationToken.None);
+        }
+    }
+
+    private static RequestLog CreateRequestLog(string path, DateTime createdAt) => new()
+    {
+        Id = 0,
+        Method = "GET",
+        Path = path,
+        StatusCode = 200,
+        CreatedAt = createdAt,
+    };
+
     private static IOptions<SharpbillOptions> TestOptions() => Options.Create(new SharpbillOptions
     {
         AppEnvironment = "local",

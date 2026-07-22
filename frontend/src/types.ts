@@ -191,6 +191,7 @@ export interface RequestLog {
 
 export interface RequestLogList {
   items: RequestLog[];
-  total: number;
+  total: number | null;
+  total_is_exact: boolean;
   next_cursor: number | null;
 }

@@ -15,13 +15,12 @@ public sealed class RequestLogRepository(DatabaseSession session)
     {
         ArgumentNullException.ThrowIfNull(query);
         int limit = Math.Clamp(query.Limit, 1, 500);
-        int offset = Math.Clamp(query.Offset, 0, 10_000);
         List<string> baseConditions = ["1 = 1"];
         DynamicParameters parameters = new();
         if (!string.IsNullOrWhiteSpace(query.Search))
         {
             baseConditions.Add("l.path LIKE @Search ESCAPE '\\\\'");
-            parameters.Add("Search", $"%{RepositoryMapping.EscapeLike(query.Search.Trim())}%");
+            parameters.Add("Search", $"{RepositoryMapping.EscapeLike(query.Search.Trim())}%");
         }
 
         if (!string.IsNullOrWhiteSpace(query.Method))
@@ -45,8 +44,6 @@ public sealed class RequestLogRepository(DatabaseSession session)
         }
 
         parameters.Add("Limit", limit + 1);
-        parameters.Add("Offset", offset);
-        string countSql = $"SELECT COUNT(*) FROM request_logs l WHERE {baseWhere}";
         string pageSql = $"""
             SELECT l.id, l.method, l.path, l.user_id, u.email AS user_email,
                    l.ip, l.status_code, l.created_at
@@ -54,13 +51,9 @@ public sealed class RequestLogRepository(DatabaseSession session)
             LEFT JOIN users u ON u.id = l.user_id
             WHERE {pageWhere}
             ORDER BY l.id DESC
-            LIMIT @Limit OFFSET @Offset
+            LIMIT @Limit
             """;
         var connection = await OpenAsync(cancellationToken).ConfigureAwait(false);
-        int total = await connection.ExecuteScalarAsync<int>(Command(
-            countSql,
-            parameters,
-            cancellationToken)).ConfigureAwait(false);
         List<RequestLogRow> rows = (await connection.QueryAsync<RequestLogRow>(Command(
             pageSql,
             parameters,
@@ -72,10 +65,21 @@ public sealed class RequestLogRepository(DatabaseSession session)
         }
 
         RequestLogResponse[] items = rows.Select(ToResponse).ToArray();
+        long? total = null;
+        if (query.IncludeTotal)
+        {
+            string countSql = $"SELECT COUNT(*) FROM request_logs l WHERE {baseWhere}";
+            total = await connection.ExecuteScalarAsync<long>(Command(
+                countSql,
+                parameters,
+                cancellationToken)).ConfigureAwait(false);
+        }
+
         return new RequestLogListResponse
         {
             Items = items,
             Total = total,
+            TotalIsExact = total.HasValue,
             NextCursor = hasMore && items.Length > 0 ? items[^1].Id : null,
         };
     }

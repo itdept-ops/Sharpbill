@@ -457,6 +457,14 @@ state, and loss state. Page on any new loss/write error, a stopped writer while 
 or outstanding work that does not drain within the measured persistence objective. Collection,
 durable storage, dashboards, alert delivery, and response ownership remain environment controls.
 
+Request-log browsing is keyset-only: pass the returned `next_cursor` as `before_id`; nonzero
+`offset` is rejected. Path search is an escaped prefix match rather than an unbounded contains
+scan. Exact filtered `COUNT(*)` is omitted by default and returned only when an authorized caller
+explicitly sends `include_total=true`; the admin UI does not request it and progressively loads
+older rows. Keep exact counts for deliberate investigations, not polling. Profile the prefix and
+other filters with production-shaped cardinality before adding an index or widening search
+semantics; the frozen `0021` schema must not be changed without a reviewed forward migration.
+
 Privileged changes and authentication outcomes are staged transactionally as append-only event
 facts with separate mutable retry/lease state. The repository supplies bounded cursor reads,
 self-audited CSV export, an approved 400-day application retention schedule, and worker-facing
