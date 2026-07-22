@@ -44,6 +44,7 @@ jobs:
       DB_USER: appuser
       DB_PASSWORD: apppass
       DB_REQUIRE_TLS: "false"
+      SHARPBILL_TEST_DATABASE: "Server=127.0.0.1;Port=3306;Database=appdb;User ID=appuser;Password=apppass;SslMode=Disabled;AllowPublicKeyRetrieval=True"
       SESSION_JWT_SECRET: ci-only-secret-0123456789abcdef0123456789abcdef
       TEST_DATABASE_DESTRUCTIVE_ACK: sharpbill-ephemeral-test-db
     steps:

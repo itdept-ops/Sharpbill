@@ -13,8 +13,17 @@ public sealed class MySqlConnectionFactory : IDatabaseConnectionFactory, IAsyncD
     public MySqlConnectionFactory(IOptions<SharpbillOptions> options)
     {
         ArgumentNullException.ThrowIfNull(options);
-        DatabaseOptions database = options.Value.Database;
+        SharpbillOptions sharpbill = options.Value;
+        DatabaseOptions database = sharpbill.Database;
         _poolAcquisitionTimeout = TimeSpan.FromSeconds(database.PoolTimeoutSeconds);
+        _dataSource = new MySqlDataSourceBuilder(BuildConnectionString(sharpbill)).Build();
+        DefaultTypeMap.MatchNamesWithUnderscores = true;
+    }
+
+    internal static string BuildConnectionString(SharpbillOptions options)
+    {
+        ArgumentNullException.ThrowIfNull(options);
+        DatabaseOptions database = options.Database;
         MySqlConnectionStringBuilder connectionString = new()
         {
             Server = database.Host,
@@ -33,14 +42,14 @@ public sealed class MySqlConnectionFactory : IDatabaseConnectionFactory, IAsyncD
             IgnoreCommandTransaction = false,
             AllowUserVariables = false,
             SslMode = database.RequireTls ? MySqlSslMode.VerifyFull : MySqlSslMode.Disabled,
+            AllowPublicKeyRetrieval = options.IsLocal && !database.RequireTls,
         };
         if (database.RequireTls)
         {
             connectionString.SslCa = database.TlsCaPath;
         }
 
-        _dataSource = new MySqlDataSourceBuilder(connectionString.ConnectionString).Build();
-        DefaultTypeMap.MatchNamesWithUnderscores = true;
+        return connectionString.ConnectionString;
     }
 
     public async ValueTask<MySqlConnection> OpenConnectionAsync(CancellationToken cancellationToken = default)

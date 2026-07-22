@@ -42,12 +42,13 @@ public sealed class RepositoryIntegrationTests
     [Fact]
     public async Task CanonicalSeedAndBoundedQueriesRoundTripWhenDatabaseIsConfiguredAsync()
     {
-        if (string.IsNullOrWhiteSpace(ConnectionString))
+        string? connectionString = GetConfiguredDatabase();
+        if (connectionString is null)
         {
             return;
         }
 
-        await using var session = new DatabaseSession(new TestConnectionFactory(ConnectionString));
+        await using var session = new DatabaseSession(new TestConnectionFactory(connectionString));
         var roleRepository = new RoleRepository(session);
         var permissionRepository = new PermissionRepository(session);
         var userRepository = new UserRepository(session, TestOptions());
@@ -73,12 +74,13 @@ public sealed class RepositoryIntegrationTests
     [Fact]
     public async Task NonceAndOutboxTransitionsAreAtomicWhenDatabaseIsConfiguredAsync()
     {
-        if (string.IsNullOrWhiteSpace(ConnectionString))
+        string? connectionString = GetConfiguredDatabase();
+        if (connectionString is null)
         {
             return;
         }
 
-        await using var session = new DatabaseSession(new TestConnectionFactory(ConnectionString));
+        await using var session = new DatabaseSession(new TestConnectionFactory(connectionString));
         await session.BeginAsync(CancellationToken.None);
         try
         {
@@ -254,6 +256,25 @@ public sealed class RepositoryIntegrationTests
         DevelopmentAuthentication = new DevelopmentAuthenticationOptions(),
         Retention = new RetentionOptions(),
     });
+
+    private static string? GetConfiguredDatabase()
+    {
+        if (!string.IsNullOrWhiteSpace(ConnectionString))
+        {
+            return ConnectionString;
+        }
+
+        if (string.Equals(
+            Environment.GetEnvironmentVariable("CI"),
+            "true",
+            StringComparison.OrdinalIgnoreCase))
+        {
+            throw new InvalidOperationException(
+                "SHARPBILL_TEST_DATABASE is required for repository integration tests in CI.");
+        }
+
+        return null;
+    }
 
     private static DateTime ToMySqlTimestampPrecision(DateTime value) =>
         new(value.Ticks - (value.Ticks % TimeSpan.TicksPerMicrosecond), DateTimeKind.Utc);

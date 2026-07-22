@@ -1,0 +1,550 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Evidence-based enterprise backend audit for Sharpbill CRM.">
+  <title>Sharpbill CRM Backend Audit — 2026-07-21</title>
+  <style>
+    :root{--ink:#172033;--muted:#5b6475;--paper:#fff;--ground:#f4f7fb;--line:#d7dfeb;--navy:#153e75;--critical:#6f1111;--high:#b42318;--medium:#a54c00;--low:#135aa2;--info:#596273;--good:#136f3a;--partial:#8a4b00;--missing:#9c1c1c;--unverified:#525f73}
+    *{box-sizing:border-box} html{scroll-behavior:smooth} body{margin:0;color:var(--ink);background:var(--ground);font-family:Inter,ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif;font-size:16px;line-height:1.55}
+    a{color:#0b4ea2;text-decoration-thickness:1px;text-underline-offset:2px} a:hover{color:#072f65} code,pre{font-family:ui-monospace,SFMono-Regular,Consolas,"Liberation Mono",monospace} code{font-size:.92em;overflow-wrap:anywhere}
+    header{padding:2.75rem max(1.25rem,calc((100vw - 1180px)/2));color:#fff;background:linear-gradient(120deg,#0c2446,#153e75)} header h1{margin:0 0 .45rem;max-width:980px;font-size:clamp(1.8rem,4vw,3rem);line-height:1.12} header p{margin:.35rem 0;max-width:980px;color:#e6effd}
+    .eyebrow{margin-bottom:.55rem;color:#b9d3ff;font-size:.82rem;font-weight:800;letter-spacing:.08em;text-transform:uppercase}.header-meta{display:flex;flex-wrap:wrap;gap:.55rem;margin-top:1rem}.shell{width:min(1180px,calc(100% - 2.5rem));margin:0 auto}
+    nav{position:sticky;top:0;z-index:5;border-bottom:1px solid var(--line);background:rgba(255,255,255,.97);backdrop-filter:blur(8px)}nav .shell{display:flex;gap:.9rem;overflow-x:auto;padding:.7rem 0;white-space:nowrap}nav a{color:#22395c;font-size:.9rem;font-weight:700}
+    main{padding:1.6rem 0 2.6rem}section{margin:1.35rem 0;padding:clamp(1rem,3vw,1.8rem);border:1px solid var(--line);border-radius:10px;background:var(--paper);box-shadow:0 1px 2px rgba(17,32,56,.04)}h2{margin:0 0 1rem;color:#102c55;font-size:clamp(1.35rem,2.5vw,1.85rem);line-height:1.18}h3{margin:1.5rem 0 .65rem;color:#12325e;font-size:1.22rem;line-height:1.25}h4{margin:1rem 0 .35rem;color:#31435e;font-size:1rem}p{margin:.55rem 0}ul,ol{margin:.55rem 0;padding-left:1.3rem}li+li{margin-top:.28rem}
+    .lede{max-width:980px;font-size:1.06rem}.notice{margin:1rem 0;padding:.85rem 1rem;border-left:4px solid #a54c00;border-radius:4px;background:#fff7ed}.good-note{border-left-color:var(--good);background:#effbf3}
+    .badge{display:inline-block;margin:.1rem .25rem .1rem 0;padding:.17rem .48rem;border:1px solid currentColor;border-radius:999px;font-size:.76rem;font-weight:800;letter-spacing:.025em;line-height:1.3;vertical-align:middle;white-space:nowrap}.critical{color:var(--critical);background:#fde7e7}.high{color:var(--high);background:#fff0ed}.medium{color:var(--medium);background:#fff5e8}.low{color:var(--low);background:#ebf4ff}.informational{color:var(--info);background:#f1f3f5}.confirmed{color:#0b5d2e;background:#eaf8ef}.fixed{color:#075a32;background:#dff8e9;border-width:2px}.probable{color:#755000;background:#fff7d6}.not-verified{color:var(--unverified);background:#edf0f4}.effective{color:var(--good);background:#eaf8ef}.partial{color:var(--partial);background:#fff4df}.missing{color:var(--missing);background:#ffebeb}
+    .summary-grid,.two-col{display:grid;gap:1rem;grid-template-columns:repeat(2,minmax(0,1fr))}.metric{padding:1rem;border:1px solid var(--line);border-radius:8px;background:#fbfcfe}.metric strong{display:block;color:#102c55;font-size:1.35rem}.metric span{color:var(--muted);font-size:.9rem}
+    .table-wrap{overflow-x:auto;margin:.8rem 0}table{width:100%;border-collapse:collapse;background:#fff}caption{padding:.35rem 0 .6rem;color:#3c4c64;font-weight:700;text-align:left}th,td{padding:.66rem .68rem;border:1px solid var(--line);vertical-align:top;text-align:left}th{color:#18365f;background:#eef4fc;font-size:.88rem}td{font-size:.91rem}
+    .diagram{display:grid;gap:.65rem;grid-template-columns:1fr;margin:1rem 0;padding:1rem;border:1px dashed #88a3c7;border-radius:8px;background:#f8fbff}.diagram-row{display:flex;flex-wrap:wrap;align-items:stretch;gap:.55rem}.node{flex:1 1 180px;padding:.7rem;border:1px solid #9eb9dd;border-radius:7px;background:#fff}.node strong{display:block;color:#173d72}.arrow{align-self:center;color:#496a94;font-weight:800}
+    .finding{margin:1.4rem 0;padding:1rem;border:1px solid var(--line);border-left:5px solid #59799f;border-radius:8px;background:#fff;break-inside:avoid}.finding.high-find{border-left-color:var(--high)}.finding.medium-find{border-left-color:#d27816}.finding.low-find{border-left-color:var(--low)}.finding h3{margin-top:0}
+    .finding-grid{display:grid;grid-template-columns:minmax(180px,.6fr) minmax(0,2fr);margin:.85rem 0;border-top:1px solid var(--line);border-left:1px solid var(--line)}.finding-grid dt,.finding-grid dd{margin:0;padding:.52rem .65rem;border-right:1px solid var(--line);border-bottom:1px solid var(--line)}.finding-grid dt{color:#29476f;background:#f5f8fc;font-weight:750}.finding-grid dd{background:#fff}
+    pre{overflow:auto;margin:.7rem 0;padding:.8rem;border:1px solid #d8e1ee;border-radius:7px;background:#101a2a;color:#e9f0fa;font-size:.82rem;line-height:1.45;white-space:pre-wrap;word-break:break-word}.small{color:var(--muted);font-size:.88rem}.toc-list{columns:2;column-gap:2rem}.toc-list li{break-inside:avoid}.definition-list dt{margin-top:.8rem;color:#1a416e;font-weight:800}.definition-list dd{margin:.12rem 0 0}footer{padding:1.2rem 0 2.4rem;color:#536075;font-size:.88rem}
+    @media(max-width:760px){.shell{width:min(100% - 1.25rem,1180px)}.summary-grid,.two-col{grid-template-columns:1fr}.toc-list{columns:1}.finding-grid{grid-template-columns:1fr}.finding-grid dt{border-bottom:0}header{padding:2rem .65rem}th,td{min-width:130px}}
+    @media print{@page{margin:14mm}body{background:#fff;color:#000;font-size:10.5pt}header{padding:0 0 10pt;color:#000;background:#fff}header p,.eyebrow{color:#000}nav{display:none}.shell{width:100%}main{padding:0}section{margin:12pt 0;padding:0;border:0;box-shadow:none}a{color:#000;text-decoration:none}.finding{break-before:page;border:1px solid #777;border-left-width:4px}.finding:first-of-type{break-before:auto}.badge{background:transparent!important}pre{color:#000;background:#fff;border-color:#777}table{font-size:8.5pt}.table-wrap{overflow:visible}.diagram{background:#fff}}
+  </style>
+</head>
+<body>
+  <header>
+    <div class="shell">
+      <div class="eyebrow">Evidence-based enterprise engineering audit</div>
+      <h1>Sharpbill CRM backend audit</h1>
+      <p>Repository snapshot <code>b53976d3d23c6e0be213b9e96dd18cf77caf50e3</code> on <code>main</code> · Generated 2026-07-21 15:57 PDT (UTC−07:00, America/Los_Angeles).</p>
+      <div class="header-meta"><span class="badge high">OVERALL RISK: HIGH</span><span class="badge high">PRODUCTION READINESS: DO NOT APPROVE</span><span class="badge confirmed">REMEDIATION LOG IN PROGRESS</span></div>
+    </div>
+  </header>
+  <nav aria-label="Report contents"><div class="shell">
+    <a href="#summary">Executive summary</a><a href="#architecture">Architecture</a><a href="#findings-summary">Findings</a><a href="#detailed-findings">Detailed findings</a><a href="#control-matrix">Control matrix</a><a href="#roadmap">Roadmap</a><a href="#verification">Verification</a><a href="#open-questions">Open questions</a><a href="#methodology">Methodology</a><a href="#appendix">Appendix</a>
+  </div></nav>
+  <main class="shell">
+    <section id="summary" aria-labelledby="summary-heading">
+      <h2 id="summary-heading">1. Executive summary</h2>
+      <p class="lede">Sharpbill is a layered ASP.NET Core/.NET 10 application with disciplined dependency injection, Dapper/MySQL persistence, a dedicated C# migrator, server-side session validation, OIDC, RBAC, and a Docker Compose development stack. The reviewed application code has meaningful security strengths; no confirmed authentication bypass, IDOR, SQL injection, or cross-tenant bypass was found in the inspected scope. That is not sufficient for enterprise production approval: the current <code>main</code> CI release gate is red before browser tests run, audit evidence is not independently delivered to immutable storage, and production control-plane evidence is unavailable.</p>
+      <div class="notice"><strong>Recommendation: Do not approve.</strong> SB-001 and SB-005 are fixed locally and awaiting hosted Actions verification. Production approval still depends on SB-002 and the evidence explicitly deferred under SB-003. This is a release-readiness recommendation, not a claim that an unknown external environment lacks those controls.</div>
+      <div class="summary-grid" aria-label="Audit snapshot">
+        <div class="metric"><strong>ASP.NET Core/.NET 10</strong><span>Layered Domain, Application, Contracts, Infrastructure, API, Workers, and Migrator projects.</span></div>
+        <div class="metric"><strong>MySQL 8.4 + Dapper</strong><span>Pooled MySqlConnector access; C# migrator validates the <code>0021</code> schema baseline.</span></div>
+        <div class="metric"><strong>121 local tests passed</strong><span>Latest local Release solution execution passed; three real-MySQL repository tests executed against Compose MySQL.</span></div>
+        <div class="metric"><strong>Current hosted CI: failed</strong><span>Run 29873722564 failed during migrator authentication; the E2E/API/browser stages were skipped.</span></div>
+      </div>
+      <h3>Five most important risks</h3>
+      <ol>
+        <li><a href="#SB-001">SB-001</a>: fixed locally; hosted Docker/MySQL end-to-end verification is pending the grouped main push.</li>
+        <li><a href="#SB-002">SB-002</a>: security events have no implemented external dispatcher or immutable off-box evidence sink.</li>
+        <li><a href="#SB-003">SB-003</a>: production deployment, recovery, observability, and operational-control evidence is not available for verification.</li>
+        <li><a href="#SB-004">SB-004</a>: <code>main</code> has no branch protection/ruleset and hosted security-alert services are disabled or not enabled.</li>
+        <li><a href="#SB-006">SB-006</a> and <a href="#SB-007">SB-007</a>: login/session persistence uses exclusive-lock hot paths that can constrain enterprise concurrency.</li>
+      </ol>
+      <div class="two-col">
+        <div><h3>Business impact summary</h3><p>A failed required release gate means an unverified build may be deployed. The lack of independently retained security evidence weakens investigation after credential, database, or administrator compromise. Missing production evidence prevents confident statements about recovery objectives, backup safety, rollout control, and customer-data protection. Database lock hot paths and local-only coordination can degrade availability as authenticated traffic or login bursts rise.</p></div>
+        <div><h3>Notable strengths</h3><ul><li>Fallback authentication policy, permission policies, server-side session-state validation, and service-level hierarchy checks provide defense in depth.</li><li>Strong local/production configuration validation rejects insecure cookies, weak secrets, broad trusted-proxy CIDRs, non-TLS production database settings, and non-local dev authentication.</li><li>Parameterized Dapper access, FK/check/unique constraints, bounded worker batches, transactional migrations, and documented retention/hold behavior are present.</li><li>Images are largely digest-pinned; the API image runs non-root; CI includes formatting, package audit, image scanning, and SBOM generation.</li></ul></div>
+      </div>
+      <h3>Scope and limitations</h3>
+      <p>Reviewed: C# backend source, environment/configuration files, database migration and repository code, API controllers and middleware, tests, Docker/Compose files, CI, deployment references, documentation, local Docker status, GitHub Actions evidence, and GitHub repository-control endpoints. No production systems were contacted or modified. No live identity-provider tenant, secret manager, cloud account, external SIEM/WORM sink, database grants, backup system, production proxy, or deployment environment was supplied; those items are explicitly marked <span class="badge not-verified">NOT VERIFIED</span>.</p>
+      <div class="table-wrap"><table>
+        <caption>Finding count by severity</caption>
+        <thead><tr><th scope="col">Severity</th><th scope="col">Count</th><th scope="col">Interpretation</th></tr></thead>
+        <tbody>
+          <tr><td><span class="badge critical">CRITICAL</span></td><td>0</td><td>No confirmed practical system-compromise or destructive cross-tenant finding in the reviewed code.</td></tr>
+          <tr><td><span class="badge high">HIGH</span></td><td>3</td><td>Release gate failure, independent audit-evidence gap, and unverified production-control evidence preclude approval.</td></tr>
+          <tr><td><span class="badge medium">MEDIUM</span></td><td>8</td><td>Material governance, test, concurrency, scale, observability, data-minimization, and capacity risks.</td></tr>
+          <tr><td><span class="badge low">LOW</span></td><td>1</td><td>Observability-integrity improvement with limited direct security impact.</td></tr>
+          <tr><td><span class="badge informational">INFORMATIONAL</span></td><td>0</td><td>Scope observations appear in the control matrix and open questions rather than as defects.</td></tr>
+        </tbody>
+      </table></div>
+    </section>
+
+    <section id="architecture" aria-labelledby="architecture-heading">
+      <h2 id="architecture-heading">2. Architecture and trust boundaries</h2>
+      <div class="table-wrap"><table>
+        <caption>Detected stack and delivery model</caption>
+        <thead><tr><th scope="col">Area</th><th scope="col">Observed implementation</th><th scope="col">Audit implication</th></tr></thead>
+        <tbody>
+          <tr><td>Application</td><td>ASP.NET Core/.NET 10, controllers, middleware, built-in DI, JSON console logging.</td><td>Clear HTTP entry point and ordered middleware pipeline.</td></tr>
+          <tr><td>Architecture</td><td>Domain, Contracts, Application, Infrastructure, API, Workers, Migrator, and separate test projects.</td><td>Dependency boundaries and testability are strong; DI scope/build validation is enabled.</td></tr>
+          <tr><td>Data</td><td>MySQL 8.4, MySqlConnector, Dapper, transactional C# migrator, schema baseline <code>0021</code>.</td><td>Parameterization and constraints are used; DB concurrency and recovery evidence still matter.</td></tr>
+          <tr><td>Identity</td><td>Google/Microsoft OIDC, signed session cookie/token plus server session-state validation; local-only dev auth.</td><td>Browser/session trust boundary is substantive; live provider configuration was not examined.</td></tr>
+          <tr><td>Authorization</td><td>Fallback authenticated policy, named permission policies, RBAC/direct grants, hierarchy and optimistic-version checks.</td><td>No confirmed object/function authorization bypass in reviewed paths.</td></tr>
+          <tr><td>Async work</td><td>In-process <code>RequestLogBufferWorker</code> and <code>RetentionWorker</code>; transactional security-event outbox primitives only.</td><td>No external queue/broker or outbox delivery worker in repository.</td></tr>
+          <tr><td>Runtime</td><td>Docker Compose local stack (API, MySQL, web, one-shot migrator); Caddy/Compose production reference only.</td><td>Local runtime validated; production deployment is not implemented here.</td></tr>
+          <tr><td>Quality</td><td>xUnit, architecture/integration tests, Vitest/Playwright frontend tests, GitHub Actions.</td><td>Useful checks exist, but real-DB test wiring and required E2E release evidence are defective.</td></tr>
+        </tbody>
+      </table></div>
+      <h3>Trust-boundary and sensitive-data flow</h3>
+      <div class="diagram" role="img" aria-label="Text diagram of Sharpbill trust boundaries and data flows">
+        <div class="diagram-row"><div class="node"><strong>Browser / API client</strong>Cookie/session requests, CSRF provenance, request ID, rate limiting.</div><div class="arrow" aria-hidden="true">→</div><div class="node"><strong>API boundary</strong>Forwarded-header trust, body/content-type limits, authentication, authorization, controllers, WebSocket endpoint.</div><div class="arrow" aria-hidden="true">→</div><div class="node"><strong>Application services</strong>RBAC, user/profile/role/privacy/security-event operations and business validation.</div></div>
+        <div class="diagram-row"><div class="node"><strong>OIDC providers</strong>Google or Microsoft signing-key and identity assertions; only fixed provider endpoints observed.</div><div class="arrow" aria-hidden="true">→</div><div class="node"><strong>Infrastructure</strong>Dapper repositories, transactions, MySQL pooling, timeouts, UTC session state.</div><div class="arrow" aria-hidden="true">→</div><div class="node"><strong>MySQL</strong>Users, identities, sessions, permissions, request logs, security events, outbox, privacy/retention state.</div></div>
+        <div class="diagram-row"><div class="node"><strong>Hosted workers</strong>Bounded request-log persistence and periodic retention. No hosted dispatcher to an external evidence sink.</div><div class="arrow" aria-hidden="true">→</div><div class="node"><strong>External operations (not verified)</strong>Ingress/TLS, secrets, backups/PITR, monitoring, SIEM/WORM, deployment approval, and rollback.</div></div>
+      </div>
+      <p><strong>Tenant boundary:</strong> the checked-in architecture explicitly supports one organization per deployment/database. It has no tenant root/key. This is not a confirmed shared-tenant failure for the declared model, but a shared deployment would require a material schema, authorization, query, operations, and test redesign; see <code>docs/architecture/ADR-001-single-tenant.md:9-18, 32-38, 73-74, 90-102</code>.</p>
+      <p><strong>CRM scope boundary:</strong> the reviewed backend contains identity, users, roles/permissions, settings, dashboard/analytics, security events, request logs, privacy/retention, legal acceptance, and presence. No customer/contact/opportunity, attachment/file upload, bulk import, webhook, email delivery, password-reset, invitation, or arbitrary outbound URL subsystem was found in the inspected API/controller and worker scope. Controls for such modules are therefore <span class="badge not-verified">NOT VERIFIED</span>, not assumed absent in a future product.</p>
+    </section>
+
+    <section id="findings-summary" aria-labelledby="findings-summary-heading">
+      <h2 id="findings-summary-heading">3. Findings summary</h2>
+      <div class="table-wrap"><table>
+        <caption>Findings sorted by severity and practical impact</caption>
+        <thead><tr><th scope="col">ID</th><th scope="col">Severity</th><th scope="col">Confidence</th><th scope="col">Status</th><th scope="col">Component</th><th scope="col">Finding</th><th scope="col">Business impact</th><th scope="col">Effort</th></tr></thead>
+        <tbody>
+          <tr><td><a href="#SB-001"><code>SB-001</code></a></td><td><span class="badge high">HIGH</span></td><td>High</td><td><span class="badge confirmed">Confirmed</span> <span class="badge fixed">FIXED LOCALLY</span></td><td>CI / migrator</td><td>Local-only RSA public-key retrieval is now enabled while production remains VerifyFull.</td><td>Hosted E2E recheck pending.</td><td>Complete</td></tr>
+          <tr><td><a href="#SB-002"><code>SB-002</code></a></td><td><span class="badge high">HIGH</span></td><td>High</td><td><span class="badge confirmed">Confirmed</span></td><td>Security events / outbox</td><td>No implemented external dispatcher or immutable evidence sink.</td><td>Forensics and accountability can be lost after DB/admin compromise.</td><td>Large</td></tr>
+          <tr><td><a href="#SB-003"><code>SB-003</code></a></td><td><span class="badge high">HIGH</span></td><td>High</td><td><span class="badge not-verified">Not verified</span></td><td>Production operations</td><td>Production deployment, recovery, telemetry, and least-privilege evidence not supplied.</td><td>Enterprise operation cannot be approved on repository evidence.</td><td>Large</td></tr>
+          <tr><td><a href="#SB-004"><code>SB-004</code></a></td><td><span class="badge medium">MEDIUM</span></td><td>High</td><td><span class="badge confirmed">Confirmed</span></td><td>GitHub governance</td><td>No main ruleset/protection; GitHub scanning alerts unavailable.</td><td>Unchecked or unreviewed changes can reach the default branch.</td><td>Small</td></tr>
+          <tr><td><a href="#SB-005"><code>SB-005</code></a></td><td><span class="badge medium">MEDIUM</span></td><td>High</td><td><span class="badge confirmed">Confirmed</span> <span class="badge fixed">FIXED LOCALLY</span></td><td>CI tests</td><td>CI now supplies the real-MySQL connection and fails closed if it is absent.</td><td>False-positive pass removed.</td><td>Complete</td></tr>
+          <tr><td><a href="#SB-006"><code>SB-006</code></a></td><td><span class="badge medium">MEDIUM</span></td><td>High</td><td><span class="badge confirmed">Confirmed</span></td><td>Session validation</td><td>Authenticated requests take an exclusive user-row lock.</td><td>Same-user concurrency can serialize and degrade availability.</td><td>Medium</td></tr>
+          <tr><td><a href="#SB-007"><code>SB-007</code></a></td><td><span class="badge medium">MEDIUM</span></td><td>High</td><td><span class="badge confirmed">Confirmed</span></td><td>OIDC nonce</td><td>Nonce issuance serializes globally on process and singleton settings lock.</td><td>Login bursts can become a bottleneck.</td><td>Medium</td></tr>
+          <tr><td><a href="#SB-008"><code>SB-008</code></a></td><td><span class="badge medium">MEDIUM</span></td><td>High</td><td><span class="badge confirmed">Confirmed</span></td><td>Retention / request logs</td><td>Operational telemetry is lossy and retention lacks critical health metrics/alerts.</td><td>Delayed detection of deletion/backlog or missing activity telemetry.</td><td>Medium</td></tr>
+          <tr><td><a href="#SB-009"><code>SB-009</code></a></td><td><span class="badge medium">MEDIUM</span></td><td>Medium</td><td><span class="badge probable">Probable</span></td><td>Scale coordination</td><td>Rate limits, presence, replay memory, and scheduling assumptions are process-local.</td><td>Multi-replica behavior can multiply limits or diverge.</td><td>Large</td></tr>
+          <tr><td><a href="#SB-010"><code>SB-010</code></a></td><td><span class="badge medium">MEDIUM</span></td><td>Medium</td><td><span class="badge probable">Probable</span></td><td>User directory</td><td><code>users.read</code> can return more profile/access data than a minimum directory view may need.</td><td>Unnecessary internal PII/access-data aggregation.</td><td>Medium</td></tr>
+          <tr><td><a href="#SB-011"><code>SB-011</code></a></td><td><span class="badge medium">MEDIUM</span></td><td>Medium</td><td><span class="badge probable">Probable</span></td><td>Logs / exports / retries</td><td>Large log/export and transient-lock paths lack capacity/resilience proof.</td><td>Slow admin investigations or resource pressure under volume.</td><td>Medium</td></tr>
+          <tr><td><a href="#SB-012"><code>SB-012</code></a></td><td><span class="badge low">LOW</span></td><td>High</td><td><span class="badge confirmed">Confirmed</span></td><td>Request context</td><td>Client-selected correlation IDs are accepted as request identifiers.</td><td>Limited loss of log-correlation uniqueness.</td><td>Small</td></tr>
+        </tbody>
+      </table></div>
+    </section>
+
+    <section id="detailed-findings" aria-labelledby="detailed-findings-heading">
+      <h2 id="detailed-findings-heading">4. Detailed findings</h2>
+
+      <article class="finding high-find" id="SB-001" aria-labelledby="SB-001-heading">
+        <h3 id="SB-001-heading"><code>SB-001</code> — Current main cannot complete the Docker/MySQL end-to-end gate</h3>
+        <span class="badge high">HIGH</span><span class="badge confirmed">Confirmed</span><span class="badge fixed">FIXED LOCALLY</span><span class="badge informational">Confidence: High</span>
+        <dl class="finding-grid">
+          <dt>Category / mappings</dt><dd>Release engineering and database connectivity. CWE: not applicable to a standalone code vulnerability. OWASP ASVS/API Top 10: secure delivery/verification control; no direct API category.</dd>
+          <dt>Component and path</dt><dd>GitHub Actions E2E job; one-shot C# migrator against Compose MySQL.</dd>
+          <dt>Root cause / execution path</dt><dd>The E2E workflow starts MySQL then invokes <code>migrator migrate</code>. Local Compose disables TLS by default, while the migrator connection-string builder does not set the client option required by the MySQL <code>caching_sha2_password</code> failure path. The job fails before API, web, or Playwright execution.</dd>
+          <dt>Why it matters / scenario</dt><dd>A commit can be present on <code>main</code> without a passing full-stack migration/login/authorization test. An operator or CI runner attempting the documented local/ephemeral startup may receive the same database authentication failure.</dd>
+          <dt>Likelihood / impact / affected scope</dt><dd>Likelihood: demonstrated. Technical impact: required E2E evidence is absent. Business impact: release confidence and recovery of the verified deployment path are reduced. Affected: every release relying on this workflow.</dd>
+          <dt>Compensating controls</dt><dd>Backend, frontend, image, SBOM, and scan jobs passed in the same run; local Compose configuration parses; production configuration requires verified TLS. These do not make the skipped E2E path pass.</dd>
+          <dt>Recommendation / implementation outline</dt><dd>Centralize connection policy. Prefer verified TLS whenever practical; for the isolated non-production Compose case, explicitly permit public-key retrieval only there, never in production. Cover both API and migrator builders with the same policy and test fixture.</dd>
+          <dt>Proof, effort, owner, compatibility</dt><dd>Re-run the exact Compose migration, seed, API readiness, and Playwright job on a clean runner; add a test for local MySQL 8.4 authentication and a production-TLS negative test. Effort: small. Owner: backend + platform. No schema migration expected; coordinate only configuration rollout.</dd>
+          <dt>Fix action / remediation status</dt><dd><strong>Fixed locally on 2026-07-21.</strong> The API and migrator now enable <code>AllowPublicKeyRetrieval</code> only for <code>APP_ENV=local</code> with TLS disabled; production keeps <code>VerifyFull</code> and public-key retrieval disabled. Added positive local and negative production tests. Rebuilt Docker images; <code>migrator migrate</code> and <code>validate</code> pass against local MySQL 8.4. Hosted Actions verification remains pending.</dd>
+        </dl>
+        <h4>Evidence</h4>
+        <pre><code>GitHub Actions run 29873722564 (2026-07-21): failed.
+Failure: [SBM0010] ... caching_sha2_password ... use a secure connection,
+ServerRSAPublicKeyFile, or AllowPublicKeyRetrieval=True.
+
+.github/workflows/ci.yml:363-369        starts MySQL; runs migrator migrate and seed
+docker-compose.yml:127-142              migrator receives DB_REQUIRE_TLS default false
+backend/src/Sharpbill.Migrator/ConnectionStringResolver.cs
+  fixed: local disabled-TLS connections enable public-key retrieval
+backend/src/Sharpbill.Infrastructure/Database/MySqlConnectionFactory.cs
+  fixed: the same local-only policy is applied to the API; production remains VerifyFull
+Local proof: migrator migrate + validate passed against Compose MySQL 8.4</code></pre>
+      </article>
+
+      <article class="finding high-find" id="SB-002" aria-labelledby="SB-002-heading">
+        <h3 id="SB-002-heading"><code>SB-002</code> — Security audit evidence is not independently immutable or delivered</h3>
+        <span class="badge high">HIGH</span><span class="badge confirmed">Confirmed</span><span class="badge informational">Confidence: High</span>
+        <dl class="finding-grid">
+          <dt>Category / mappings</dt><dd>Security logging, audit integrity, governance. CWE-778 (insufficient/incomplete logging evidence); OWASP ASVS security-logging/error-handling control family; OWASP API Top 10: operational security-misconfiguration relevance.</dd>
+          <dt>Component and path</dt><dd>Security event repository, transactional outbox primitives, hosted-worker registration, retention.</dd>
+          <dt>Root cause / execution path</dt><dd>Security events and pending delivery records are atomically stored in the same MySQL database. Claim/lease/mark primitives exist, but no hosted dispatcher sends them to a separately administered sink. Retention eventually removes expired events, including undelivered events.</dd>
+          <dt>Why it matters / scenario</dt><dd>An administrator, database compromise, destructive recovery event, or failed-but-never-dispatched outbox can leave the organization without independently retained evidence of authentication and privileged actions. The primary DB is not an immutable, independently controlled audit store.</dd>
+          <dt>Likelihood / impact / affected scope</dt><dd>Likelihood: present in the repository runnable topology. Technical impact: no nonrepudiable off-box trail. Business impact: impaired incident investigation, legal hold support, customer assurance, and change accountability. Affected: security events and privileged-action evidence.</dd>
+          <dt>Compensating controls</dt><dd>Event/outbox writes are transactional; claim/lease/retry primitives are implemented; internal security-event access is permission protected; the documentation explicitly discloses the gap rather than claiming compliance.</dd>
+          <dt>Recommendation / implementation outline</dt><dd>Deploy a least-privileged dispatcher outside the API process. Deliver signed or tamper-evident envelopes to restricted append-only/WORM storage or a SIEM, with independent credentials, dead-letter handling, lag/loss/tamper alerts, and deletion/hold policy alignment.</dd>
+          <dt>Proof, effort, owner, compatibility</dt><dd>Fault-inject sink outage, restart, duplicate delivery, database tamper attempt, and retention boundary; prove alerting and recovery without exposing event payloads. Effort: large. Owner: security/platform/data. No application API migration necessarily required; requires infrastructure, ownership, retention, and possibly legal/privacy coordination.</dd>
+        </dl>
+        <h4>Evidence</h4>
+        <pre><code>backend/src/Sharpbill.Infrastructure/Repositories/SecurityEventRepository.cs:19-62
+  writes security event plus pending delivery state transactionally
+backend/src/Sharpbill.Infrastructure/Services/Operations/EventOutboxService.cs:8-58
+  exposes claim/mark service operations; no external sink implementation
+backend/src/Sharpbill.Workers/ServiceCollectionExtensions.cs:11-15
+  registers only RequestLogBufferWorker and RetentionWorker
+backend/src/Sharpbill.Infrastructure/Repositories/SecurityEventRepository.cs:125-158
+  prunes retained security-event records
+README.md:112-116; docs/ENTERPRISE_OPERATIONS.md:431-438
+  expressly state no external dispatcher or immutable/SIEM/WORM storage is supplied</code></pre>
+      </article>
+
+      <article class="finding high-find" id="SB-003" aria-labelledby="SB-003-heading">
+        <h3 id="SB-003-heading"><code>SB-003</code> — Enterprise production-control evidence is unavailable</h3>
+        <span class="badge high">HIGH</span><span class="badge not-verified">Not verified</span><span class="badge informational">Confidence: High that evidence is unavailable</span>
+        <dl class="finding-grid">
+          <dt>Category / mappings</dt><dd>Production operations, business continuity, separation of duties. CWE-693 (protection mechanism not evidenced). OWASP ASVS architecture/deployment control families; OWASP API Top 10: no direct code-level category.</dd>
+          <dt>Component and path</dt><dd>Deployment reference, recovery documentation, external environment gates, database identities, monitoring, secrets, network boundary, and approval workflow.</dd>
+          <dt>Root cause / execution path</dt><dd>The repository explicitly defines local/evaluation support and unapproved deployment references. It contains no deployed IaC, production environment, rollback automation, secret-manager integration, backup/PITR proof, HA/failover proof, telemetry pipeline, or external audit delivery. The production reference also uses one <code>api.env</code> for API and migrator despite documenting that their database credentials must differ.</dd>
+          <dt>Why it matters / scenario</dt><dd>After a ransomware event, failed migration, credential leak, or availability incident, recovery, least-privilege, edge TLS/proxy trust, alerting, and rollback cannot be demonstrated from the supplied evidence. If the reference file were used unchanged, API and migrator privilege separation is likely to be compromised or migration fails.</dd>
+          <dt>Likelihood / impact / affected scope</dt><dd>Likelihood: unknown external environment; evidence gap is demonstrated. Potential technical impact: unrecoverable/slow recovery, broad DB privilege, undetected incidents, and unsafe rollout. Business impact: customer data and availability assurance cannot be supported. Affected: any production deployment.</dd>
+          <dt>Compensating controls</dt><dd>The application validates production TLS/cookie/origin settings, has liveness/readiness, runs API/migrator non-root in the reference, and provides unusually candid operations runbooks. Those are not evidence of an operated environment.</dd>
+          <dt>Recommendation / implementation outline</dt><dd>Before production approval, produce approved IaC and environment evidence: TLS/ingress and trusted-proxy config, separate runtime/migrator identities and grants, managed secrets/rotation, encrypted backups/PITR, isolated restore drill with measured RPO/RTO, HA/resource controls, central logs/metrics/traces/SLO alerts, WORM/SIEM delivery, deployment approval, immutable digest promotion, and tested rollback.</dd>
+          <dt>Proof, effort, owner, compatibility</dt><dd>Collect current owner-attested evidence and independently exercise restore, failover, rollback, and privileged-access tests. Effort: large. Owner: platform, DBA, security, operations. Requires deployment design, credentials, contracts, and possibly downtime/change-window coordination; do not infer absence in an undisclosed external environment.</dd>
+        </dl>
+        <h4>Evidence</h4>
+        <pre><code>deploy/docker-compose.prod.yml:1
+  Reference only; not wired to any deploy pipeline yet.
+deploy/docker-compose.prod.yml:26-27, 53-65
+  API and migrator both load ./api.env; comments require separate credentials
+docs/ENTERPRISE_OPERATIONS.md:53-56, 60-80
+  explicitly defers IaC, HA, secrets, PITR, telemetry, SIEM/WORM, deployment/rollback,
+  provider validation, signing, and external governance
+docs/ENTERPRISE_OPERATIONS.md:210-223, 271-273
+  local rehearsal is not production RPO/RTO, immutable retention, PITR, HA, or restore proof
+GitHub environments endpoint: no configured repository environments were returned</code></pre>
+      </article>
+
+      <article class="finding medium-find" id="SB-004" aria-labelledby="SB-004-heading">
+        <h3 id="SB-004-heading"><code>SB-004</code> — Main-branch governance and hosted security detection are not enforced</h3>
+        <span class="badge medium">MEDIUM</span><span class="badge confirmed">Confirmed</span><span class="badge informational">Confidence: High</span>
+        <dl class="finding-grid">
+          <dt>Category / mappings</dt><dd>Secure delivery, supply chain, change control. CWE-693. OWASP ASVS secure development/deployment control families; OWASP API Top 10: API8 Security Misconfiguration relevance.</dd>
+          <dt>Component and path</dt><dd>GitHub repository settings and <code>.github/workflows/ci.yml</code>.</dd>
+          <dt>Root cause / execution path</dt><dd><code>main</code> has no branch protection and no ruleset. GitHub code-scanning, secret-scanning, and Dependabot-alert endpoints report disabled/not enabled. Actions allow all actions and do not require SHA pinning. The workflow has useful checks but none can be required by repository policy.</dd>
+          <dt>Why it matters / scenario</dt><dd>A direct or insufficiently reviewed change can land on the default branch while CI is red, as the current failed run illustrates. Newly introduced secrets, static-analysis findings, or dependency advisories can lack hosted alert coverage.</dd>
+          <dt>Likelihood / impact / affected scope</dt><dd>Likelihood: configuration is demonstrated. Technical impact: bypassable quality/security gate and delayed detection. Business impact: materially weaker change traceability and release assurance. Affected: all contributors and releases.</dd>
+          <dt>Compensating controls</dt><dd>CI runs on pushes/PRs and weekly; actions used in the workflow are SHA pinned; job token is read-only; NuGet/npm checks, image scans, and SBOM generation exist. This is strong build-time hygiene, not enforced branch governance.</dd>
+          <dt>Recommendation / implementation outline</dt><dd>Configure a <code>main</code> ruleset/branch protection requiring pull requests, independent reviews/CODEOWNERS where appropriate, resolved conversations, no force/direct pushes, and successful backend, frontend, image/supply-chain, and E2E checks. Enable or supply equivalent secret scanning, code scanning/SAST, dependency alerts, action allowlist/SHA enforcement, and immutable release evidence.</dd>
+          <dt>Proof, effort, owner, compatibility</dt><dd>Verify REST/UI configuration; attempt a test direct push and merge with a failed required check in a non-production test repository. Retain scanner/SBOM results with release records. Effort: small to medium. Owner: platform/security. No application compatibility change.</dd>
+        </dl>
+        <h4>Evidence</h4>
+        <pre><code>GET /repos/itdept-ops/Sharpbill/branches/main/protection → 404 Branch not protected
+GET /repos/itdept-ops/Sharpbill/rulesets → []
+GET code-scanning/alerts → Code scanning is not enabled
+GET secret-scanning/alerts → Secret scanning is disabled
+GET dependabot/alerts → Dependabot alerts are disabled
+.github/workflows/ci.yml:3-18, 12-14, 60-78, 254-316
+  CI trigger/concurrency, read-only token, package audit, image scans, SPDX SBOM generation</code></pre>
+      </article>
+
+      <article class="finding medium-find" id="SB-005" aria-labelledby="SB-005-heading">
+        <h3 id="SB-005-heading"><code>SB-005</code> — CI silently treats real-MySQL repository integration tests as passing</h3>
+        <span class="badge medium">MEDIUM</span><span class="badge confirmed">Confirmed</span><span class="badge fixed">FIXED LOCALLY</span><span class="badge informational">Confidence: High</span>
+        <dl class="finding-grid">
+          <dt>Category / mappings</dt><dd>Testing and data integrity. CWE: not applicable. OWASP ASVS verification/secure-development control family; OWASP API Top 10: not directly applicable.</dd>
+          <dt>Component and path</dt><dd><code>RepositoryIntegrationTests</code> and backend CI MySQL service configuration.</dd>
+          <dt>Root cause / execution path</dt><dd>Two database tests return successfully if <code>SHARPBILL_TEST_DATABASE</code> is empty. CI provisions MySQL and sets <code>DB_*</code> variables but does not set that explicit test connection string, so the substantive repository round-trip and nonce/outbox transition assertions do not execute.</dd>
+          <dt>Why it matters / scenario</dt><dd>A regression in SQL mapping, database collation, optimistic writes, escaped filtering, nonce atomicity, or outbox transition can report green in CI without having exercised the actual MySQL path.</dd>
+          <dt>Likelihood / impact / affected scope</dt><dd>Likelihood: demonstrated by code and CI configuration. Technical impact: false test coverage. Business impact: database defects can evade release checks. Affected: repository/migration changes and any workflow relying on the reported test count.</dd>
+          <dt>Compensating controls</dt><dd>CI runs migration dry-run/apply/validate; 121 solution tests pass locally; three repository tests execute against Compose MySQL and pass with transactional rollback.</dd>
+          <dt>Recommendation / implementation outline</dt><dd>Construct an ephemeral connection string after migration and set <code>SHARPBILL_TEST_DATABASE</code> for the test invocation. Replace silent returns with an explicit test skip only for intentional developer mode, and fail CI when database configuration is absent.</dd>
+          <dt>Proof, effort, owner, compatibility</dt><dd>Make the CI test report show executed DB assertions; deliberately remove the variable and expect a failing CI guard. Keep the test database ephemeral and never use production credentials. Effort: small. Owner: backend/test/platform. No schema or client compatibility impact.</dd>
+          <dt>Fix action / remediation status</dt><dd><strong>Fixed locally on 2026-07-21.</strong> Backend CI now supplies <code>SHARPBILL_TEST_DATABASE</code>. The test helper throws when CI is active and the variable is missing, while intentional local runs may omit the external database. Three real-MySQL repository tests passed locally. Hosted Actions verification remains pending.</dd>
+        </dl>
+        <h4>Evidence</h4>
+        <pre><code>backend/tests/Sharpbill.IntegrationTests/Repositories/RepositoryIntegrationTests.cs:20-22
+  reads only SHARPBILL_TEST_DATABASE
+...RepositoryIntegrationTests.cs:43-48 and 74-79
+  returns when that value is absent
+.github/workflows/ci.yml:25-49
+  now supplies the ephemeral SHARPBILL_TEST_DATABASE connection
+.github/workflows/ci.yml:88-104
+  migrates/validates then runs the solution test command
+RepositoryIntegrationTests.cs
+  now fails closed in CI when the database connection is absent</code></pre>
+      </article>
+
+      <article class="finding medium-find" id="SB-006" aria-labelledby="SB-006-heading">
+        <h3 id="SB-006-heading"><code>SB-006</code> — Every authenticated request serializes on the user row</h3>
+        <span class="badge medium">MEDIUM</span><span class="badge confirmed">Confirmed</span><span class="badge informational">Confidence: High</span>
+        <dl class="finding-grid">
+          <dt>Category / mappings</dt><dd>Database concurrency and availability. CWE-400 (resource exhaustion/availability pressure). OWASP ASVS availability/resilience controls; OWASP API Top 10 2023 API4 Unrestricted Resource Consumption relevance.</dd>
+          <dt>Component and path</dt><dd>Session authentication handler, session validation service, user repository.</dd>
+          <dt>Root cause / execution path</dt><dd>For each authenticated request, the handler validates the session. Validation begins a transaction, reads the user/session, and conditionally updates activity. Although one lookup uses <code>FOR SHARE</code>, the final user hydration query unconditionally uses <code>FOR UPDATE</code>, serializing concurrent requests for the same user.</dd>
+          <dt>Why it matters / scenario</dt><dd>A dashboard with parallel API calls, multiple browser tabs, a mobile client retry, or an administrator editing the user concurrently can queue behind an exclusive lock. Lock waits increase latency and can amplify deadlocks or timeout failures.</dd>
+          <dt>Likelihood / impact / affected scope</dt><dd>Likelihood: direct code path; volume threshold needs load validation. Technical impact: same-user request serialization. Business impact: slow or unavailable interactive CRM use for active users. Affected: authenticated API requests and administrative user/session operations.</dd>
+          <dt>Compensating controls</dt><dd>Server-side session-state validation supports revocation; transactions roll back safely; pools and timeouts are bounded. These controls do not remove the exclusive lock on the normal read path.</dd>
+          <dt>Recommendation / implementation outline</dt><dd>Use a consistent shared/optimistic authorization snapshot for normal validation and acquire an exclusive lock only around a proven conditional last-seen update. Preserve revocation/deactivation semantics and test stale/session-revoked behavior.</dd>
+          <dt>Proof, effort, owner, compatibility</dt><dd>Run 50+ parallel same-user requests while simultaneously revoking a session and changing a role; record p95/p99 latency, lock waits, deadlocks, and correctness. Effort: medium. Owner: backend/data. No schema migration expected; behavior change needs regression/security review.</dd>
+        </dl>
+        <h4>Evidence</h4>
+        <pre><code>backend/src/Sharpbill.Api/Authentication/SessionAuthenticationHandler.cs:69-87
+  calls ValidateAsync on authenticated requests
+backend/src/Sharpbill.Infrastructure/Services/Identity/SessionService.cs:219-281
+  opens transaction, validates user/session, conditionally updates activity
+backend/src/Sharpbill.Infrastructure/Repositories/UserRepository.cs:49-57
+  auth lookup requests FOR SHARE
+backend/src/Sharpbill.Infrastructure/Repositories/UserRepository.cs:470-480
+  final user query unconditionally applies FOR UPDATE</code></pre>
+      </article>
+
+      <article class="finding medium-find" id="SB-007" aria-labelledby="SB-007-heading">
+        <h3 id="SB-007-heading"><code>SB-007</code> — OIDC nonce issuance has global serialized lock hot paths</h3>
+        <span class="badge medium">MEDIUM</span><span class="badge confirmed">Confirmed</span><span class="badge informational">Confidence: High</span>
+        <dl class="finding-grid">
+          <dt>Category / mappings</dt><dd>Authentication resilience and database concurrency. CWE-400. OWASP ASVS authentication/availability controls; OWASP API Top 10 2023 API4 relevance.</dd>
+          <dt>Component and path</dt><dd>Nonce service, singleton site settings row, nonce rate limiter.</dd>
+          <dt>Root cause / execution path</dt><dd>A static <code>SemaphoreSlim(1)</code> serializes nonce issuance inside each API process. Each issuance then locks the singleton <code>site_settings</code> row <code>FOR UPDATE</code>, extending serialization across replicas that share MySQL.</dd>
+          <dt>Why it matters / scenario</dt><dd>During a workforce login event, SSO outage/retry burst, or distributed abuse attempt, nonce latency can grow linearly behind the settings-row lock. Per-IP local throttling does not bound distributed source traffic or cross-replica load.</dd>
+          <dt>Likelihood / impact / affected scope</dt><dd>Likelihood: code path is direct. Technical impact: login throughput bottleneck and lock contention. Business impact: delayed access to CRM during an identity event. Affected: all OIDC login initiations.</dd>
+          <dt>Compensating controls</dt><dd>Nonce replay/capacity rules and a 30/minute/IP local rate limiter are present. These reduce single-IP abuse but are not a scalable admission-control mechanism.</dd>
+          <dt>Recommendation / implementation outline</dt><dd>Replace singleton-settings locking with a dedicated atomic quota/admission design that preserves replay resistance and capacity guarantees; use database atomic update, a distributed limiter, or an explicitly designed nonce store. Do not weaken nonce validation to remove the lock.</dd>
+          <dt>Proof, effort, owner, compatibility</dt><dd>Load test distributed-source nonce requests across multiple instances; measure lock waits, issuance p99, and replay rejection. Fault-inject crashes/retries to confirm no nonce reuse. Effort: medium. Owner: backend/identity/data. No public API change expected, but authentication flow regression testing is mandatory.</dd>
+        </dl>
+        <h4>Evidence</h4>
+        <pre><code>backend/src/Sharpbill.Infrastructure/Services/Identity/NonceService.cs:20-31
+  static process-wide SemaphoreSlim(1) wraps issuance
+...NonceService.cs:35-38
+  locks singleton settings state during issuance
+backend/src/Sharpbill.Infrastructure/Repositories/SettingsRepository.cs:28-42
+  settings row lock path
+backend/src/Sharpbill.Api/Configuration/RateLimitingExtensions.cs:98-101
+  /api/auth/nonce local per-IP limiter</code></pre>
+      </article>
+
+      <article class="finding medium-find" id="SB-008" aria-labelledby="SB-008-heading">
+        <h3 id="SB-008-heading"><code>SB-008</code> — Retention and activity-telemetry health cannot be fully observed</h3>
+        <span class="badge medium">MEDIUM</span><span class="badge confirmed">Confirmed</span><span class="badge informational">Confidence: High</span>
+        <dl class="finding-grid">
+          <dt>Category / mappings</dt><dd>Observability, retention reliability, operational logging. CWE-778. OWASP ASVS security logging/error handling control family; OWASP API Top 10: no direct one-to-one category.</dd>
+          <dt>Component and path</dt><dd>Retention worker, request-log buffer worker, protected log metrics endpoint, operations/privacy policy.</dd>
+          <dt>Root cause / execution path</dt><dd>Retention emits structured count/failure logs but no application metrics for last successful cycle, oldest eligible record, backlog, hold state, or alert delivery. Request logs enter a bounded in-memory channel and intentionally drop records on saturation, persistence failure, cancellation, or shutdown.</dd>
+          <dt>Why it matters / scenario</dt><dd>A retention worker can repeatedly fail or fall behind without a machine-actionable alert. Under database outage or traffic pressure, request activity telemetry becomes incomplete. A security investigator may mistake it for a complete audit trail despite documentation classifying it only as telemetry.</dd>
+          <dt>Likelihood / impact / affected scope</dt><dd>Likelihood: drop behavior and missing metrics are direct code facts. Technical impact: delayed operational detection and incomplete activity telemetry. Business impact: prolonged privacy/retention exceptions and weaker incident reconstruction. Affected: request-log and privacy-lifecycle operations.</dd>
+          <dt>Compensating controls</dt><dd>Queue depth/drop/error counters are exposed behind authorization; batches are bounded and transactional; retention is independently committed and hold-aware; the documentation correctly warns that request logs are telemetry, not immutable audit evidence.</dd>
+          <dt>Recommendation / implementation outline</dt><dd>Emit durable metrics for each retention category (success timestamp, backlog/oldest age, hold state, failures, batch count) and configure alert ownership. Export queue metrics and structured logs to a central collector. Keep request logs explicitly non-audit; use SB-002's independent security-event sink for evidence.</dd>
+          <dt>Proof, effort, owner, compatibility</dt><dd>Simulate DB failure, queue saturation, held records, and restart; verify alarms, dashboards, recovery, and no accidental claim of complete audit coverage. Effort: medium. Owner: platform/operations/backend. No API migration expected; monitoring and runbook coordination required.</dd>
+        </dl>
+        <h4>Evidence</h4>
+        <pre><code>backend/src/Sharpbill.Workers/RetentionWorker.cs:20-55, 96-114
+  logs cycle counts and failures; no emitted health/backlog/oldest metrics
+docs/DATA_RETENTION_PRIVACY.md:105-121; docs/ENTERPRISE_OPERATIONS.md:389-399
+  require monitored lifecycle/alert outcomes
+backend/src/Sharpbill.Workers/RequestLogBufferWorker.cs:39-62, 83-92, 169-224
+  bounded channel, drop/error counters, and dropped batches on failure/shutdown
+backend/src/Sharpbill.Api/Controllers/LogsController.cs:9-15
+  authorized metrics endpoint</code></pre>
+      </article>
+
+      <article class="finding medium-find" id="SB-009" aria-labelledby="SB-009-heading">
+        <h3 id="SB-009-heading"><code>SB-009</code> — Horizontal-scale controls are process-local</h3>
+        <span class="badge medium">MEDIUM</span><span class="badge probable">Probable</span><span class="badge informational">Confidence: Medium</span>
+        <dl class="finding-grid">
+          <dt>Category / mappings</dt><dd>Scalability, abuse resistance, distributed consistency. CWE-770. OWASP ASVS availability controls; OWASP API Top 10 2023 API4 Unrestricted Resource Consumption.</dd>
+          <dt>Component and path</dt><dd>In-memory rate limiter, singleton WebSocket presence hub, replay memory, periodic retention scheduling, trusted-forwarded-header configuration.</dd>
+          <dt>Root cause / execution path</dt><dd>The limiter is in-memory and partitioned by remote IP. Presence connections and broadcasts are held in one process. Documentation confirms rate limits, presence, replay memory, and WebSockets are process-local and restricts the reference topology to one API replica until externalized.</dd>
+          <dt>Why it matters / scenario</dt><dd>With more than one replica, limits multiply, presence diverges, and replay/control state may be inconsistent. If trusted proxy settings are wrong, client IP attribution can also be wrong. Multiple retention workers can overlap without demonstrated leader election.</dd>
+          <dt>Likelihood / impact / affected scope</dt><dd>Likelihood: depends on an unverified multi-replica/proxy deployment; the implementation limitation is documented. Technical impact: inconsistent rate limits/presence and duplicate maintenance pressure. Business impact: abuse resistance and live-state accuracy degrade when scaling. Affected: API throttling, login protection, presence, retention.</dd>
+          <dt>Compensating controls</dt><dd>Forwarded headers are ignored unless explicit proxy networks are trusted; current documented reference topology is one replica; rate-limit partitions are bounded. These controls intentionally constrain, not solve, multi-replica operation.</dd>
+          <dt>Recommendation / implementation outline</dt><dd>Either enforce a documented one-replica service limit in deployment admission or externalize rate limiting, nonce/replay coordination, presence/pub-sub, and scheduled-work leadership. Prefer ingress rate limiting plus a shared coordination store and a leader/lease mechanism.</dd>
+          <dt>Proof, effort, owner, compatibility</dt><dd>Run two replicas behind the intended ingress; validate per-client quotas, provider replay, presence fan-out, retention exclusivity, and proxy IP handling under load. Effort: large. Owner: platform/backend. Requires infrastructure and possibly protocol/operational redesign; no silent horizontal scale-out.</dd>
+        </dl>
+        <h4>Evidence</h4>
+        <pre><code>backend/src/Sharpbill.Api/Configuration/RateLimitingExtensions.cs:18-25, 64-81
+  in-memory limiter keyed from RemoteIpAddress
+backend/src/Sharpbill.Api/WebSockets/PresenceWebSocketHub.cs:7-14
+  singleton in-process connection state
+backend/src/Sharpbill.Api/Configuration/ForwardedHeadersExtensions.cs:12-43
+  trusts only explicitly configured proxies
+docs/ENTERPRISE_OPERATIONS.md:50-56
+  expressly says these controls are process-local and reference production stays one replica</code></pre>
+      </article>
+
+      <article class="finding medium-find" id="SB-010" aria-labelledby="SB-010-heading">
+        <h3 id="SB-010-heading"><code>SB-010</code> — User-directory field minimization is not demonstrated for a users.read-only actor</h3>
+        <span class="badge medium">MEDIUM</span><span class="badge probable">Probable</span><span class="badge informational">Confidence: Medium</span>
+        <dl class="finding-grid">
+          <dt>Category / mappings</dt><dd>CRM data protection and excessive data exposure. CWE-200. OWASP ASVS access-control/data-protection control families; OWASP API Top 10 2023 API3 Broken Object Property Level Authorization / excessive data exposure relevance.</dd>
+          <dt>Component and path</dt><dd>User service response projection and <code>users.read</code> authorization.</dd>
+          <dt>Root cause / execution path</dt><dd>A user who is not the subject needs only <code>users.read</code> to obtain a <code>UserResponse</code>. That response includes email, phone, bio, preferences, roles, direct/effective permissions, status, and timestamps. Location and immutable provider subjects are appropriately restricted.</dd>
+          <dt>Why it matters / scenario</dt><dd>If <code>users.read</code> is assigned for directory/reporting purposes, a broad internal role can aggregate personal contact data and access topology that may not be needed for the business task. The correct classification and intended role meaning were not supplied.</dd>
+          <dt>Likelihood / impact / affected scope</dt><dd>Likelihood: data is directly present in the response; inappropriate entitlement depends on product/data-classification policy. Technical impact: unnecessary data exposure to an authorized but over-broad role. Business impact: internal privacy and least-privilege risk. Affected: user directory/profile APIs and holders of <code>users.read</code>.</dd>
+          <dt>Compensating controls</dt><dd>Location and provider identity subjects are masked/restricted; role/permission changes have hierarchy checks; export is separately permissioned. No confirmed unauthorized access was found.</dd>
+          <dt>Recommendation / implementation outline</dt><dd>Define a field-classification matrix and separate self, directory, manager, and administrator response projections. Make contact details/access grants opt-in permissions rather than incidental directory data. Add negative tests for a <code>users.read</code>-only principal.</dd>
+          <dt>Proof, effort, owner, compatibility</dt><dd>Obtain product/privacy classification approval; snapshot response contracts for each role; validate that UI consumers tolerate reduced directory fields. Effort: medium. Owner: product/privacy/backend. May be a backward-compatible API addition followed by a deprecation plan for broad fields.</dd>
+        </dl>
+        <h4>Evidence</h4>
+        <pre><code>backend/src/Sharpbill.Infrastructure/Services/Business/UserService.cs:97-110
+  permits non-self read with users.read
+backend/src/Sharpbill.Infrastructure/Services/Business/BusinessServiceSupport.cs:136-180
+  location/provider subjects are restricted, while UserResponse includes contact, profile,
+  access, status, preference, and timestamp fields
+OWASP API Security Top 10 2023 API3
+  relevant control category; this is not a confirmed authorization bypass</code></pre>
+      </article>
+
+      <article class="finding medium-find" id="SB-011" aria-labelledby="SB-011-heading">
+        <h3 id="SB-011-heading"><code>SB-011</code> — Large log/export and transient-lock paths lack enterprise volume proof</h3>
+        <span class="badge medium">MEDIUM</span><span class="badge probable">Probable</span><span class="badge informational">Confidence: Medium</span>
+        <dl class="finding-grid">
+          <dt>Category / mappings</dt><dd>Performance, reliability, resource consumption. CWE-400. OWASP ASVS availability/resilience controls; OWASP API Top 10 2023 API4 Unrestricted Resource Consumption.</dd>
+          <dt>Component and path</dt><dd>Request-log repository/listing, security-event CSV export, database transaction retry strategy.</dd>
+          <dt>Root cause / execution path</dt><dd>Request-log browsing performs a full filtered count, uses OFFSET paging, and allows leading-wildcard path search. Security-event export can assemble up to 10,000 rows in a StringBuilder, then bytes, then an additional controller array. Deadlock/lock-wait retry is centralized in business services but not consistently applied to session, nonce, retention, or request-log paths.</dd>
+          <dt>Why it matters / scenario</dt><dd>At retention-scale volumes or during a privileged investigation, count/offset/contains search can become slow and concurrent large exports can pressure memory. A transient MySQL 1205/1213 error in an un-retried path can create visible request failure or dropped request-log batch.</dd>
+          <dt>Likelihood / impact / affected scope</dt><dd>Likelihood: depends on traffic, cardinality, indexes, and concurrency not supplied. Technical impact: tail latency, memory pressure, dropped telemetry, or transient operational failures. Business impact: slower support/investigation and degraded admin availability. Affected: request-log browsing, security-event exports, selected transactional operations.</dd>
+          <dt>Compensating controls</dt><dd>Limits are bounded; security-event metadata is capped; database pools/timeouts exist; business-service retry handles some idempotent work; retention has bounded batches. No production-shaped EXPLAIN/load/fault evidence was provided.</dd>
+          <dt>Recommendation / implementation outline</dt><dd>Use keyset pagination and optional/approximate counts for operational logs; profile and add only evidenced composite indexes; stream CSV directly with byte/concurrency limits; centralize narrowly scoped retry for idempotent MySQL lock/deadlock sections with jitter and metrics.</dd>
+          <dt>Proof, effort, owner, compatibility</dt><dd>Run EXPLAIN ANALYZE and load/failure tests on representative log volume; test concurrent max exports and injected MySQL 1205/1213 errors; record p95/p99, heap, lock, and retry outcomes. Effort: medium. Owner: backend/data/performance. Pagination response semantics may need client coordination; indexes require migration/rehearsal.</dd>
+        </dl>
+        <h4>Evidence</h4>
+        <pre><code>backend/src/Sharpbill.Infrastructure/Repositories/RequestLogRepository.cs:17-25, 47-80
+  filtered COUNT(*), OFFSET, and leading-wildcard path matching
+backend/src/Sharpbill.Infrastructure/Services/Operations/SecurityEventService.cs:73-131
+  allows 10,000-row CSV and buffers StringBuilder/bytes
+backend/src/Sharpbill.Api/Controllers/SecurityEventsController.cs:39-43
+  copies export bytes with ToArray()
+backend/src/Sharpbill.Infrastructure/Services/Business/BusinessServiceSupport.cs:22-69, 91-104
+  retry policy exists there but not uniformly in session/nonce/retention/request-log paths</code></pre>
+      </article>
+
+      <article class="finding low-find" id="SB-012" aria-labelledby="SB-012-heading">
+        <h3 id="SB-012-heading"><code>SB-012</code> — Client-selected request IDs weaken correlation uniqueness</h3>
+        <span class="badge low">LOW</span><span class="badge confirmed">Confirmed</span><span class="badge informational">Confidence: High</span>
+        <dl class="finding-grid">
+          <dt>Category / mappings</dt><dd>Observability integrity. CWE: not applicable to an access-control defect. OWASP ASVS logging/monitoring control family; OWASP API Top 10: no direct category.</dd>
+          <dt>Component and path</dt><dd>Request-context middleware and structured request logging.</dd>
+          <dt>Root cause / execution path</dt><dd>The request context accepts a requester-supplied <code>X-Request-ID</code> as the correlation identifier rather than always generating a server-controlled unique ID.</dd>
+          <dt>Why it matters / scenario</dt><dd>A client can deliberately reuse another value or choose a collision-prone value, making cross-log correlation less reliable. This does not bypass authentication or authorization; actor and source IP are also recorded.</dd>
+          <dt>Likelihood / impact / affected scope</dt><dd>Likelihood: direct behavior. Technical impact: ambiguous correlation. Business impact: modestly slower incident triage. Affected: logs/traces that treat this field as unique.</dd>
+          <dt>Compensating controls</dt><dd>Structured logs include independent request context and user/source information; no sensitive body/query content is intentionally logged.</dd>
+          <dt>Recommendation / implementation outline</dt><dd>Generate a server request ID for every request. Preserve a sanitized client correlation ID in a distinct field if interoperability requires it, and document which identifier is authoritative.</dd>
+          <dt>Proof, effort, owner, compatibility</dt><dd>Send duplicate client headers and verify unique server IDs plus preserved client metadata. Effort: small. Owner: backend/operations. May require a short observability/dashboard transition; no database migration.</dd>
+        </dl>
+        <h4>Evidence</h4>
+        <pre><code>backend/src/Sharpbill.Api/Middleware/RequestContextMiddleware.cs:14-43
+  establishes request context from the incoming request identifier
+backend/src/Sharpbill.Api/Middleware/RequestLoggingMiddleware.cs:42-107
+  emits structured request context without body/query logging</code></pre>
+      </article>
+    </section>
+
+    <section id="control-matrix" aria-labelledby="control-matrix-heading">
+      <h2 id="control-matrix-heading">5. CRM control matrix</h2>
+      <div class="table-wrap"><table>
+        <caption>Control assessment — ratings are evidence-based, not compliance certifications</caption>
+        <thead><tr><th scope="col">Domain</th><th scope="col">Control</th><th scope="col">Rating</th><th scope="col">Evidence</th><th scope="col">Recommended action</th></tr></thead>
+        <tbody>
+          <tr><td>Authentication</td><td>OIDC/session validation/revocation</td><td><span class="badge effective">Effective</span></td><td>Fallback auth, signature/issuer/audience/nonce validation, server session state.</td><td>Run governed live-provider/failover test before production.</td></tr>
+          <tr><td>Authorization</td><td>Function/object authorization</td><td><span class="badge effective">Effective</span></td><td>Permission policies plus service hierarchy, direct-grant and last-admin checks; no confirmed bypass reviewed.</td><td>Maintain boundary tests as modules expand.</td></tr>
+          <tr><td>Tenant isolation</td><td>Shared-tenant isolation</td><td><span class="badge not-verified">Not verified</span></td><td>Declared one-organization-per-deployment model; no tenant key by design.</td><td>Prohibit shared deployments or redesign schema/auth/query/ops before offering them.</td></tr>
+          <tr><td>Field-level access</td><td>Directory/profile minimization</td><td><span class="badge partial">Partial</span></td><td>Location/provider subjects restricted; users.read response is broad (SB-010).</td><td>Approve field classification and split projections.</td></tr>
+          <tr><td>Administrative access</td><td>RBAC, hierarchy, privileged changes</td><td><span class="badge effective">Effective</span></td><td>Permission checks, actor/target validation, optimistic versions, security events.</td><td>Require platform-side review/approval evidence for production admin operations.</td></tr>
+          <tr><td>Session and token security</td><td>Cookie/token lifecycle</td><td><span class="badge effective">Effective</span></td><td>Signed session token with DB state/revocation; secure production options validation.</td><td>Address SB-006 concurrency without weakening revocation.</td></tr>
+          <tr><td>Sensitive-data protection</td><td>Transport/config safeguards</td><td><span class="badge partial">Partial</span></td><td>Production TLS/secure cookie/public origin checks; at-rest encryption/keys are external.</td><td>Provide managed-DB/key/secret evidence (SB-003).</td></tr>
+          <tr><td>Audit logging</td><td>Independent immutable security evidence</td><td><span class="badge missing">Missing</span></td><td>Transactional DB outbox, but no dispatcher/WORM/SIEM (SB-002).</td><td>Implement and operate independent evidence delivery.</td></tr>
+          <tr><td>Bulk export</td><td>Authorization, bounds, scalability</td><td><span class="badge partial">Partial</span></td><td>Separate permission and row limits; security-event export is in-memory (SB-011).</td><td>Stream and rate/concurrency-limit exports.</td></tr>
+          <tr><td>Data deletion</td><td>Retention, hold, lifecycle</td><td><span class="badge partial">Partial</span></td><td>Bounded hold-aware worker and policy; health/alert proof missing (SB-008).</td><td>Add lifecycle metrics, alerts, and evidence of legal/policy approvals.</td></tr>
+          <tr><td>API protection</td><td>CSRF, body limits, error control, rate limits</td><td><span class="badge partial">Partial</span></td><td>Good same-origin/CSRF/body/error controls; scaling coordination is local (SB-009).</td><td>Externalize/enforce at ingress for multi-replica operation.</td></tr>
+          <tr><td>Webhook security</td><td>Inbound/outbound webhook controls</td><td><span class="badge not-verified">Not verified</span></td><td>No webhook module was found in reviewed scope.</td><td>Threat-model signatures/replay/idempotency before introducing webhooks.</td></tr>
+          <tr><td>Database integrity</td><td>Constraints, transactions, parameterization</td><td><span class="badge effective">Effective</span></td><td>Parameterized Dapper, FKs/checks/unique constraints, REPEATABLE READ, rollback.</td><td>Load test locking hot paths (SB-006/SB-007).</td></tr>
+          <tr><td>Migration safety</td><td>Dedicated migrator/schema validation</td><td><span class="badge partial">Partial</span></td><td>SB-001 is fixed locally; production migration/restore evidence is outside the requested scope.</td><td>Confirm the hosted E2E run, then retain production evidence as deferred.</td></tr>
+          <tr><td>Background reliability</td><td>Outbox, retention, request log workers</td><td><span class="badge partial">Partial</span></td><td>Bounded transactional batches and SKIP LOCKED; no external dispatcher/leader/alerts.</td><td>Address SB-002, SB-008, and SB-009.</td></tr>
+          <tr><td>Observability</td><td>Logs, metrics, traces, alerts</td><td><span class="badge partial">Partial</span></td><td>JSON logs, health endpoints, local worker counters; no operated telemetry evidence.</td><td>Centralize telemetry and SLO/alert/on-call evidence (SB-003).</td></tr>
+          <tr><td>Backup and recovery</td><td>PITR/restore/DR</td><td><span class="badge not-verified">Not verified</span></td><td>Local rehearsal documented; production proof explicitly excluded.</td><td>Run independent restore drill and measure RPO/RTO.</td></tr>
+          <tr><td>Dependency security</td><td>Vulnerability/SBOM/image controls</td><td><span class="badge partial">Partial</span></td><td>NuGet/npm/image scans and SBOMs; hosted alerting/provenance governance incomplete.</td><td>Enable equivalent alerts, immutable release evidence, digest promotion.</td></tr>
+          <tr><td>Test coverage</td><td>Critical behavior in required CI</td><td><span class="badge partial">Partial</span></td><td>121 local tests pass; SB-005 real-DB CI wiring is fixed locally.</td><td>Confirm hosted execution and establish risk-based thresholds.</td></tr>
+          <tr><td>Deployment safety</td><td>Protected promotion/rollback</td><td><span class="badge missing">Missing</span></td><td>Reference-only deploy Compose; unprotected main; no environment/rollback evidence.</td><td>Implement governed promotion and evidence SB-003/SB-004 closure.</td></tr>
+        </tbody>
+      </table></div>
+    </section>
+
+    <section id="roadmap" aria-labelledby="roadmap-heading">
+      <h2 id="roadmap-heading">6. Remediation roadmap</h2>
+      <div class="table-wrap"><table>
+        <caption>Prioritized, owner-oriented remediation plan</caption>
+        <thead><tr><th scope="col">When</th><th scope="col">Related findings</th><th scope="col">Priority / owner</th><th scope="col">Action and dependencies</th><th scope="col">Risk reduction / effort / compatibility</th></tr></thead>
+        <tbody>
+          <tr><td>Immediate — before next deployment</td><td>SB-001</td><td>Urgent · Backend + platform</td><td>Fix isolated local MySQL connection policy; run the full Compose migration/seed/API/browser job from a clean runner; make it required after governance is enabled.</td><td>Restores factual release evidence. Small effort; no schema change expected.</td></tr>
+          <tr><td>Immediate — before next deployment</td><td>SB-004, SB-005</td><td>Urgent · Platform/security + test owner</td><td>Protect main; require reviews/checks; wire ephemeral real-MySQL integration tests and fail on missing DB config; enable equivalent security scanning/alert coverage.</td><td>Prevents bypassed/red gate and false test confidence. Small-to-medium effort; no client impact.</td></tr>
+          <tr><td>Immediate — before production approval</td><td>SB-003</td><td>Urgent · Platform/DBA/security/operations</td><td>Produce approved environment/IaC, identities/grants, secrets, ingress/TLS, backups/PITR, restore, observability, deployment approval, and rollback evidence.</td><td>Converts unknown production risk into testable controls. Large effort; requires external owners/change windows.</td></tr>
+          <tr><td>Near term — within 30 days</td><td>SB-002, SB-008</td><td>High · Security/platform/data</td><td>Deploy external outbox dispatcher and WORM/SIEM destination; add retention/queue delivery metrics, loss/lag/dead-letter/tamper alerts and runbooks.</td><td>Protects forensic evidence and lifecycle detection. Large cross-team effort; coordinate retention/legal policy.</td></tr>
+          <tr><td>Near term — within 30 days</td><td>SB-006, SB-007</td><td>High · Backend/data/identity</td><td>Profile lock contention; narrow session locking; redesign nonce admission without singleton settings lock; add load/fault tests.</td><td>Improves interactive availability. Medium effort; security regression review required.</td></tr>
+          <tr><td>Near term — within 30 days</td><td>SB-010, SB-011, SB-012</td><td>High · Product/privacy/backend/operations</td><td>Approve data classification and response projections; stream/throttle exports; profile log access; server-generate IDs.</td><td>Improves minimization and operability. Medium effort; API/deprecation coordination may be needed.</td></tr>
+          <tr><td>Medium term — within 90 days</td><td>SB-009</td><td>High · Platform/backend</td><td>Decide and enforce one-replica limitation or externalize limiter, replay state, presence fanout, and scheduler leadership.</td><td>Enables safe horizontal scale. Large infrastructure/design effort.</td></tr>
+          <tr><td>Strategic improvements</td><td>SB-002 to SB-011</td><td>Program · Engineering leadership</td><td>Establish SLOs, capacity model, chaos/recovery drills, penetration testing, dependency provenance/signing, privacy/legal approval workflow, and a shared-tenancy decision record.</td><td>Sustained enterprise assurance. Ongoing investment; governance and product coordination.</td></tr>
+        </tbody>
+      </table></div>
+    </section>
+
+    <section id="verification" aria-labelledby="verification-heading">
+      <h2 id="verification-heading">7. Verification plan</h2>
+      <ol>
+        <li><strong>Release path (SB-001, SB-004):</strong> clean GitHub runner runs Compose config, MySQL, migrator dry-run/migrate/seed/validate, API readiness, frontend startup, and Playwright. Require the green checks through branch protection.</li>
+        <li><strong>Real database test truthfulness (SB-005):</strong> CI supplies an ephemeral <code>SHARPBILL_TEST_DATABASE</code>; test report proves repository assertions ran. Missing configuration must fail, not return green.</li>
+        <li><strong>Audit evidence (SB-002, SB-008):</strong> force external-sink outage, duplicate delivery, restart, DB failover, retention expiry, and tamper attempt. Verify append-only delivery, idempotency, lag/dead-letter/tamper alerts, restricted evidence access, and recovery.</li>
+        <li><strong>Concurrency and capacity (SB-006, SB-007, SB-009, SB-011):</strong> use representative database volume and intended replica count. Test 50+ concurrent same-user calls, distributed nonce bursts, multi-replica quotas/presence, log query/explain plans, max concurrent exports, 1205/1213 fault injection, heap, lock waits, and p95/p99 latency.</li>
+        <li><strong>Data minimization (SB-010):</strong> product/privacy signs a field matrix; contract tests verify self/directory/manager/admin projections and an actor with only <code>users.read</code> cannot retrieve fields not approved for directory use.</li>
+        <li><strong>Production operations (SB-003):</strong> independently restore an encrypted backup to an isolated database with new credentials; run <code>Sharpbill.Migrator validate</code> and representative reads; record RPO/RTO. Exercise ingress/TLS, trusted proxy, least-privilege DB grants, secret rotation, deployment approval, rollback, monitoring alerts, and on-call handoff.</li>
+        <li><strong>Security checks (SB-004):</strong> enable or provide comparable secret scanning, SAST/code scanning, dependency alerts, image scanning, SBOM retention, action-policy enforcement, and signed/provenance-verified immutable image digest promotion.</li>
+      </ol>
+      <div class="notice good-note"><strong>Closure evidence standard:</strong> a code diff alone does not close a finding. Closure requires the listed test/operational proof, an accountable owner, environment scope, date, and acceptance record. Findings marked <span class="badge not-verified">NOT VERIFIED</span> require evidence before they can be re-rated.</div>
+    </section>
+
+    <section id="open-questions" aria-labelledby="open-questions-heading">
+      <h2 id="open-questions-heading">8. Open questions and missing evidence</h2>
+      <ul>
+        <li>Which exact production environments, cloud accounts, regions, ingress proxies, data-residency boundaries, and support access paths will be used?</li>
+        <li>Are Google/Microsoft application registrations, tenant-consent, MFA/Conditional Access, SCIM/lifecycle controls, and live-provider failover tests owned and operated? <span class="badge not-verified">NOT VERIFIED</span></li>
+        <li>Who owns runtime and migrator DB principals, grants, password rotation, encryption-at-rest keys, backup authorization, PITR, HA/failover, cross-boundary copies, and restore drills? <span class="badge not-verified">NOT VERIFIED</span></li>
+        <li>Is the one-organization-per-deployment/database constraint a firm commercial/product boundary? If shared tenancy is planned, what tenant key, row policy, export, backup, logging, and support-isolation design will replace it?</li>
+        <li>Which fields in a user directory are approved for ordinary users, managers, support, and administrators? This needs product/privacy classification, not an engineering assumption.</li>
+        <li>What RPO/RTO, availability SLOs, load profile, largest expected log/security-event volume, peak simultaneous user/session rate, and retention volume have been approved?</li>
+        <li>Who operates the external append-only evidence sink, who can read/delete it, how are legal holds handled, and how are loss/lag/tamper alerts tested?</li>
+        <li>Will customer/contact, attachments, imports, webhooks, external integrations, invitations, password recovery, or impersonation be added? Their threat models, API contracts, and controls were not in scope because no implementation was found.</li>
+        <li>Legal, privacy, risk, and compliance owners must determine jurisdictional obligations; this audit identifies enabling controls only and does not make GDPR, CCPA, SOC 2, ISO 27001, or any legal-compliance determination.</li>
+      </ul>
+    </section>
+
+    <section id="methodology" aria-labelledby="methodology-heading">
+      <h2 id="methodology-heading">9. Audit methodology and standards</h2>
+      <p>The audit used an evidence-first, read-only approach: repository inventory; architecture and data-flow tracing; targeted source review of middleware, identity, authorization, repository, worker, migrator, Docker, CI, deployment, and operations code; safe local test/configuration execution; GitHub Actions/run-log review; and read-only GitHub repository-control endpoint checks. Findings were consolidated by root cause and rated against the definitions in the appendix. Missing environment evidence is explicitly <span class="badge not-verified">NOT VERIFIED</span>.</p>
+      <div class="two-col">
+        <div>
+          <h3>Standards reference</h3>
+          <ul>
+            <li><a href="https://owasp.org/www-project-application-security-verification-standard/">OWASP Application Security Verification Standard</a>: used as a control-family reference for architecture, authentication, authorization, data protection, logging, and error handling.</li>
+            <li><a href="https://owasp.org/API-Security/">OWASP API Security Top 10 (2023)</a>: used for applicable API3 data exposure, API4 resource consumption, and API8 misconfiguration mappings.</li>
+            <li><a href="https://cwe.mitre.org/">CWE</a>: used only where a weakness class fit the demonstrated root cause; otherwise marked not applicable.</li>
+          </ul>
+        </div>
+        <div>
+          <h3>Safe checks executed</h3>
+          <ul>
+            <li><code>dotnet test Sharpbill.slnx --configuration Release --no-restore --nologo</code> — 121 passed, 0 failed after the first remediation group.</li>
+            <li><code>dotnet package list --project Sharpbill.slnx --vulnerable --include-transitive --format json --no-restore</code> — no vulnerable package entries returned.</li>
+            <li><code>docker compose config --quiet</code> — local Compose configuration valid.</li>
+            <li><code>docker compose ps --format json</code> — local API/MySQL healthy; web process running at the audit snapshot.</li>
+            <li><code>gh run view 29873722564 --json jobs</code> and <code>--log-failed</code> — current CI failure evidence.</li>
+            <li>Read-only source searches and GitHub REST reads for protection, rulesets, security-alert endpoints, environments, and Actions policy.</li>
+          </ul>
+        </div>
+      </div>
+      <p class="small">This report is a technical engineering assessment, not a certification, penetration-test attestation, legal opinion, privacy impact assessment, or compliance determination. Passing tests and absence of a confirmed finding in an area do not prove security.</p>
+    </section>
+
+    <section id="appendix" aria-labelledby="appendix-heading">
+      <h2 id="appendix-heading">10. Appendix</h2>
+      <h3>Representative files and components reviewed</h3>
+      <p><code>backend/src/Sharpbill.Api/Program.cs</code>; API authentication, middleware, controllers, WebSocket and rate-limit configuration; <code>Sharpbill.Application</code> abstractions; <code>Sharpbill.Infrastructure</code> configuration, identity/business/operations services, repositories, database session/factory; <code>Sharpbill.Workers</code>; <code>Sharpbill.Migrator</code>; tests; database/migration material; <code>docker-compose.yml</code>; Dockerfiles; <code>deploy/</code>; <code>.github/workflows/ci.yml</code>; root and operations/security/privacy/architecture documentation; frontend E2E specifications only insofar as they establish backend release evidence.</p>
+      <h3>Items excluded or unavailable</h3>
+      <p>Production database data, external cloud/IaC state, live identity providers, secret values, external evidence sink, third-party accounts, production logs/metrics/traces, backup media, real user data, network penetration testing, and legal/compliance documentation were not accessed. No destructive operation or production-system interaction was performed.</p>
+      <h3>Rating definitions</h3>
+      <dl class="definition-list">
+        <dt>Critical</dt><dd>Practical compromise, privileged-account compromise, cross-tenant exposure, destructive widespread loss, or prolonged critical-service failure.</dd>
+        <dt>High</dt><dd>Serious security, privacy, integrity, availability, or tenant-isolation weakness with practical enterprise impact.</dd>
+        <dt>Medium</dt><dd>Material weakness with realistic preconditions, constrained impact, or significant defense-in-depth reduction.</dd>
+        <dt>Low</dt><dd>Limited-risk weakness with modest direct impact.</dd>
+        <dt>Informational</dt><dd>Improvement opportunity without a demonstrated material defect.</dd>
+        <dt>Confidence: High / Medium / Low</dt><dd>High is directly shown by code/configuration/reproducible behavior; Medium has strong evidence but a contextual dependency; Low is plausible but relies substantially on missing evidence.</dd>
+        <dt>Verification status</dt><dd><strong>Confirmed</strong> means directly established; <strong>Probable</strong> means an indicated risk with unverified execution/deployment conditions; <strong>Not verified</strong> means required evidence was not available and no conclusion about an external control is made.</dd>
+        <dt>CRM data terms</dt><dd>PII means personal information; WORM means write-once/read-many evidence storage; PITR means point-in-time recovery; RPO/RTO are recovery point/time objectives; IDOR is insecure direct object reference.</dd>
+      </dl>
+      <h3>Report integrity check</h3>
+      <p>Complete HTML5 document: yes. No secrets, credentials, tokens, personal data, or confidential business values are included. Every defect has a unique ID, severity, confidence, exactly one verification status, evidence, compensating controls, remediation, owner/effort, and verification path. Internal navigation IDs are present for all listed findings and report sections.</p>
+    </section>
+  </main>
+  <footer><div class="shell">Sharpbill CRM backend audit · Evidence snapshot generated 2026-07-21 15:57 PDT (UTC−07:00) · Prepared for engineering, security, data, platform, and leadership review.</div></footer>
+</body>
+</html>

@@ -117,6 +117,7 @@ internal static class ConnectionStringResolver
                 SslCa = sslMode is MySqlSslMode.VerifyCA or MySqlSslMode.VerifyFull
                     ? tlsCaPath
                     : string.Empty,
+                AllowPublicKeyRetrieval = !production && sslMode == MySqlSslMode.Disabled,
                 AllowLoadLocalInfile = false,
                 AllowUserVariables = false,
                 ConnectionReset = true,
@@ -155,6 +156,7 @@ internal static class ConnectionStringResolver
         }
 
         EnsureTransportPolicy(production, builder.SslMode, builder.SslCa);
+        builder.AllowPublicKeyRetrieval = !production && builder.SslMode == MySqlSslMode.Disabled;
         builder.AllowLoadLocalInfile = false;
         builder.AllowUserVariables = false;
         return builder.ConnectionString;

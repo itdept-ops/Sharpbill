@@ -22,6 +22,7 @@ public sealed class ConnectionStringResolverTests
 
         Assert.Equal(MySqlSslMode.VerifyFull, parsed.SslMode);
         Assert.Equal("/certs/database-ca.pem", parsed.SslCa);
+        Assert.False(parsed.AllowPublicKeyRetrieval);
         Assert.False(parsed.AllowLoadLocalInfile);
         Assert.False(parsed.AllowUserVariables);
     }
@@ -61,7 +62,27 @@ public sealed class ConnectionStringResolverTests
 
         string value = ConnectionStringResolver.Resolve(Options, environment.GetValueOrDefault);
 
-        Assert.Equal(MySqlSslMode.Disabled, new MySqlConnectionStringBuilder(value).SslMode);
+        var parsed = new MySqlConnectionStringBuilder(value);
+        Assert.Equal(MySqlSslMode.Disabled, parsed.SslMode);
+        Assert.True(parsed.AllowPublicKeyRetrieval);
+    }
+
+    [Fact]
+    public void LocalFullConnectionStringEnablesPublicKeyRetrievalOnlyForDisabledTls()
+    {
+        var environment = new Dictionary<string, string?>(StringComparer.Ordinal)
+        {
+            ["APP_ENV"] = "local",
+            ["ConnectionStrings__Sharpbill"] =
+                "Server=db;Database=sharpbill;User ID=migrator;Password=test;SslMode=Disabled",
+        };
+
+        string value = ConnectionStringResolver.Resolve(Options, environment.GetValueOrDefault);
+        var parsed = new MySqlConnectionStringBuilder(value);
+
+        Assert.True(parsed.AllowPublicKeyRetrieval);
+        Assert.False(parsed.AllowLoadLocalInfile);
+        Assert.False(parsed.AllowUserVariables);
     }
 
     private static Dictionary<string, string?> BaseEnvironment(string environment) =>
