@@ -2,6 +2,8 @@
 
 `schema-0021.sql` is the reviewed terminal snapshot of the historical Python/Alembic schema.
 It is not an editable migration chain and it never runs against a non-empty database.
+The active application stack is .NET 10 / ASP.NET Core with MySQL 8.4 LTS; this directory exists
+only to support the C# compatibility bridge described in `../../docs/TECH_STACK.md`.
 
 The C# migrator has two deliberately narrow paths:
 

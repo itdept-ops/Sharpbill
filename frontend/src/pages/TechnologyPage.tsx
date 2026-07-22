@@ -9,8 +9,8 @@ const STACK = [
     head: "// FRONTEND",
     badge: "SPA",
     items: [
-      "React 18 + TypeScript",
-      "Vite build and dev server",
+      "React 18.3 + TypeScript 5.9",
+      "Vite 8 build and dev server",
       "React Router v6",
       "Vitest + Playwright coverage",
       "Bespoke CSS with accessible controls",
@@ -20,7 +20,7 @@ const STACK = [
     head: "// BACKEND",
     badge: "API",
     items: [
-      ".NET 10 + ASP.NET Core",
+      ".NET 10 + ASP.NET Core 10",
       "Clean service interfaces and dependency injection",
       "Middleware for context, CSRF, logging, limits, and errors",
       "Dapper + MySqlConnector",
@@ -32,7 +32,7 @@ const STACK = [
     head: "// DATA",
     badge: "RDBMS",
     items: [
-      "MySQL 8.4 LTS + utf8mb4",
+      "MySQL 8.4.10 LTS + utf8mb4",
       "Roles, permissions, identities, sessions, and legal acceptance",
       "Per-request authorization reads",
       "Cursor-paged request logs",
@@ -44,8 +44,9 @@ const STACK = [
     badge: "DEVOPS",
     items: [
       "Loopback-only Docker Compose for local operation",
+      "Node 24 build/dev toolchain",
       "Digest-pinned runtime images",
-      "Non-root production web image",
+      "Non-root ASP.NET Core and nginx production images",
       "GitHub Actions quality, E2E, image, SBOM, and Trivy checks",
       "Caddy production topology documented separately",
     ],
@@ -84,9 +85,9 @@ export function TechnologyPage() {
           </h1>
           <p>
             Sharpbill is a full-stack access-control console with a React front end, an
-            enterprise-style C# backend, MySQL persistence, explicit migrations, Docker-first local
-            runtime, and repository gates for quality and supply-chain evidence. This page describes
-            the current repository baseline, not a production infrastructure claim.
+            enterprise-style C# backend, MySQL persistence, explicit C# migrations, Docker-first
+            local runtime, and repository gates for quality and supply-chain evidence. This page
+            describes the current repository baseline, not a production infrastructure claim.
           </p>
         </header>
 

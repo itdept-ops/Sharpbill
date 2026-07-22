@@ -1,14 +1,16 @@
 # Production operating boundary and control requirements
 
-This repository contains the application and test controls. It intentionally does not configure
-AWS resources, GitHub repository settings, or a deployment pipeline. Those external controls must
-be implemented and evidenced by the environment owner before production release.
+This repository contains the application, local runtime, and repository test controls. It
+intentionally does not configure AWS resources or a deployment pipeline. Production governance
+beyond the current private, protected GitHub repository must be implemented and evidenced by the
+environment owner before production release.
 
 References to numbered migrations `0001`…`0021` below describe the frozen historical Alembic
 provenance of the compatibility schema. Current schema authority belongs to the reviewed
 `Sharpbill.Migrator` executable; the ASP.NET Core API never runs migrations at startup.
 The C# cutover is complete: no Python service or migration image is built, published, or used by
-the active release path.
+the active release path. The checked-in technology inventory is maintained in
+[`TECH_STACK.md`](TECH_STACK.md).
 
 ## Tested operating boundary
 
@@ -20,6 +22,8 @@ The supported repository-managed runtime is the loopback-only local Compose stac
 - the production-shaped API image uses a digest-pinned .NET 10 ASP.NET Core chiseled runtime, while
   `global.json` pins the approved SDK patch; production images are still release candidates, not
   deployed artifacts;
+- the production-shaped web image is static React/Vite output served by a digest-pinned nginx image
+  running as non-root user `101`;
 - one application/database instance represents exactly one organization;
 - the API receives an allowlisted environment and non-root database credentials, never the Compose
   root password;
@@ -60,8 +64,8 @@ are unapproved references and do not close any of those gaps.
 The following remain explicitly deferred to named environment owners; repository changes alone
 cannot close them:
 
-- GitHub rulesets/branch protection, required independent review, security-service enablement,
-  environment approvals, and release governance;
+- required independent review, production security-service ownership, environment approvals, and
+  release governance beyond the current protected private repository;
 - provider app-registration ownership, tenant consent, Conditional Access/step-up, lifecycle/SCIM
   integration where required, and live Google/Microsoft failover tests with non-production tenants;
 - cloud/IaC ownership for edge TLS, private networking, workload identity, managed secrets and key
