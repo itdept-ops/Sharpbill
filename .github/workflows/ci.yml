@@ -173,6 +173,19 @@ jobs:
         with:
           persist-credentials: false
 
+      - name: Scan source for secrets and high-risk misconfiguration
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          scan-type: fs
+          scan-ref: .
+          scanners: secret,misconfig
+          severity: CRITICAL,HIGH
+          exit-code: "1"
+          hide-progress: "true"
+          skip-dirs: .git
+          timeout: 10m0s
+          version: v0.70.0
+
       - name: Build production images
         run: |
           docker build --target prod -t sharpbill-api:ci-${{ github.sha }} ./backend
@@ -203,6 +216,7 @@ jobs:
           api_image="sharpbill-api:ci-${GITHUB_SHA}"
           web_image="sharpbill-web:ci-${GITHUB_SHA}"
           test "$(docker image inspect --format '{{.Config.User}}' "$api_image")" = "65532:65532"
+          test "$(docker image inspect --format '{{.Config.User}}' "$web_image")" = "101:101"
 
           session_secret="$(openssl rand -hex 32)"
           docker run --detach --name "$api_container" \
