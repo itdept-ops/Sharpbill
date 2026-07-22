@@ -2,19 +2,20 @@
 
 **An access-control console for local development and evaluation** — single sign-on that verifies
 the provider's *immutable* identity, a database-backed **roles + permissions** system, a **live
-presence** roster with a **session kill-switch**, deep user management, an admin request-activity
-log, and a Matrix/terminal ("DATASTREAM") interface. ASP.NET Core + React + MySQL, run locally with
-Docker Compose.
+presence** roster with a **session kill-switch**, deep user management, request/security-event
+telemetry, and a Matrix/terminal ("DATASTREAM") interface. React, ASP.NET Core, MySQL, and Docker
+Compose form the supported local runtime.
 
 ![CI](https://github.com/itdept-ops/Sharpbill/actions/workflows/ci.yml/badge.svg)
-&nbsp;·&nbsp; .NET 10 · ASP.NET Core · React 18 + TypeScript · MySQL 8 · Docker · WebSockets
+&nbsp;·&nbsp; .NET 10 · ASP.NET Core · React 18 + TypeScript · MySQL 8.4 LTS · Docker · WebSockets
 
 > **Supported boundary:** the repository and default Compose stack are for loopback-only local
 > development and evaluation. They are not an approved production release or a compliance
 > certification. AWS resources, managed database controls, deployment/rollback automation,
-> external delivery from the repository outbox into a restricted SIEM/WORM audit sink,
-> backup/PITR, monitoring, and repository governance are intentionally outside this repository.
-> `deploy/` contains unapproved reference files only.
+> external delivery from the repository outbox into a restricted SIEM/WORM audit sink, backup/PITR,
+> production monitoring, distributed rate-limit/presence coordination, and production review
+> ownership are intentionally outside this repository. `deploy/` contains unapproved reference
+> files only.
 
 > 🤖 **Built solo with a fleet of adversarial AI agents** — a real multi-agent SDLC that caught
 > genuine privilege-escalation bugs in this very RBAC. The story, with the actual bugs, is in
@@ -24,8 +25,24 @@ Docker Compose.
 
 ---
 
+## Current baseline
+
+- **Backend:** layered .NET 10 / ASP.NET Core service with contracts, domain, application
+  abstractions, infrastructure adapters, workers, middleware, and DI composition.
+- **Frontend:** React 18 + TypeScript + Vite with Vitest unit coverage and Playwright E2E coverage.
+- **Data:** MySQL 8.4 LTS with an explicit `Sharpbill.Migrator` compatibility baseline at `0021`.
+- **Local runtime:** loopback-only Docker Compose for `mysql`, one-shot `migrator`, `api`, and
+  `web`.
+- **Repository controls:** private GitHub repository, protected `main`, required CI checks,
+  digest-pinned images/actions, SBOM generation, Trivy scans, Dependabot, and CODEOWNERS.
+- **Production boundary:** AWS, backups/PITR, SIEM/WORM dispatch, production monitoring, and
+  distributed rate-limit/presence coordination are production-owned.
+
+---
+
 ## Contents
 
+- [Current baseline](#current-baseline)
 - [What it does](#what-it-does)
 - [Screens](#screens)
 - [Architecture](#architecture)
@@ -177,20 +194,23 @@ per-request permission gate.
 
 - **Backend** — **.NET 10 + ASP.NET Core** with explicit Domain, Contracts, Application,
   Infrastructure, Workers, and API projects. Controllers are thin; application services and
-  repository ports are injected through the built-in DI container; middleware owns cross-cutting
-  HTTP concerns. Persistence uses **Dapper + MySqlConnector**. All routes live under `/api`, and
-  errors preserve the `{"detail": {"code", "message"}}` envelope. The C# runtime cutover is
-  complete; no Python service is part of the active application or container path.
+  repository ports are injected through the built-in DI container; middleware owns request context,
+  security headers, CSRF checks, body limits, request logging, and error handling. Persistence uses
+  **Dapper + MySqlConnector**, with bounded retry only for MySQL deadlock/lock-wait faults. All
+  routes live under `/api`, and errors preserve the `{"detail": {"code", "message"}}` envelope.
+  The C# runtime cutover is complete; no Python service is part of the active application or
+  container path.
 - **Frontend** — **React 18 + TypeScript + Vite**, React Router v6, hand-written CSS
-  (the "DATASTREAM" terminal theme). Vite proxies `/api` (incl. WebSocket upgrade) to the API.
+  (the "DATASTREAM" terminal theme), Vitest unit coverage, and Playwright E2E coverage. Vite
+  proxies `/api` (including WebSocket upgrade) to the API in local development.
 - **Database** — digest-pinned **MySQL 8.4.10 LTS** (`utf8mb4`). `Sharpbill.Migrator` applies the
   reviewed `0021` snapshot to an empty database, or validates and journals an existing exact `0021`
   database. The frozen Alembic migrations `0001`…`0021` remain immutable historical schema
   provenance; the ASP.NET Core API never mutates schema on startup. One database represents one
   organization, not a shared multi-tenant SaaS schema.
 - **Runtime** — **Docker Compose** (`mysql` + explicit one-shot `migrator` + published non-root
-  `api` + Vite development `web`). Run `dotnet watch` directly from the SDK when backend hot reload
-  is needed. CI pins the .NET 10 SDK and Node 24.
+  `api` + Vite development `web`) for loopback-only local operation. Run `dotnet watch` directly
+  from the SDK when backend hot reload is needed. CI pins the .NET 10 SDK and Node 24.
 
 ```
 Browser ──HTTP/WS──▶  Vite dev server ──proxy /api──▶  ASP.NET Core  ──▶  MySQL
@@ -429,14 +449,15 @@ Never use that command against data that must be retained.
   plus a plain user's denial from the admin directory. This exercises the application boundary; it
   does not test live provider tenants or external production controls.
 - **CI** (`.github/workflows/ci.yml`, .NET 10 + Node 24) — immutable action revisions and
-  read-only permissions; centrally pinned NuGet restore with transitive vulnerability rejection, formatting
-  and analyzer enforcement, warnings-as-errors Release builds, migration dry-run/apply/validation,
-  xUnit/TRX coverage evidence with a zero-test guard; locked npm install, TypeScript/ESLint, Vitest,
-  build, and full dependency audit; production-image builds with
-  a blocking High/Critical Trivy scan and uploaded SPDX SBOMs; and an ephemeral Compose/Playwright
-  access-control flow with a masked, independent dev-auth secret. There is no deploy job. The
-  workflow is repository test evidence, not proof that GitHub rulesets, review requirements,
-  security services, production environments, or deployment approvals are configured.
+  read-only permissions; centrally pinned NuGet restore with transitive vulnerability rejection,
+  formatting and analyzer enforcement, warnings-as-errors Release builds, migration
+  dry-run/apply/validation, xUnit/TRX coverage evidence with a zero-test guard; locked npm install,
+  TypeScript/ESLint, Vitest, build, and full dependency audit; production-image builds with a
+  blocking High/Critical Trivy scan and uploaded SPDX SBOMs; and an ephemeral Compose/Playwright
+  access-control flow with a masked, independent dev-auth secret. Protected `main` requires the
+  frontend, backend, E2E, and production-image/supply-chain jobs to pass through a pull request.
+  There is no deploy job. The workflow is repository test evidence, not proof of production
+  environment controls, deployment approvals, or external security-service operation.
 
 ---
 
@@ -448,7 +469,8 @@ backend/   layered .NET 10 solution, ASP.NET Core API, workers, C# migrator, xUn
 frontend/  React + Vite SPA (DATASTREAM terminal theme)
 deploy/    production compose + Caddyfile (reference; not used locally)
 docs/img/  README screenshots
-.github/   CI: quality, migration, coverage, supply-chain, and browser gates — no deploy job
+.github/   protected-branch CI: quality, migration, coverage, supply-chain, and browser gates;
+           Dependabot and CODEOWNERS live here too; no deploy job
 ```
 
 ---
