@@ -69,5 +69,7 @@ public sealed class RetentionWorkerTests
 
             return new RetentionCycleResponse();
         }
+
+        public RetentionMetricsResponse GetMetrics() => new();
     }
 }

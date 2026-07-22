@@ -33,11 +33,17 @@ public sealed class PrivacyController(IPrivacyService privacyService) : Sharpbil
 
 [Route("api/admin/privacy")]
 [Authorize(Policy = PermissionKeys.PrivacyManage)]
-public sealed class PrivacyAdministrationController(IPrivacyService privacyService) : SharpbillControllerBase
+public sealed class PrivacyAdministrationController(
+    IPrivacyService privacyService,
+    IRetentionService retentionService) : SharpbillControllerBase
 {
     [HttpGet]
     public async Task<ActionResult<PrivacyAdminStatusResponse>> GetAsync(CancellationToken cancellationToken) =>
         Ok(await privacyService.GetAdministrationAsync(ActorUserId, cancellationToken).ConfigureAwait(false));
+
+    [HttpGet("retention/metrics")]
+    public ActionResult<RetentionMetricsResponse> RetentionMetrics() =>
+        Ok(retentionService.GetMetrics());
 
     [HttpPut("hold")]
     public async Task<ActionResult<PrivacyAdminStatusResponse>> HoldAsync(

@@ -12,101 +12,143 @@ public sealed partial class RetentionService(
     IServiceScopeFactory scopeFactory,
     IClock clock,
     IOptions<SharpbillOptions> options,
+    RetentionTelemetry telemetry,
     ILogger<RetentionService> logger) : IRetentionService
 {
     public async Task<RetentionCycleResponse> RunCycleAsync(CancellationToken cancellationToken)
     {
         RetentionOptions policy = options.Value.Retention;
         DateTime now = clock.UtcNow;
-        CategoryResult nonces = await RunCategoryAsync(
-            "nonces",
-            policy.NonceBatchSize,
-            policy.WorkerMaxBatchesPerCycle,
-            governed: false,
-            (provider, limit, token) => provider.GetRequiredService<INonceRepository>()
-                .PruneExpiredAsync(now, limit, token),
-            cancellationToken).ConfigureAwait(false);
-        CategoryResult requestLogs = await RunCategoryAsync(
-            "request_logs",
-            policy.RequestLogBatchSize,
-            policy.WorkerMaxBatchesPerCycle,
-            governed: true,
-            (provider, limit, token) => provider.GetRequiredService<IRequestLogRepository>()
-                .PruneAsync(now.AddDays(-policy.RequestLogDays), limit, token),
-            cancellationToken).ConfigureAwait(false);
-        CategoryResult sessions = await RunCategoryAsync(
-            "sessions",
-            policy.SessionBatchSize,
-            policy.WorkerMaxBatchesPerCycle,
-            governed: true,
-            (provider, limit, token) => provider.GetRequiredService<ISessionRepository>()
-                .PruneAsync(now.AddDays(-policy.SessionDays), limit, token),
-            cancellationToken).ConfigureAwait(false);
-        CategoryResult preciseLocations = await RunCategoryAsync(
-            "precise_locations",
-            policy.PreciseLocationBatchSize,
-            policy.WorkerMaxBatchesPerCycle,
-            governed: true,
-            (provider, limit, token) => provider.GetRequiredService<IUserRepository>()
-                .ClearExpiredLocationsAsync(now, limit, token),
-            cancellationToken).ConfigureAwait(false);
-        CategoryResult accounts = await RunCategoryAsync(
-            "accounts",
-            policy.AccountBatchSize,
-            policy.WorkerMaxBatchesPerCycle,
-            governed: true,
-            (provider, limit, token) => provider.GetRequiredService<IRetentionRepository>()
-                .AnonymizeDueAccountsAsync(now, limit, token),
-            cancellationToken).ConfigureAwait(false);
-        CategoryResult securityEvents = await RunCategoryAsync(
-            "security_events",
-            policy.SecurityEventBatchSize,
-            policy.WorkerMaxBatchesPerCycle,
-            governed: true,
-            (provider, limit, token) => provider.GetRequiredService<ISecurityEventRepository>()
-                .PruneAsync(now, limit, token),
-            cancellationToken).ConfigureAwait(false);
-        CategoryResult legalAcceptances = await RunCategoryAsync(
-            "legal_acceptances",
-            policy.LegalAcceptanceBatchSize,
-            policy.WorkerMaxBatchesPerCycle,
-            governed: true,
-            (provider, limit, token) => provider.GetRequiredService<ILegalAcceptanceRepository>()
-                .PruneAsync(now.AddDays(-policy.LegalAcceptanceDays), limit, token),
-            cancellationToken).ConfigureAwait(false);
-        CategoryResult[] categories =
-        [
-            nonces,
-            requestLogs,
-            sessions,
-            preciseLocations,
-            accounts,
-            securityEvents,
-            legalAcceptances,
-        ];
-
-        return new RetentionCycleResponse
+        telemetry.CycleStarted(now);
+        try
         {
-            NoncesDeleted = nonces.Count,
-            NonceBatches = nonces.Batches,
-            RequestLogsDeleted = requestLogs.Count,
-            RequestLogBatches = requestLogs.Batches,
-            SessionsDeleted = sessions.Count,
-            SessionBatches = sessions.Batches,
-            PreciseLocationsCleared = preciseLocations.Count,
-            PreciseLocationBatches = preciseLocations.Batches,
-            AccountsAnonymized = accounts.Count,
-            AccountBatches = accounts.Batches,
-            SecurityEventsDeleted = securityEvents.Count,
-            SecurityEventBatches = securityEvents.Batches,
-            LegalAcceptancesDeleted = legalAcceptances.Count,
-            LegalAcceptanceBatches = legalAcceptances.Batches,
-            FailedCategories = categories
-                .Where(static category => category.Failed)
-                .Select(static category => category.Name)
-                .ToArray(),
-        };
+            CategoryResult nonces = await RunCategoryAsync(
+                "nonces",
+                policy.NonceBatchSize,
+                policy.WorkerMaxBatchesPerCycle,
+                governed: false,
+                (provider, limit, token) => provider.GetRequiredService<INonceRepository>()
+                    .PruneExpiredAsync(now, limit, token),
+                cancellationToken).ConfigureAwait(false);
+            CategoryResult requestLogs = await RunCategoryAsync(
+                "request_logs",
+                policy.RequestLogBatchSize,
+                policy.WorkerMaxBatchesPerCycle,
+                governed: true,
+                (provider, limit, token) => provider.GetRequiredService<IRequestLogRepository>()
+                    .PruneAsync(now.AddDays(-policy.RequestLogDays), limit, token),
+                cancellationToken).ConfigureAwait(false);
+            CategoryResult sessions = await RunCategoryAsync(
+                "sessions",
+                policy.SessionBatchSize,
+                policy.WorkerMaxBatchesPerCycle,
+                governed: true,
+                (provider, limit, token) => provider.GetRequiredService<ISessionRepository>()
+                    .PruneAsync(now.AddDays(-policy.SessionDays), limit, token),
+                cancellationToken).ConfigureAwait(false);
+            CategoryResult preciseLocations = await RunCategoryAsync(
+                "precise_locations",
+                policy.PreciseLocationBatchSize,
+                policy.WorkerMaxBatchesPerCycle,
+                governed: true,
+                (provider, limit, token) => provider.GetRequiredService<IUserRepository>()
+                    .ClearExpiredLocationsAsync(now, limit, token),
+                cancellationToken).ConfigureAwait(false);
+            CategoryResult accounts = await RunCategoryAsync(
+                "accounts",
+                policy.AccountBatchSize,
+                policy.WorkerMaxBatchesPerCycle,
+                governed: true,
+                (provider, limit, token) => provider.GetRequiredService<IRetentionRepository>()
+                    .AnonymizeDueAccountsAsync(now, limit, token),
+                cancellationToken).ConfigureAwait(false);
+            CategoryResult securityEvents = await RunCategoryAsync(
+                "security_events",
+                policy.SecurityEventBatchSize,
+                policy.WorkerMaxBatchesPerCycle,
+                governed: true,
+                (provider, limit, token) => provider.GetRequiredService<ISecurityEventRepository>()
+                    .PruneAsync(now, limit, token),
+                cancellationToken).ConfigureAwait(false);
+            CategoryResult legalAcceptances = await RunCategoryAsync(
+                "legal_acceptances",
+                policy.LegalAcceptanceBatchSize,
+                policy.WorkerMaxBatchesPerCycle,
+                governed: true,
+                (provider, limit, token) => provider.GetRequiredService<ILegalAcceptanceRepository>()
+                    .PruneAsync(now.AddDays(-policy.LegalAcceptanceDays), limit, token),
+                cancellationToken).ConfigureAwait(false);
+            CategoryResult[] categories =
+            [
+                nonces,
+                requestLogs,
+                sessions,
+                preciseLocations,
+                accounts,
+                securityEvents,
+                legalAcceptances,
+            ];
+
+            var response = new RetentionCycleResponse
+            {
+                NoncesDeleted = nonces.Count,
+                NonceBatches = nonces.Batches,
+                RequestLogsDeleted = requestLogs.Count,
+                RequestLogBatches = requestLogs.Batches,
+                SessionsDeleted = sessions.Count,
+                SessionBatches = sessions.Batches,
+                PreciseLocationsCleared = preciseLocations.Count,
+                PreciseLocationBatches = preciseLocations.Batches,
+                AccountsAnonymized = accounts.Count,
+                AccountBatches = accounts.Batches,
+                SecurityEventsDeleted = securityEvents.Count,
+                SecurityEventBatches = securityEvents.Batches,
+                LegalAcceptancesDeleted = legalAcceptances.Count,
+                LegalAcceptanceBatches = legalAcceptances.Batches,
+                FailedCategories = categories
+                    .Where(static category => category.Failed)
+                    .Select(static category => category.Name)
+                    .ToArray(),
+            };
+            RetentionBacklogSnapshot? backlog = null;
+            try
+            {
+                await using AsyncServiceScope scope = scopeFactory.CreateAsyncScope();
+                backlog = await scope.ServiceProvider.GetRequiredService<IRetentionRepository>()
+                    .GetBacklogAsync(clock.UtcNow, cancellationToken)
+                    .ConfigureAwait(false);
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                throw;
+            }
+            catch (Exception exception)
+            {
+                LogBacklogFailure(logger, exception);
+                response = response with
+                {
+                    FailedCategories = response.FailedCategories
+                        .Append("retention_backlog")
+                        .ToArray(),
+                };
+            }
+
+            telemetry.CycleCompleted(clock.UtcNow, response, backlog);
+            return response;
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            telemetry.CycleCancelled();
+            throw;
+        }
+        catch
+        {
+            telemetry.CycleFailed(clock.UtcNow, "retention_cycle");
+            throw;
+        }
     }
+
+    public RetentionMetricsResponse GetMetrics() => telemetry.GetMetrics();
 
     private async Task<CategoryResult> RunCategoryAsync(
         string category,
@@ -209,4 +251,10 @@ public sealed partial class RetentionService(
         Level = LogLevel.Error,
         Message = "Retention category {Category} failed; continuing remaining categories in fresh scopes")]
     private static partial void LogCategoryFailure(ILogger logger, Exception exception, string category);
+
+    [LoggerMessage(
+        EventId = 2301,
+        Level = LogLevel.Error,
+        Message = "Retention backlog observation failed; cycle health is marked failed and the prior snapshot remains visible")]
+    private static partial void LogBacklogFailure(ILogger logger, Exception exception);
 }

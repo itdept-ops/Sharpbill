@@ -88,3 +88,57 @@ public sealed record RetentionCycleResponse
     [JsonPropertyName("failed_categories")]
     public IReadOnlyList<string> FailedCategories { get; init; } = [];
 }
+
+public sealed record RetentionCategoryMetricsResponse
+{
+    [JsonPropertyName("category")]
+    public required string Category { get; init; }
+    [JsonPropertyName("governed_by_hold")]
+    public bool GovernedByHold { get; init; }
+    [JsonPropertyName("last_cycle_changed")]
+    public int LastCycleChanged { get; init; }
+    [JsonPropertyName("last_cycle_batches")]
+    public int LastCycleBatches { get; init; }
+    [JsonPropertyName("last_cycle_failed")]
+    public bool LastCycleFailed { get; init; }
+    [JsonPropertyName("due_count")]
+    public long? DueCount { get; init; }
+    [JsonPropertyName("oldest_eligible_at")]
+    public DateTime? OldestEligibleAt { get; init; }
+    [JsonPropertyName("oldest_eligible_age_seconds")]
+    public long? OldestEligibleAgeSeconds { get; init; }
+}
+
+public sealed record RetentionMetricsResponse
+{
+    [JsonPropertyName("cycle_in_progress")]
+    public bool CycleInProgress { get; init; }
+    [JsonPropertyName("cycles_total")]
+    public long CyclesTotal { get; init; }
+    [JsonPropertyName("failed_cycles_total")]
+    public long FailedCyclesTotal { get; init; }
+    [JsonPropertyName("consecutive_failed_cycles")]
+    public int ConsecutiveFailedCycles { get; init; }
+    [JsonPropertyName("last_cycle_started_at")]
+    public DateTime? LastCycleStartedAt { get; init; }
+    [JsonPropertyName("last_cycle_completed_at")]
+    public DateTime? LastCycleCompletedAt { get; init; }
+    [JsonPropertyName("last_successful_cycle_at")]
+    public DateTime? LastSuccessfulCycleAt { get; init; }
+    [JsonPropertyName("last_failed_cycle_at")]
+    public DateTime? LastFailedCycleAt { get; init; }
+    [JsonPropertyName("last_failure_categories")]
+    public IReadOnlyList<string> LastFailureCategories { get; init; } = [];
+    [JsonPropertyName("retention_hold")]
+    public bool? RetentionHold { get; init; }
+    [JsonPropertyName("backlog_captured_at")]
+    public DateTime? BacklogCapturedAt { get; init; }
+    [JsonPropertyName("total_due_count")]
+    public long? TotalDueCount { get; init; }
+    [JsonPropertyName("oldest_eligible_at")]
+    public DateTime? OldestEligibleAt { get; init; }
+    [JsonPropertyName("oldest_eligible_age_seconds")]
+    public long? OldestEligibleAgeSeconds { get; init; }
+    [JsonPropertyName("categories")]
+    public IReadOnlyList<RetentionCategoryMetricsResponse> Categories { get; init; } = [];
+}

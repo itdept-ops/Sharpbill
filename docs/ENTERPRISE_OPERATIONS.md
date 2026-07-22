@@ -401,6 +401,22 @@ batch-size counterparts, `RETENTION_WORKER_INTERVAL_SECONDS`,
 behavior. Alert on cycle failure, oldest eligible record, backlog growth, and shutdown timeout; do
 not increase batches until lock, redo, and replica-lag impact is measured.
 
+After every cycle, Sharpbill takes one indexed MySQL backlog snapshot covering all seven retention
+categories. A holder of `privacy.manage` can read the process-wide state at
+`GET /api/admin/privacy/retention/metrics`: cycle progress and totals, consecutive failures, last
+start/completion/full success/failure, failed categories, hold state, per-category changed/batch
+counts, eligible backlog, and oldest eligible age. A `null` backlog timestamp means no successful
+snapshot has occurred in this process; a stale timestamp means the last observation failed or the
+worker stopped. The standard .NET `Sharpbill.Retention` meter emits cycle outcomes, changed rows,
+category failures, hold state, backlog, oldest age, and last-success time for an attached collector.
+
+At minimum, page the named operator when two scheduled intervals pass without a full success, a
+cycle/category fails, or backlog/oldest age grows across consecutive cycles outside an approved
+hold. Create policy-specific thresholds from measured volume rather than treating a nonzero due
+count during a bounded cycle as an incident. The repository emits the endpoint, instruments, and
+structured logs; collector configuration, durable metric storage, dashboards, paging delivery,
+and alert ownership remain environment controls and must be proven before production approval.
+
 Account lifecycle expiry performs privacy-safe anonymization rather than unsafe relational-root
 deletion. It revokes sessions, removes profile/GPS/provider-email copies, legal-acceptance request
 metadata, and direct grants; assigns the least-privilege role; and retains only the opaque provider

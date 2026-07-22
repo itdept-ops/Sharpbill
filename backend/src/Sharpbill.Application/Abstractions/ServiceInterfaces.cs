@@ -216,6 +216,7 @@ public interface IPrivacyService
 public interface IRetentionService
 {
     Task<RetentionCycleResponse> RunCycleAsync(CancellationToken cancellationToken);
+    RetentionMetricsResponse GetMetrics();
 }
 
 public interface ISecurityEventService

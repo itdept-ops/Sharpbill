@@ -391,6 +391,7 @@ Never use that command against data that must be retained.
 | GET | `/api/users/export.csv` | `users.export` | bounded, self-audited CSV of the filtered directory |
 | GET · PUT | `/api/admin/settings` | `settings.manage` | site settings (signup mode, providers, default role) |
 | GET · PUT | `/api/admin/privacy[/hold]` | `privacy.manage` | policy/hold status and documented hold update |
+| GET | `/api/admin/privacy/retention/metrics` | `privacy.manage` | retention cycle, failure, hold, backlog, and oldest-eligible health |
 | POST · DELETE | `/api/admin/privacy/users/{id}/erasure-request` | `privacy.manage` | schedule / cancel verified account erasure |
 | GET | `/api/roles` · `/api/permissions` | `roles.manage` | list |
 | POST | `/api/roles` · `/api/permissions` | `roles.manage` | create |

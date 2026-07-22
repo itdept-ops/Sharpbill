@@ -418,6 +418,49 @@ public sealed class RepositoryIntegrationTests
         }
     }
 
+    [Fact]
+    public async Task RetentionBacklogReportsExpiredRowsWhenDatabaseIsConfiguredAsync()
+    {
+        string? connectionString = GetConfiguredDatabase();
+        if (connectionString is null)
+        {
+            return;
+        }
+
+        await using var session = new DatabaseSession(new TestConnectionFactory(connectionString));
+        await session.BeginAsync(CancellationToken.None);
+        try
+        {
+            DateTime now = DateTime.UtcNow;
+            DateTime expiredAt = now.AddMinutes(-2);
+            var nonces = new NonceRepository(session);
+            await nonces.AddAsync(new LoginNonce
+            {
+                Nonce = $"retention-{Guid.NewGuid():N}",
+                CreatedAt = expiredAt.AddMinutes(-10),
+                ExpiresAt = expiredAt,
+            }, CancellationToken.None);
+            var retention = new RetentionRepository(session, TestOptions());
+
+            RetentionBacklogSnapshot snapshot = await retention.GetBacklogAsync(
+                now,
+                CancellationToken.None);
+
+            RetentionBacklogCategory nonceBacklog = Assert.Single(
+                snapshot.Categories,
+                static category => category.Category == "nonces");
+            Assert.True(nonceBacklog.DueCount >= 1);
+            Assert.NotNull(nonceBacklog.OldestEligibleAt);
+            Assert.True(nonceBacklog.OldestEligibleAt <= ToMySqlTimestampPrecision(expiredAt));
+            Assert.Equal(ToMySqlTimestampPrecision(now),
+                ToMySqlTimestampPrecision(snapshot.CapturedAt));
+        }
+        finally
+        {
+            await session.RollbackAsync(CancellationToken.None);
+        }
+    }
+
     private static IOptions<SharpbillOptions> TestOptions() => Options.Create(new SharpbillOptions
     {
         AppEnvironment = "local",

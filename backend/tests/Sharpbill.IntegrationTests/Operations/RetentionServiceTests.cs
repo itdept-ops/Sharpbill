@@ -16,6 +16,46 @@ namespace Sharpbill.IntegrationTests.Operations;
 public sealed class RetentionServiceTests
 {
     [Fact]
+    public void TelemetryRecordsSuccessfulCycleAndBacklogAge()
+    {
+        using var telemetry = new RetentionTelemetry();
+        DateTime startedAt = new(2026, 7, 21, 12, 0, 0, DateTimeKind.Utc);
+        DateTime completedAt = startedAt.AddSeconds(5);
+        telemetry.CycleStarted(startedAt);
+
+        telemetry.CycleCompleted(
+            completedAt,
+            new RetentionCycleResponse
+            {
+                SessionsDeleted = 3,
+                SessionBatches = 1,
+            },
+            new RetentionBacklogSnapshot(
+                completedAt,
+                RetentionHold: false,
+                [
+                    new RetentionBacklogCategory(
+                        "sessions",
+                        GovernedByHold: true,
+                        DueCount: 2,
+                        completedAt.AddMinutes(-4)),
+                ]));
+
+        RetentionMetricsResponse metrics = telemetry.GetMetrics();
+        Assert.Equal(1, metrics.CyclesTotal);
+        Assert.Equal(0, metrics.FailedCyclesTotal);
+        Assert.Equal(completedAt, metrics.LastSuccessfulCycleAt);
+        Assert.Equal(2, metrics.TotalDueCount);
+        Assert.Equal(240, metrics.OldestEligibleAgeSeconds);
+        RetentionCategoryMetricsResponse sessions = Assert.Single(
+            metrics.Categories,
+            static category => category.Category == "sessions");
+        Assert.Equal(3, sessions.LastCycleChanged);
+        Assert.Equal(2, sessions.DueCount);
+        Assert.Equal(240, sessions.OldestEligibleAgeSeconds);
+    }
+
+    [Fact]
     public async Task FailedCategoryDoesNotStarveLaterSecurityAndLegalCategoriesAsync()
     {
         var probe = new RetentionProbe();
@@ -29,10 +69,12 @@ public sealed class RetentionServiceTests
         services.AddSingleton<ISecurityEventRepository>(new ProbeSecurityEventRepository(probe));
         services.AddSingleton<ILegalAcceptanceRepository>(new ProbeLegalAcceptanceRepository(probe));
         await using ServiceProvider provider = services.BuildServiceProvider();
+        using var telemetry = new RetentionTelemetry();
         var service = new RetentionService(
             provider.GetRequiredService<IServiceScopeFactory>(),
             new FakeClock(),
             Options.Create(new SharpbillOptions()),
+            telemetry,
             NullLogger<RetentionService>.Instance);
 
         RetentionCycleResponse result = await service.RunCycleAsync(CancellationToken.None);
@@ -45,6 +87,19 @@ public sealed class RetentionServiceTests
         Assert.Equal(7, probe.UnitOfWorksCreated);
         Assert.Equal(6, probe.Commits);
         Assert.Equal(1, probe.Rollbacks);
+        RetentionMetricsResponse metrics = service.GetMetrics();
+        Assert.Equal(1, metrics.CyclesTotal);
+        Assert.Equal(1, metrics.FailedCyclesTotal);
+        Assert.Equal(1, metrics.ConsecutiveFailedCycles);
+        Assert.Equal(["request_logs"], metrics.LastFailureCategories);
+        Assert.True(metrics.RetentionHold);
+        Assert.Equal(4, metrics.TotalDueCount);
+        RetentionCategoryMetricsResponse requestLogMetrics = Assert.Single(
+            metrics.Categories,
+            static category => category.Category == "request_logs");
+        Assert.True(requestLogMetrics.LastCycleFailed);
+        Assert.Equal(4, requestLogMetrics.DueCount);
+        Assert.False(metrics.CycleInProgress);
     }
 
     private sealed class RetentionProbe
@@ -97,6 +152,19 @@ public sealed class RetentionServiceTests
             DateTime now,
             int limit,
             CancellationToken cancellationToken) => Task.FromResult(0);
+
+        public Task<RetentionBacklogSnapshot> GetBacklogAsync(
+            DateTime capturedAt,
+            CancellationToken cancellationToken) => Task.FromResult(new RetentionBacklogSnapshot(
+                capturedAt,
+                RetentionHold: true,
+                [
+                    new RetentionBacklogCategory(
+                        "request_logs",
+                        GovernedByHold: true,
+                        DueCount: 4,
+                        capturedAt.AddMinutes(-5)),
+                ]));
     }
 
     private sealed class ProbeNonceRepository : INonceRepository

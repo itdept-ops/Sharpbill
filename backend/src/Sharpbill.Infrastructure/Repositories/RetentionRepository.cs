@@ -31,6 +31,167 @@ public sealed class RetentionRepository(
             "Site settings are missing; retention cannot make a safe hold decision.");
     }
 
+    public async Task<RetentionBacklogSnapshot> GetBacklogAsync(
+        DateTime capturedAt,
+        CancellationToken cancellationToken)
+    {
+        DateTime requestLogCutoff = capturedAt.AddDays(-_retention.RequestLogDays);
+        DateTime sessionCutoff = capturedAt.AddDays(-_retention.SessionDays);
+        DateTime locationCutoff = capturedAt.AddHours(-_retention.PreciseLocationHours);
+        DateTime pendingCutoff = capturedAt.AddDays(-_retention.PendingAccountDays);
+        DateTime disabledCutoff = capturedAt.AddDays(-_retention.DisabledAccountDays);
+        DateTime legalAcceptanceCutoff = capturedAt.AddDays(-_retention.LegalAcceptanceDays);
+        const string sql = """
+            SELECT
+                s.retention_hold AS hold_active,
+                (SELECT COUNT(*) FROM login_nonces WHERE expires_at <= @Now)
+                    AS nonces_due_count,
+                (SELECT MIN(expires_at) FROM login_nonces WHERE expires_at <= @Now)
+                    AS nonces_oldest_expiry,
+                (SELECT COUNT(*) FROM request_logs WHERE created_at <= @RequestLogCutoff)
+                    AS request_logs_due_count,
+                (SELECT MIN(created_at) FROM request_logs WHERE created_at <= @RequestLogCutoff)
+                    AS request_logs_oldest_created,
+                (SELECT COUNT(*) FROM user_sessions
+                    WHERE expires_at <= @SessionCutoff OR revoked_at <= @SessionCutoff)
+                    AS sessions_due_count,
+                (SELECT MIN(LEAST(expires_at, COALESCE(revoked_at, expires_at)))
+                    FROM user_sessions
+                    WHERE expires_at <= @SessionCutoff OR revoked_at <= @SessionCutoff)
+                    AS sessions_oldest_end,
+                (SELECT COUNT(*) FROM users
+                    WHERE location_retention_until <= @Now
+                       OR last_location_at <= @LocationCutoff
+                       OR (last_location_at IS NULL AND
+                           (last_latitude IS NOT NULL OR last_longitude IS NOT NULL OR
+                            last_location_accuracy IS NOT NULL)))
+                    AS precise_locations_due_count,
+                (SELECT MIN(location_retention_until) FROM users
+                    WHERE location_retention_until <= @Now)
+                    AS precise_locations_oldest_deadline,
+                (SELECT MIN(last_location_at) FROM users
+                    WHERE last_location_at <= @LocationCutoff)
+                    AS precise_locations_oldest_capture,
+                (SELECT MIN(updated_at) FROM users
+                    WHERE last_location_at IS NULL AND
+                         (last_latitude IS NOT NULL OR last_longitude IS NOT NULL OR
+                          last_location_accuracy IS NOT NULL))
+                    AS precise_locations_oldest_malformed_update,
+                (SELECT COUNT(*) FROM users u
+                    INNER JOIN roles r ON r.id = u.role_id
+                    WHERE u.erased_at IS NULL
+                      AND r.name <> 'admin'
+                      AND (u.erasure_due_at <= @Now
+                           OR (u.is_approved = 0 AND u.created_at <= @PendingCutoff)
+                           OR (u.is_active = 0 AND u.deactivated_at IS NOT NULL
+                               AND u.deactivated_at <= @DisabledCutoff)))
+                    AS accounts_due_count,
+                (SELECT MIN(u.erasure_due_at) FROM users u
+                    INNER JOIN roles r ON r.id = u.role_id
+                    WHERE u.erased_at IS NULL AND r.name <> 'admin'
+                      AND u.erasure_due_at <= @Now)
+                    AS accounts_oldest_erasure_due,
+                (SELECT MIN(u.created_at) FROM users u
+                    INNER JOIN roles r ON r.id = u.role_id
+                    WHERE u.erased_at IS NULL AND r.name <> 'admin'
+                      AND u.is_approved = 0 AND u.created_at <= @PendingCutoff)
+                    AS accounts_oldest_pending_created,
+                (SELECT MIN(u.deactivated_at) FROM users u
+                    INNER JOIN roles r ON r.id = u.role_id
+                    WHERE u.erased_at IS NULL AND r.name <> 'admin'
+                      AND u.is_active = 0 AND u.deactivated_at IS NOT NULL
+                      AND u.deactivated_at <= @DisabledCutoff)
+                    AS accounts_oldest_deactivated,
+                (SELECT COUNT(*) FROM security_events WHERE retention_until <= @Now)
+                    AS security_events_due_count,
+                (SELECT MIN(retention_until) FROM security_events WHERE retention_until <= @Now)
+                    AS security_events_oldest_deadline,
+                (SELECT COUNT(*) FROM legal_acceptances
+                    WHERE retention_until <= @Now OR accepted_at <= @LegalAcceptanceCutoff)
+                    AS legal_acceptances_due_count,
+                (SELECT MIN(retention_until) FROM legal_acceptances WHERE retention_until <= @Now)
+                    AS legal_acceptances_oldest_deadline,
+                (SELECT MIN(accepted_at) FROM legal_acceptances
+                    WHERE accepted_at <= @LegalAcceptanceCutoff)
+                    AS legal_acceptances_oldest_accepted
+            FROM site_settings s
+            WHERE s.id = 1
+            """;
+        var connection = await OpenAsync(cancellationToken).ConfigureAwait(false);
+        RetentionBacklogRow? row = await connection.QuerySingleOrDefaultAsync<RetentionBacklogRow>(Command(
+            sql,
+            new
+            {
+                Now = RepositoryMapping.ToDatabaseUtc(capturedAt),
+                RequestLogCutoff = RepositoryMapping.ToDatabaseUtc(requestLogCutoff),
+                SessionCutoff = RepositoryMapping.ToDatabaseUtc(sessionCutoff),
+                LocationCutoff = RepositoryMapping.ToDatabaseUtc(locationCutoff),
+                PendingCutoff = RepositoryMapping.ToDatabaseUtc(pendingCutoff),
+                DisabledCutoff = RepositoryMapping.ToDatabaseUtc(disabledCutoff),
+                LegalAcceptanceCutoff = RepositoryMapping.ToDatabaseUtc(legalAcceptanceCutoff),
+            },
+            cancellationToken)).ConfigureAwait(false);
+        if (row is null)
+        {
+            throw new InvalidOperationException(
+                "Site settings are missing; retention backlog cannot make a safe hold decision.");
+        }
+
+        DateTime utcCapturedAt = Normalize(capturedAt);
+        return new RetentionBacklogSnapshot(
+            utcCapturedAt,
+            row.HoldActive,
+            [
+                Category("nonces", false, row.NoncesDueCount, row.NoncesOldestExpiry),
+                Category(
+                    "request_logs",
+                    true,
+                    row.RequestLogsDueCount,
+                    AddDays(row.RequestLogsOldestCreated, _retention.RequestLogDays)),
+                Category(
+                    "sessions",
+                    true,
+                    row.SessionsDueCount,
+                    AddDays(row.SessionsOldestEnd, _retention.SessionDays)),
+                Category(
+                    "precise_locations",
+                    true,
+                    row.PreciseLocationsDueCount,
+                    Earliest(
+                        row.PreciseLocationsOldestDeadline,
+                        AddHours(
+                            row.PreciseLocationsOldestCapture,
+                            _retention.PreciseLocationHours),
+                        row.PreciseLocationsOldestMalformedUpdate)),
+                Category(
+                    "accounts",
+                    true,
+                    row.AccountsDueCount,
+                    Earliest(
+                        row.AccountsOldestErasureDue,
+                        AddDays(
+                            row.AccountsOldestPendingCreated,
+                            _retention.PendingAccountDays),
+                        AddDays(
+                            row.AccountsOldestDeactivated,
+                            _retention.DisabledAccountDays))),
+                Category(
+                    "security_events",
+                    true,
+                    row.SecurityEventsDueCount,
+                    row.SecurityEventsOldestDeadline),
+                Category(
+                    "legal_acceptances",
+                    true,
+                    row.LegalAcceptancesDueCount,
+                    Earliest(
+                        row.LegalAcceptancesOldestDeadline,
+                        AddDays(
+                            row.LegalAcceptancesOldestAccepted,
+                            _retention.LegalAcceptanceDays))),
+            ]);
+    }
+
     public async Task<int> AnonymizeDueAccountsAsync(
         DateTime now,
         int limit,
@@ -241,5 +402,52 @@ public sealed class RetentionRepository(
         public DateTime? ErasureDueAt { get; set; }
         public bool IsApproved { get; set; }
         public DateTime CreatedAt { get; set; }
+    }
+
+    private static RetentionBacklogCategory Category(
+        string category,
+        bool governedByHold,
+        long dueCount,
+        DateTime? oldestEligibleAt) => new(
+            category,
+            governedByHold,
+            dueCount,
+            RepositoryMapping.FromDatabaseUtc(oldestEligibleAt));
+
+    private static DateTime? AddDays(DateTime? value, int days) =>
+        value?.AddDays(days);
+
+    private static DateTime? AddHours(DateTime? value, int hours) =>
+        value?.AddHours(hours);
+
+    private static DateTime? Earliest(params DateTime?[] values) => values
+        .Where(static value => value.HasValue)
+        .Min();
+
+    private static DateTime Normalize(DateTime value) =>
+        DateTime.SpecifyKind(RepositoryMapping.ToDatabaseUtc(value), DateTimeKind.Utc);
+
+    private sealed class RetentionBacklogRow
+    {
+        public bool HoldActive { get; set; }
+        public long NoncesDueCount { get; set; }
+        public DateTime? NoncesOldestExpiry { get; set; }
+        public long RequestLogsDueCount { get; set; }
+        public DateTime? RequestLogsOldestCreated { get; set; }
+        public long SessionsDueCount { get; set; }
+        public DateTime? SessionsOldestEnd { get; set; }
+        public long PreciseLocationsDueCount { get; set; }
+        public DateTime? PreciseLocationsOldestDeadline { get; set; }
+        public DateTime? PreciseLocationsOldestCapture { get; set; }
+        public DateTime? PreciseLocationsOldestMalformedUpdate { get; set; }
+        public long AccountsDueCount { get; set; }
+        public DateTime? AccountsOldestErasureDue { get; set; }
+        public DateTime? AccountsOldestPendingCreated { get; set; }
+        public DateTime? AccountsOldestDeactivated { get; set; }
+        public long SecurityEventsDueCount { get; set; }
+        public DateTime? SecurityEventsOldestDeadline { get; set; }
+        public long LegalAcceptancesDueCount { get; set; }
+        public DateTime? LegalAcceptancesOldestDeadline { get; set; }
+        public DateTime? LegalAcceptancesOldestAccepted { get; set; }
     }
 }

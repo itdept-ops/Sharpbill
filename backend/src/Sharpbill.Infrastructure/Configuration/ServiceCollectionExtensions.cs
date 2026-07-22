@@ -77,6 +77,7 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<IValidator<RetentionPolicyOptions>, RetentionPolicyValidator>();
 
         services.AddSingleton<IGeoService, GeoService>();
+        services.AddSingleton<RetentionTelemetry>();
         services.AddScoped<ISecurityEventService, SecurityEventService>();
         services.AddScoped<IEventOutboxService, EventOutboxService>();
         services.AddScoped<IRequestLogService, RequestLogService>();

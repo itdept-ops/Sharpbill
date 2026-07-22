@@ -45,15 +45,15 @@
       <div class="summary-grid" aria-label="Audit snapshot">
         <div class="metric"><strong>ASP.NET Core/.NET 10</strong><span>Layered Domain, Application, Contracts, Infrastructure, API, Workers, and Migrator projects.</span></div>
         <div class="metric"><strong>MySQL 8.4 + Dapper</strong><span>Pooled MySqlConnector access; C# migrator validates the <code>0021</code> schema baseline.</span></div>
-        <div class="metric"><strong>132 local tests passed</strong><span>Latest local Release solution execution passed; five real-MySQL repository tests are wired against MySQL.</span></div>
-        <div class="metric"><strong>Current hosted CI: passed</strong><span>Run 29880201498 passed frontend, backend/real-MySQL, full E2E access-control, image, scan, and supply-chain jobs.</span></div>
+        <div class="metric"><strong>134 local tests passed</strong><span>Latest local Release solution execution passed; six real-MySQL repository tests are wired against MySQL.</span></div>
+        <div class="metric"><strong>Current hosted CI: passed</strong><span>Run 29880459213 passed frontend, backend/real-MySQL, full E2E access-control, image, scan, and supply-chain jobs.</span></div>
       </div>
       <h3>Five most important risks</h3>
       <ol>
         <li><a href="#SB-002">SB-002</a>: security events have no implemented external dispatcher or immutable off-box evidence sink.</li>
         <li><a href="#SB-003">SB-003</a>: production deployment, recovery, observability, and operational-control evidence is not available for verification.</li>
         <li><a href="#SB-004">SB-004</a>: <code>main</code> has no branch protection/ruleset and hosted security-alert services are disabled or not enabled.</li>
-        <li><a href="#SB-008">SB-008</a>: retention and request-log health remains incompletely observable.</li>
+        <li><a href="#SB-008">SB-008</a>: retention health is now instrumented locally; request-log loss detail and operated alert delivery remain incomplete.</li>
         <li><a href="#SB-009">SB-009</a> and <a href="#SB-011">SB-011</a>: remaining scale, query, export, and transient-fault behavior needs bounded implementation or an explicit deployment constraint.</li>
       </ol>
       <div class="two-col">
@@ -114,11 +114,11 @@
           <tr><td><a href="#SB-005"><code>SB-005</code></a></td><td><span class="badge medium">MEDIUM</span></td><td>High</td><td><span class="badge confirmed">Confirmed</span> <span class="badge fixed">FIXED</span></td><td>CI tests</td><td>CI supplies the real-MySQL connection and fails closed if it is absent.</td><td>False-positive pass removed and hosted test job verified.</td><td>Complete</td></tr>
           <tr><td><a href="#SB-006"><code>SB-006</code></a></td><td><span class="badge medium">MEDIUM</span></td><td>High</td><td><span class="badge confirmed">Confirmed</span> <span class="badge fixed">FIXED</span></td><td>Session validation</td><td>Authorization reads use compatible shared locks; conditional activity writes occur after snapshot release.</td><td>Same-user read serialization removed and hosted-verified.</td><td>Complete</td></tr>
           <tr><td><a href="#SB-007"><code>SB-007</code></a></td><td><span class="badge medium">MEDIUM</span></td><td>High</td><td><span class="badge confirmed">Confirmed</span> <span class="badge fixed">FIXED</span></td><td>OIDC nonce</td><td>Nonce admission uses 64 short, database-coordinated quota shards instead of process/settings-row serialization.</td><td>Cross-replica capacity remains bounded without a global login lock; hosted E2E passed.</td><td>Complete</td></tr>
-          <tr><td><a href="#SB-008"><code>SB-008</code></a></td><td><span class="badge medium">MEDIUM</span></td><td>High</td><td><span class="badge confirmed">Confirmed</span></td><td>Retention / request logs</td><td>Operational telemetry is lossy and retention lacks critical health metrics/alerts.</td><td>Delayed detection of deletion/backlog or missing activity telemetry.</td><td>Medium</td></tr>
+          <tr><td><a href="#SB-008"><code>SB-008</code></a></td><td><span class="badge medium">MEDIUM</span></td><td>High</td><td><span class="badge confirmed">Confirmed</span> <span class="badge partial">PARTIALLY FIXED</span></td><td>Retention / request logs</td><td>Retention health is machine-readable in code; request-log loss detail and operated alert delivery remain.</td><td>Lifecycle backlog is observable; missing activity telemetry still needs explicit loss monitoring.</td><td>In progress</td></tr>
           <tr><td><a href="#SB-009"><code>SB-009</code></a></td><td><span class="badge medium">MEDIUM</span></td><td>Medium</td><td><span class="badge probable">Probable</span></td><td>Scale coordination</td><td>Rate limits, presence, replay memory, and scheduling assumptions are process-local.</td><td>Multi-replica behavior can multiply limits or diverge.</td><td>Large</td></tr>
           <tr><td><a href="#SB-010"><code>SB-010</code></a></td><td><span class="badge medium">MEDIUM</span></td><td>Medium</td><td><span class="badge probable">Probable</span></td><td>User directory</td><td><code>users.read</code> can return more profile/access data than a minimum directory view may need.</td><td>Unnecessary internal PII/access-data aggregation.</td><td>Medium</td></tr>
           <tr><td><a href="#SB-011"><code>SB-011</code></a></td><td><span class="badge medium">MEDIUM</span></td><td>Medium</td><td><span class="badge probable">Probable</span></td><td>Logs / exports / retries</td><td>Large log/export and transient-lock paths lack capacity/resilience proof.</td><td>Slow admin investigations or resource pressure under volume.</td><td>Medium</td></tr>
-          <tr><td><a href="#SB-012"><code>SB-012</code></a></td><td><span class="badge low">LOW</span></td><td>High</td><td><span class="badge confirmed">Confirmed</span> <span class="badge fixed">FIXED LOCALLY</span></td><td>Request context</td><td>Every request receives a unique server ID; sanitized caller correlation is retained separately.</td><td>Authoritative correlation uniqueness restored.</td><td>Complete</td></tr>
+          <tr><td><a href="#SB-012"><code>SB-012</code></a></td><td><span class="badge low">LOW</span></td><td>High</td><td><span class="badge confirmed">Confirmed</span> <span class="badge fixed">FIXED</span></td><td>Request context</td><td>Every request receives a unique server ID; sanitized caller correlation is retained separately.</td><td>Authoritative correlation uniqueness restored and hosted-verified.</td><td>Complete</td></tr>
         </tbody>
       </table></div>
     </section>
@@ -318,7 +318,7 @@ Hosted proof: GitHub Actions run 29880201498 passed all four jobs</code></pre>
 
       <article class="finding medium-find" id="SB-008" aria-labelledby="SB-008-heading">
         <h3 id="SB-008-heading"><code>SB-008</code> — Retention and activity-telemetry health cannot be fully observed</h3>
-        <span class="badge medium">MEDIUM</span><span class="badge confirmed">Confirmed</span><span class="badge informational">Confidence: High</span>
+        <span class="badge medium">MEDIUM</span><span class="badge confirmed">Confirmed</span><span class="badge partial">PARTIALLY FIXED</span><span class="badge informational">Confidence: High</span>
         <dl class="finding-grid">
           <dt>Category / mappings</dt><dd>Observability, retention reliability, operational logging. CWE-778. OWASP ASVS security logging/error handling control family; OWASP API Top 10: no direct one-to-one category.</dd>
           <dt>Component and path</dt><dd>Retention worker, request-log buffer worker, protected log metrics endpoint, operations/privacy policy.</dd>
@@ -328,12 +328,19 @@ Hosted proof: GitHub Actions run 29880201498 passed all four jobs</code></pre>
           <dt>Compensating controls</dt><dd>Queue depth/drop/error counters are exposed behind authorization; batches are bounded and transactional; retention is independently committed and hold-aware; the documentation correctly warns that request logs are telemetry, not immutable audit evidence.</dd>
           <dt>Recommendation / implementation outline</dt><dd>Emit durable metrics for each retention category (success timestamp, backlog/oldest age, hold state, failures, batch count) and configure alert ownership. Export queue metrics and structured logs to a central collector. Keep request logs explicitly non-audit; use SB-002's independent security-event sink for evidence.</dd>
           <dt>Proof, effort, owner, compatibility</dt><dd>Simulate DB failure, queue saturation, held records, and restart; verify alarms, dashboards, recovery, and no accidental claim of complete audit coverage. Effort: medium. Owner: platform/operations/backend. No API migration expected; monitoring and runbook coordination required.</dd>
+          <dt>Fix action / remediation status</dt><dd><strong>Partially fixed locally on 2026-07-21.</strong> Every retention cycle now publishes process-wide last-start/completion/full-success/failure state, consecutive failures, failed categories, hold state, per-category changed/batch counts, eligible backlog, and oldest age. Backlog-observation failure marks the cycle failed while retaining a visibly stale prior timestamp. The data comes from one parameterized MySQL snapshot using the exact cleanup predicates, is exposed only to <code>privacy.manage</code> at <code>GET /api/admin/privacy/retention/metrics</code>, and is also emitted through the standard .NET <code>Sharpbill.Retention</code> meter. Request-log loss timestamps are the next code group. External collection, durable storage, alert routing, and accountable response remain explicitly deferred environment evidence.</dd>
         </dl>
         <h4>Evidence</h4>
-        <pre><code>backend/src/Sharpbill.Workers/RetentionWorker.cs:20-55, 96-114
-  logs cycle counts and failures; no emitted health/backlog/oldest metrics
-docs/DATA_RETENTION_PRIVACY.md:105-121; docs/ENTERPRISE_OPERATIONS.md:389-399
-  require monitored lifecycle/alert outcomes
+        <pre><code>backend/src/Sharpbill.Infrastructure/Services/Operations/RetentionTelemetry.cs
+  standard meter plus thread-safe cycle, category, hold, backlog, and oldest-age state
+backend/src/Sharpbill.Infrastructure/Repositories/RetentionRepository.cs
+  parameterized post-cycle backlog snapshot uses the cleanup predicates
+backend/src/Sharpbill.Api/Controllers/PrivacyController.cs
+  privacy.manage-protected retention metrics endpoint
+RetentionServiceTests.TelemetryRecordsSuccessfulCycleAndBacklogAge
+RetentionServiceTests.FailedCategoryDoesNotStarveLaterSecurityAndLegalCategoriesAsync
+RepositoryIntegrationTests.RetentionBacklogReportsExpiredRowsWhenDatabaseIsConfiguredAsync
+  local real-MySQL expiry/backlog observation passes
 backend/src/Sharpbill.Workers/RequestLogBufferWorker.cs:39-62, 83-92, 169-224
   bounded channel, drop/error counters, and dropped batches on failure/shutdown
 backend/src/Sharpbill.Api/Controllers/LogsController.cs:9-15
@@ -413,7 +420,7 @@ backend/src/Sharpbill.Infrastructure/Services/Business/BusinessServiceSupport.cs
 
       <article class="finding low-find" id="SB-012" aria-labelledby="SB-012-heading">
         <h3 id="SB-012-heading"><code>SB-012</code> — Client-selected request IDs weaken correlation uniqueness</h3>
-        <span class="badge low">LOW</span><span class="badge confirmed">Confirmed</span><span class="badge fixed">FIXED LOCALLY</span><span class="badge informational">Confidence: High</span>
+        <span class="badge low">LOW</span><span class="badge confirmed">Confirmed</span><span class="badge fixed">FIXED</span><span class="badge informational">Confidence: High</span>
         <dl class="finding-grid">
           <dt>Category / mappings</dt><dd>Observability integrity. CWE: not applicable to an access-control defect. OWASP ASVS logging/monitoring control family; OWASP API Top 10: no direct category.</dd>
           <dt>Component and path</dt><dd>Request-context middleware and structured request logging.</dd>
@@ -423,7 +430,7 @@ backend/src/Sharpbill.Infrastructure/Services/Business/BusinessServiceSupport.cs
           <dt>Compensating controls</dt><dd>Structured logs include independent request context and user/source information; no sensitive body/query content is intentionally logged.</dd>
           <dt>Recommendation / implementation outline</dt><dd>Generate a server request ID for every request. Preserve a sanitized client correlation ID in a distinct field if interoperability requires it, and document which identifier is authoritative.</dd>
           <dt>Proof, effort, owner, compatibility</dt><dd>Integration tests send duplicate valid client headers and prove distinct 32-hex server IDs while preserving the client value separately. Invalid client values are not propagated. Owner: backend/operations. No schema migration; consumers should use response <code>X-Request-ID</code> as authoritative.</dd>
-          <dt>Fix action / remediation status</dt><dd><strong>Fixed locally on 2026-07-21.</strong> Middleware always generates the authoritative server request ID. A valid legacy caller <code>X-Request-ID</code> is stored as <code>client_request_id</code>, tagged separately on the activity and structured request log, and echoed only as <code>X-Client-Request-ID</code>. Invalid or multi-value input is discarded.</dd>
+          <dt>Fix action / remediation status</dt><dd><strong>Fixed and hosted-verified on 2026-07-21.</strong> Middleware always generates the authoritative server request ID. A valid legacy caller <code>X-Request-ID</code> is stored as <code>client_request_id</code>, tagged separately on the activity and structured request log, and echoed only as <code>X-Client-Request-ID</code>. Invalid or multi-value input is discarded. GitHub Actions run 29880459213 passed all four jobs.</dd>
         </dl>
         <h4>Evidence</h4>
         <pre><code>backend/src/Sharpbill.Api/Middleware/RequestContextMiddleware.cs
@@ -450,7 +457,7 @@ ApiBoundaryTests.InvalidClientCorrelationIdIsNotPropagatedAsync</code></pre>
           <tr><td>Sensitive-data protection</td><td>Transport/config safeguards</td><td><span class="badge partial">Partial</span></td><td>Production TLS/secure cookie/public origin checks; at-rest encryption/keys are external.</td><td>Provide managed-DB/key/secret evidence (SB-003).</td></tr>
           <tr><td>Audit logging</td><td>Independent immutable security evidence</td><td><span class="badge missing">Missing</span></td><td>Transactional DB outbox, but no dispatcher/WORM/SIEM (SB-002).</td><td>Implement and operate independent evidence delivery.</td></tr>
           <tr><td>Bulk export</td><td>Authorization, bounds, scalability</td><td><span class="badge partial">Partial</span></td><td>Separate permission and row limits; security-event export is in-memory (SB-011).</td><td>Stream and rate/concurrency-limit exports.</td></tr>
-          <tr><td>Data deletion</td><td>Retention, hold, lifecycle</td><td><span class="badge partial">Partial</span></td><td>Bounded hold-aware worker and policy; health/alert proof missing (SB-008).</td><td>Add lifecycle metrics, alerts, and evidence of legal/policy approvals.</td></tr>
+          <tr><td>Data deletion</td><td>Retention, hold, lifecycle</td><td><span class="badge partial">Partial</span></td><td>Bounded hold-aware worker plus protected backlog/oldest/failure metrics; operated alert proof remains external (SB-008).</td><td>Attach the standard meter to durable collection and prove paging ownership.</td></tr>
           <tr><td>API protection</td><td>CSRF, body limits, error control, rate limits</td><td><span class="badge partial">Partial</span></td><td>Good same-origin/CSRF/body/error controls; scaling coordination is local (SB-009).</td><td>Externalize/enforce at ingress for multi-replica operation.</td></tr>
           <tr><td>Webhook security</td><td>Inbound/outbound webhook controls</td><td><span class="badge not-verified">Not verified</span></td><td>No webhook module was found in reviewed scope.</td><td>Threat-model signatures/replay/idempotency before introducing webhooks.</td></tr>
           <tr><td>Database integrity</td><td>Constraints, transactions, parameterization</td><td><span class="badge effective">Effective</span></td><td>Parameterized Dapper, FKs/checks/unique constraints, explicit isolation, rollback, and sharded nonce admission.</td><td>Retain SB-006/SB-007 race and capacity regression coverage.</td></tr>
@@ -459,7 +466,7 @@ ApiBoundaryTests.InvalidClientCorrelationIdIsNotPropagatedAsync</code></pre>
           <tr><td>Observability</td><td>Logs, metrics, traces, alerts</td><td><span class="badge partial">Partial</span></td><td>JSON logs, unique server request IDs, distinct client correlation, health endpoints, and local worker counters; no operated telemetry evidence.</td><td>Centralize telemetry and SLO/alert/on-call evidence (SB-003).</td></tr>
           <tr><td>Backup and recovery</td><td>PITR/restore/DR</td><td><span class="badge not-verified">Not verified</span></td><td>Local rehearsal documented; production proof explicitly excluded.</td><td>Run independent restore drill and measure RPO/RTO.</td></tr>
           <tr><td>Dependency security</td><td>Vulnerability/SBOM/image controls</td><td><span class="badge partial">Partial</span></td><td>NuGet/npm/image scans and SBOMs; hosted alerting/provenance governance incomplete.</td><td>Enable equivalent alerts, immutable release evidence, digest promotion.</td></tr>
-          <tr><td>Test coverage</td><td>Critical behavior in required CI</td><td><span class="badge effective">Effective</span></td><td>132 local tests pass; five real-DB repository tests are wired; the full hosted gate is verified through the preceding group.</td><td>Establish risk-based coverage and performance thresholds.</td></tr>
+          <tr><td>Test coverage</td><td>Critical behavior in required CI</td><td><span class="badge effective">Effective</span></td><td>134 local tests pass; six real-DB repository tests are wired; the full hosted gate is verified through the preceding group.</td><td>Establish risk-based coverage and performance thresholds.</td></tr>
           <tr><td>Deployment safety</td><td>Protected promotion/rollback</td><td><span class="badge missing">Missing</span></td><td>Reference-only deploy Compose; unprotected main; no environment/rollback evidence.</td><td>Implement governed promotion and evidence SB-003/SB-004 closure.</td></tr>
         </tbody>
       </table></div>
@@ -476,7 +483,7 @@ ApiBoundaryTests.InvalidClientCorrelationIdIsNotPropagatedAsync</code></pre>
           <tr><td>Immediate — before production approval</td><td>SB-003</td><td>Urgent · Platform/DBA/security/operations</td><td>Produce approved environment/IaC, identities/grants, secrets, ingress/TLS, backups/PITR, restore, observability, deployment approval, and rollback evidence.</td><td>Converts unknown production risk into testable controls. Large effort; requires external owners/change windows.</td></tr>
           <tr><td>Near term — within 30 days</td><td>SB-002, SB-008</td><td>High · Security/platform/data</td><td>Deploy external outbox dispatcher and WORM/SIEM destination; add retention/queue delivery metrics, loss/lag/dead-letter/tamper alerts and runbooks.</td><td>Protects forensic evidence and lifecycle detection. Large cross-team effort; coordinate retention/legal policy.</td></tr>
           <tr><td>Completed 2026-07-21</td><td>SB-006, SB-007</td><td>Backend/data/identity</td><td>Shared session snapshots and sharded nonce admission are hosted-verified; local race, capacity, Docker, and endpoint checks also pass.</td><td>Improves interactive availability without weakening revocation, replay protection, or the capacity ceiling.</td></tr>
-          <tr><td>In progress</td><td>SB-010, SB-011, SB-012</td><td>High · Product/privacy/backend/operations</td><td>SB-012 server-owned correlation is locally complete; approve data classification and response projections, stream/throttle exports, and profile log access.</td><td>Improves minimization and operability. Remaining work needs product/API or representative-volume decisions.</td></tr>
+          <tr><td>In progress</td><td>SB-008, SB-010, SB-011</td><td>High · Product/privacy/backend/operations</td><td>SB-012 server-owned correlation is hosted-verified and the retention portion of SB-008 is locally instrumented; add explicit request-log loss health, approve data classification, and improve export/log capacity.</td><td>Improves minimization and operability. Remaining work needs environment, product/API, or representative-volume decisions.</td></tr>
           <tr><td>Medium term — within 90 days</td><td>SB-009</td><td>High · Platform/backend</td><td>Decide and enforce one-replica limitation or externalize limiter, replay state, presence fanout, and scheduler leadership.</td><td>Enables safe horizontal scale. Large infrastructure/design effort.</td></tr>
           <tr><td>Strategic improvements</td><td>SB-002 to SB-011</td><td>Program · Engineering leadership</td><td>Establish SLOs, capacity model, chaos/recovery drills, penetration testing, dependency provenance/signing, privacy/legal approval workflow, and a shared-tenancy decision record.</td><td>Sustained enterprise assurance. Ongoing investment; governance and product coordination.</td></tr>
         </tbody>
@@ -527,12 +534,12 @@ ApiBoundaryTests.InvalidClientCorrelationIdIsNotPropagatedAsync</code></pre>
         <div>
           <h3>Safe checks executed</h3>
           <ul>
-            <li><code>dotnet test Sharpbill.slnx --configuration Release --no-restore --nologo</code> — 132 passed, 0 failed after the request-correlation remediation.</li>
-            <li>Five <code>RepositoryIntegrationTests</code> — passed against local Compose MySQL, including same-user shared snapshots and atomic sharded nonce admission.</li>
+            <li><code>dotnet test Sharpbill.slnx --configuration Release --no-restore --nologo</code> — 134 passed, 0 failed after the local retention-observability remediation.</li>
+            <li>Six <code>RepositoryIntegrationTests</code> — passed against local Compose MySQL, including same-user shared snapshots, atomic sharded nonce admission, and expired-row backlog observation.</li>
             <li><code>dotnet package list --project Sharpbill.slnx --vulnerable --include-transitive --format json --no-restore</code> — no vulnerable package entries returned.</li>
             <li><code>docker compose config --quiet</code> — local Compose configuration valid.</li>
             <li><code>docker compose ps --format json</code> — local API/MySQL healthy; web process running at the audit snapshot.</li>
-            <li><code>gh run view 29879026056 --json jobs</code> — all four hosted jobs passed, including real-MySQL backend tests and full Docker/Playwright E2E.</li>
+            <li><code>gh run view 29880459213 --json jobs</code> — all four hosted jobs passed, including real-MySQL backend tests and full Docker/Playwright E2E for the server-owned correlation group.</li>
             <li>Read-only source searches and GitHub REST reads for protection, rulesets, security-alert endpoints, environments, and Actions policy.</li>
           </ul>
         </div>

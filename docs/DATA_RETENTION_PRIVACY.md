@@ -109,6 +109,14 @@ bounded, independently committed batches so cleanup cannot hold an unbounded tra
 must monitor last success, rows examined/deleted/anonymized, oldest eligible row, failures, and hold
 state. Re-running a partial cycle must be safe.
 
+The application records this evidence after each cycle in a process-wide health snapshot and the
+standard .NET `Sharpbill.Retention` meter. Authorized privacy operators can inspect the snapshot at
+`GET /api/admin/privacy/retention/metrics`. It reports per-category changed/batch counts, remaining
+eligible backlog and oldest eligible age alongside hold, last-success, and failure state. Snapshot
+collection failure marks the cycle failed and leaves the prior timestamp visible, so stale data is
+detectable rather than silently presented as current. External collection, durable metric storage,
+alert delivery, and an accountable responder remain required environment controls.
+
 Every route that can race anonymization re-reads the account through Dapper under a current row lock
 on the same connection and transaction as its protected write. This prevents a request that began
 before erasure from restoring profile, location, activity, session, approval, role, or grant data

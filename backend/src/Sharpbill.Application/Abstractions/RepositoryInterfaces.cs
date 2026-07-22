@@ -219,4 +219,18 @@ public interface IRetentionRepository
 {
     Task<bool> IsHoldActiveAsync(bool forUpdate, CancellationToken cancellationToken);
     Task<int> AnonymizeDueAccountsAsync(DateTime now, int limit, CancellationToken cancellationToken);
+    Task<RetentionBacklogSnapshot> GetBacklogAsync(
+        DateTime capturedAt,
+        CancellationToken cancellationToken);
 }
+
+public sealed record RetentionBacklogCategory(
+    string Category,
+    bool GovernedByHold,
+    long DueCount,
+    DateTime? OldestEligibleAt);
+
+public sealed record RetentionBacklogSnapshot(
+    DateTime CapturedAt,
+    bool RetentionHold,
+    IReadOnlyList<RetentionBacklogCategory> Categories);
