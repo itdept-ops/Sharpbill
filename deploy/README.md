@@ -16,12 +16,15 @@ rollback controls. No AWS resource, HA/PITR design, or deployment automation is 
 The API artifact is the layered .NET 10 / ASP.NET Core service on a digest-pinned chiseled runtime;
 the same promoted image also contains the single-purpose `Sharpbill.Migrator` executable. Schema
 authority is deliberately separate from API startup. The C# cutover is complete; no Python service
-or migration image is built or published by the active release path.
+or migration image is built or published by the active release path. The web artifact is a static
+React/Vite build served by a digest-pinned nginx image running as non-root user `101`.
 The current compatibility schema baseline is `0021`; traffic admission must use
 `/api/health/ready`, not process liveness, and must see every readiness dimension report `ok`.
 Public OAuth client IDs are read by the static web application at runtime from `/api/auth/config`.
 Production rejects malformed Google/Azure client IDs, non-canonical `PUBLIC_ORIGIN`, and proxy trust
 that is not an explicit reviewed IP/CIDR network (including wildcard/world-wide trust).
+
+The repository-wide technology inventory is maintained in [`../docs/TECH_STACK.md`](../docs/TECH_STACK.md).
 
 ## MySQL 8.0 to 8.4 LTS upgrade policy
 

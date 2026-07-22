@@ -77,6 +77,11 @@ Production uses the chiseled ASP.NET Core runtime, published artifacts, numeric 
 designed to run read-only except for a bounded `/tmp` mount. API and migrator targets are built
 from the same reviewed source and dependency graph.
 
+The frontend remains a React 18 / TypeScript / Vite single-page application. The supported local
+repository stack runs the SPA through Vite and proxies `/api` and WebSocket traffic to ASP.NET Core;
+the production-shaped web artifact is static Vite output served by nginx. The exact checked-in
+stack inventory is maintained in `docs/TECH_STACK.md`.
+
 ## Enforcement
 
 - Nullable reference types, analyzers, deterministic builds, and warnings-as-errors are enabled
@@ -86,8 +91,9 @@ from the same reviewed source and dependency graph.
 - Unit tests exercise Domain and Application behavior without infrastructure.
 - Integration tests exercise adapters and the HTTP pipeline against ephemeral MySQL.
 - CI verifies formatting, builds Release artifacts, runs all tests with branch-aware coverage,
-  audits packages, builds the exact production image, confirms its numeric user, smoke-tests
-  liveness, scans it for vulnerabilities, and emits an SBOM.
+  audits packages, builds the production-shaped API and web images, confirms non-root runtime
+  users, smoke-tests liveness, scans images and source for vulnerabilities/secrets/misconfiguration,
+  and emits SBOMs.
 - Frontend end-to-end tests continue to run against the Compose stack and existing API routes.
 
 ## Consequences

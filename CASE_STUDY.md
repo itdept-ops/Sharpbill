@@ -76,6 +76,9 @@ before it shipped, and each has a test named after the failure it prevents.
 
 ## What verifies it
 
+- **Stack:** the active application is React 18 / TypeScript / Vite on the front end, .NET 10 /
+  ASP.NET Core on the backend, MySQL 8.4 LTS for persistence, and Docker Compose for the supported
+  local runtime. The production-shaped artifacts are digest-pinned .NET, Node, and nginx images.
 - **Backend:** the rewritten .NET 10 solution has xUnit suites split across domain,
   application, architecture, migrator, and integration projects. It verifies business invariants,
   transport contracts, dependency direction, identity/session behavior, authorization services,

@@ -9,8 +9,8 @@ const FEATURES = [
   ["// ROLES & ACCESS", "A real permission system. Define roles, mint new permissions, and assign them — enforced from the database on every request."],
   ["// LIVE PRESENCE", "See who is online in real time. Presence rides the session, so the roster reflects who is actually at the console."],
   ["// KILL-SWITCH", "Kick any user in one click. Their session is revoked on the next request — no waiting for a token to expire."],
-  ["// LOCAL STACK", "API, database, and web run together through loopback-only Docker Compose. Production infrastructure and recovery controls are separate."],
-  ["// REQUEST TRACE", "Permission-gated request activity supports investigation. Production audit evidence still requires restricted, append-only export."],
+  ["// LOCAL STACK", "React, ASP.NET Core, MySQL 8.4, and the C# migrator run together through loopback-only Docker Compose."],
+  ["// REQUEST TRACE", "Permission-gated request activity and security-event exports support investigation; production SIEM/WORM delivery stays external."],
 ];
 
 export function LandingPage() {

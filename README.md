@@ -29,14 +29,19 @@ Compose form the supported local runtime.
 
 - **Backend:** layered .NET 10 / ASP.NET Core service with contracts, domain, application
   abstractions, infrastructure adapters, workers, middleware, and DI composition.
-- **Frontend:** React 18 + TypeScript + Vite with Vitest unit coverage and Playwright E2E coverage.
-- **Data:** MySQL 8.4 LTS with an explicit `Sharpbill.Migrator` compatibility baseline at `0021`.
+- **Frontend:** React 18.3 + TypeScript 5.9 + Vite 8 with Vitest unit coverage and Playwright E2E
+  coverage.
+- **Data:** MySQL 8.4.10 LTS with an explicit `Sharpbill.Migrator` compatibility baseline at
+  `0021`.
 - **Local runtime:** loopback-only Docker Compose for `mysql`, one-shot `migrator`, `api`, and
   `web`.
 - **Repository controls:** private GitHub repository, protected `main`, required CI checks,
   digest-pinned images/actions, SBOM generation, Trivy scans, Dependabot, and CODEOWNERS.
 - **Production boundary:** AWS, backups/PITR, SIEM/WORM dispatch, production monitoring, and
   distributed rate-limit/presence coordination are production-owned.
+
+See [`docs/TECH_STACK.md`](docs/TECH_STACK.md) for the canonical checked-in stack inventory,
+including exact runtime/toolchain pins and the production boundary.
 
 ---
 
@@ -46,6 +51,7 @@ Compose form the supported local runtime.
 - [What it does](#what-it-does)
 - [Screens](#screens)
 - [Architecture](#architecture)
+- [Technology stack inventory](docs/TECH_STACK.md)
 - [Security model](#security-model)
 - [Data retention & privacy policy](docs/DATA_RETENTION_PRIVACY.md)
 - [Legal documents & acceptance release process](docs/LEGAL_DOCUMENTS.md)

@@ -7,6 +7,18 @@ infrastructure concerns are supplied through dependency injection.
 The C# cutover is complete. The active backend, migrator, test, and container paths are .NET-only;
 the frozen Alembic files are retained solely as non-executable schema provenance.
 
+See [`../docs/TECH_STACK.md`](../docs/TECH_STACK.md) for the repository-wide technology inventory.
+
+## Stack snapshot
+
+- Target framework: `net10.0`
+- Approved SDK patch: `10.0.302`
+- Production runtime image: ASP.NET Core `10.0.10-noble-chiseled-extra`
+- Persistence: MySQL 8.4 LTS through Dapper and MySqlConnector
+- Schema authority: C# `Sharpbill.Migrator` at compatibility baseline `0021`
+- Background work: hosted .NET workers for retention and request-log persistence
+- API surface: ASP.NET Core middleware, authentication/authorization, controllers, and DI
+
 ## Project layout
 
 | Project | Responsibility |
@@ -27,7 +39,7 @@ The dependency direction and prohibited cross-layer references are enforced by
 
 - .NET SDK `10.0.302` (the repository's `global.json` selects the approved patch line)
 - Docker Desktop with Compose v2 for the supported local stack
-- MySQL 8.4 when running the API directly on the host
+- MySQL 8.4 LTS when running the API directly on the host
 
 ## Supported local workflow
 
@@ -93,7 +105,8 @@ Warnings and analyzer findings fail builds. NuGet auditing includes transitive p
 ## Container targets
 
 - `dev` is an opt-in .NET SDK image with `dotnet watch` for container-specific development.
-- `prod` contains only published API and migrator artifacts on the ASP.NET Core chiseled runtime.
+- `prod` contains only published API and migrator artifacts on the digest-pinned ASP.NET Core
+  chiseled runtime.
 - `migrator` uses the same immutable artifacts and runtime but starts the migration executable.
 
 The supported repository-level Compose stack runs the API from `prod`, without a host source bind
