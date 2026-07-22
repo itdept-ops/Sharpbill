@@ -40,14 +40,30 @@ public sealed record RequestLogMetricsResponse
     public long PersistedTotal { get; init; }
     [JsonPropertyName("dropped_total")]
     public long DroppedTotal { get; init; }
+    [JsonPropertyName("rejected_total")]
+    public long RejectedTotal { get; init; }
+    [JsonPropertyName("lost_after_enqueue_total")]
+    public long LostAfterEnqueueTotal { get; init; }
     [JsonPropertyName("errors_total")]
     public long ErrorsTotal { get; init; }
+    [JsonPropertyName("outstanding_total")]
+    public long OutstandingTotal { get; init; }
     [JsonPropertyName("queue_depth")]
     public int QueueDepth { get; init; }
     [JsonPropertyName("queue_capacity")]
     public int QueueCapacity { get; init; }
     [JsonPropertyName("running")]
     public bool Running { get; init; }
+    [JsonPropertyName("loss_detected")]
+    public bool LossDetected { get; init; }
+    [JsonPropertyName("last_enqueued_at")]
+    public DateTime? LastEnqueuedAt { get; init; }
+    [JsonPropertyName("last_persisted_at")]
+    public DateTime? LastPersistedAt { get; init; }
+    [JsonPropertyName("last_dropped_at")]
+    public DateTime? LastDroppedAt { get; init; }
+    [JsonPropertyName("last_error_at")]
+    public DateTime? LastErrorAt { get; init; }
 }
 
 public sealed record RequestLogQuery

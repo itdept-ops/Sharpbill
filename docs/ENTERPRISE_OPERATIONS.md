@@ -447,6 +447,16 @@ persistence; overload can produce explicit drops rather than unbounded request l
 protected queue depth, drop, error, and flush metrics and route stdout through an independently
 operated collection path.
 
+`GET /api/admin/logs/metrics` (permission `logs.view`) separates records rejected before admission
+from accepted records lost after enqueue, reports outstanding accepted work, and timestamps the
+last enqueue, persistence, drop, and write error. `loss_detected` remains true for the life of the
+process after any loss, so alert on counter deltas/timestamps rather than repeatedly paging on the
+boolean alone. The standard .NET `Sharpbill.RequestLogs` meter emits accepted, rejected, persisted,
+post-enqueue-loss, and write-error outcomes plus queue depth/capacity, outstanding work, writer
+state, and loss state. Page on any new loss/write error, a stopped writer while the API is serving,
+or outstanding work that does not drain within the measured persistence objective. Collection,
+durable storage, dashboards, alert delivery, and response ownership remain environment controls.
+
 Privileged changes and authentication outcomes are staged transactionally as append-only event
 facts with separate mutable retry/lease state. The repository supplies bounded cursor reads,
 self-audited CSV export, an approved 400-day application retention schedule, and worker-facing

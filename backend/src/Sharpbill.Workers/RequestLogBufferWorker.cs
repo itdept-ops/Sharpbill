@@ -1,3 +1,4 @@
+using System.Diagnostics.Metrics;
 using System.Threading.Channels;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -13,26 +14,39 @@ namespace Sharpbill.Workers;
 
 public sealed partial class RequestLogBufferWorker : BackgroundService, IRequestLogBuffer
 {
+    public const string MeterName = "Sharpbill.RequestLogs";
+
     private const int MaximumBatchSize = 100;
     private readonly Channel<QueueItem> _channel;
     private readonly IServiceScopeFactory _scopeFactory;
     private readonly ILogger<RequestLogBufferWorker> _logger;
+    private readonly TimeProvider _timeProvider;
+    private readonly Meter _meter = new(MeterName, "1.0.0");
+    private readonly Counter<long> _events;
     private readonly int _capacity;
     private readonly TimeSpan _shutdownTimeout;
     private long _accepted;
     private long _persisted;
     private long _dropped;
+    private long _rejected;
+    private long _lostAfterEnqueue;
     private long _writeFailures;
+    private long _lastEnqueuedUnixMilliseconds;
+    private long _lastPersistedUnixMilliseconds;
+    private long _lastDroppedUnixMilliseconds;
+    private long _lastErrorUnixMilliseconds;
     private int _queueDepth;
     private int _writerAlive;
 
     public RequestLogBufferWorker(
         IServiceScopeFactory scopeFactory,
         IOptions<SharpbillOptions> options,
+        TimeProvider timeProvider,
         ILogger<RequestLogBufferWorker> logger)
     {
         _scopeFactory = scopeFactory;
         _logger = logger;
+        _timeProvider = timeProvider;
         _capacity = options.Value.RequestPipeline.RequestLogQueueCapacity;
         _shutdownTimeout = TimeSpan.FromSeconds(
             options.Value.RequestPipeline.RequestLogShutdownTimeoutSeconds);
@@ -43,6 +57,35 @@ public sealed partial class RequestLogBufferWorker : BackgroundService, IRequest
             SingleWriter = false,
             AllowSynchronousContinuations = false,
         });
+        _events = _meter.CreateCounter<long>(
+            "sharpbill.request_logs.events",
+            unit: "{event}",
+            description: "Request-log buffer events by outcome.");
+        _ = _meter.CreateObservableGauge(
+            "sharpbill.request_logs.queue.depth",
+            () => Volatile.Read(ref _queueDepth),
+            unit: "{item}",
+            description: "Current request-log channel depth, including flush markers.");
+        _ = _meter.CreateObservableGauge(
+            "sharpbill.request_logs.queue.capacity",
+            () => _capacity,
+            unit: "{item}",
+            description: "Configured request-log channel capacity.");
+        _ = _meter.CreateObservableGauge(
+            "sharpbill.request_logs.outstanding",
+            OutstandingTotal,
+            unit: "{event}",
+            description: "Accepted request logs not yet persisted or declared lost.");
+        _ = _meter.CreateObservableGauge(
+            "sharpbill.request_logs.writer.running",
+            () => Volatile.Read(ref _writerAlive),
+            unit: "{state}",
+            description: "Whether the request-log persistence loop is running.");
+        _ = _meter.CreateObservableGauge(
+            "sharpbill.request_logs.loss_detected",
+            () => Interlocked.Read(ref _dropped) > 0 ? 1 : 0,
+            unit: "{state}",
+            description: "Whether this process has rejected or lost any request logs.");
     }
 
     public bool TryWrite(RequestLog requestLog)
@@ -53,11 +96,16 @@ public sealed partial class RequestLogBufferWorker : BackgroundService, IRequest
         {
             Interlocked.Decrement(ref _queueDepth);
             Interlocked.Increment(ref _dropped);
+            Interlocked.Increment(ref _rejected);
+            RecordNow(ref _lastDroppedUnixMilliseconds);
+            RecordEvent("rejected");
             LogDropped(_logger, Volatile.Read(ref _queueDepth));
             return false;
         }
 
         Interlocked.Increment(ref _accepted);
+        RecordNow(ref _lastEnqueuedUnixMilliseconds);
+        RecordEvent("accepted");
         return true;
     }
 
@@ -80,16 +128,31 @@ public sealed partial class RequestLogBufferWorker : BackgroundService, IRequest
         await completion.Task.WaitAsync(timeoutSource.Token).ConfigureAwait(false);
     }
 
-    public RequestLogMetricsResponse GetMetrics() => new()
+    public RequestLogMetricsResponse GetMetrics()
     {
-        EnqueuedTotal = Interlocked.Read(ref _accepted),
-        PersistedTotal = Interlocked.Read(ref _persisted),
-        DroppedTotal = Interlocked.Read(ref _dropped),
-        ErrorsTotal = Interlocked.Read(ref _writeFailures),
-        QueueDepth = Volatile.Read(ref _queueDepth),
-        QueueCapacity = _capacity,
-        Running = Volatile.Read(ref _writerAlive) == 1,
-    };
+        long accepted = Interlocked.Read(ref _accepted);
+        long persisted = Interlocked.Read(ref _persisted);
+        long dropped = Interlocked.Read(ref _dropped);
+        long lostAfterEnqueue = Interlocked.Read(ref _lostAfterEnqueue);
+        return new RequestLogMetricsResponse
+        {
+            EnqueuedTotal = accepted,
+            PersistedTotal = persisted,
+            DroppedTotal = dropped,
+            RejectedTotal = Interlocked.Read(ref _rejected),
+            LostAfterEnqueueTotal = lostAfterEnqueue,
+            ErrorsTotal = Interlocked.Read(ref _writeFailures),
+            OutstandingTotal = Math.Max(0, accepted - persisted - lostAfterEnqueue),
+            QueueDepth = Volatile.Read(ref _queueDepth),
+            QueueCapacity = _capacity,
+            Running = Volatile.Read(ref _writerAlive) == 1,
+            LossDetected = dropped > 0,
+            LastEnqueuedAt = ReadTimestamp(ref _lastEnqueuedUnixMilliseconds),
+            LastPersistedAt = ReadTimestamp(ref _lastPersistedUnixMilliseconds),
+            LastDroppedAt = ReadTimestamp(ref _lastDroppedUnixMilliseconds),
+            LastErrorAt = ReadTimestamp(ref _lastErrorUnixMilliseconds),
+        };
+    }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
@@ -179,6 +242,8 @@ public sealed partial class RequestLogBufferWorker : BackgroundService, IRequest
                 await repository.AddBatchAsync(batch, cancellationToken).ConfigureAwait(false);
                 await unitOfWork.CommitAsync(cancellationToken).ConfigureAwait(false);
                 Interlocked.Add(ref _persisted, batch.Count);
+                RecordNow(ref _lastPersistedUnixMilliseconds);
+                RecordEvent("persisted", batch.Count);
             }
             catch
             {
@@ -188,14 +253,16 @@ public sealed partial class RequestLogBufferWorker : BackgroundService, IRequest
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
-            Interlocked.Add(ref _dropped, batch.Count);
+            RecordAcceptedLoss(batch.Count);
             LogCanceledBatch(_logger, batch.Count);
             throw;
         }
         catch (Exception exception) when (exception is not OperationCanceledException)
         {
             Interlocked.Increment(ref _writeFailures);
-            Interlocked.Add(ref _dropped, batch.Count);
+            RecordNow(ref _lastErrorUnixMilliseconds);
+            RecordEvent("write_error");
+            RecordAcceptedLoss(batch.Count);
             LogWriteFailure(_logger, exception, batch.Count);
         }
     }
@@ -219,9 +286,45 @@ public sealed partial class RequestLogBufferWorker : BackgroundService, IRequest
 
         if (remainingLogs > 0)
         {
-            Interlocked.Add(ref _dropped, remainingLogs);
+            RecordAcceptedLoss(remainingLogs);
             LogShutdownDrops(_logger, remainingLogs);
         }
+    }
+
+    public override void Dispose()
+    {
+        _meter.Dispose();
+        base.Dispose();
+    }
+
+    private void RecordAcceptedLoss(int count)
+    {
+        Interlocked.Add(ref _dropped, count);
+        Interlocked.Add(ref _lostAfterEnqueue, count);
+        RecordNow(ref _lastDroppedUnixMilliseconds);
+        RecordEvent("lost_after_enqueue", count);
+    }
+
+    private long OutstandingTotal() => Math.Max(
+        0,
+        Interlocked.Read(ref _accepted)
+        - Interlocked.Read(ref _persisted)
+        - Interlocked.Read(ref _lostAfterEnqueue));
+
+    private void RecordNow(ref long timestamp) => Interlocked.Exchange(
+        ref timestamp,
+        _timeProvider.GetUtcNow().ToUnixTimeMilliseconds());
+
+    private void RecordEvent(string outcome, long count = 1) => _events.Add(
+        count,
+        new KeyValuePair<string, object?>("outcome", outcome));
+
+    private static DateTime? ReadTimestamp(ref long timestamp)
+    {
+        long unixMilliseconds = Interlocked.Read(ref timestamp);
+        return unixMilliseconds == 0
+            ? null
+            : DateTimeOffset.FromUnixTimeMilliseconds(unixMilliseconds).UtcDateTime;
     }
 
     private abstract record QueueItem;

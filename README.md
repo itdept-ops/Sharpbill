@@ -401,7 +401,7 @@ Never use that command against data that must be retained.
 | POST | `/api/presence/heartbeat` | session | presence ping (WebSocket polling fallback) |
 | WS | `/api/ws/presence` | session | real-time presence stream |
 | GET | `/api/admin/logs` | `logs.view` | operational request activity (filters: `search`, `method`, `user_id`) |
-| GET | `/api/admin/logs/metrics` | `logs.view` | bounded access-log queue health and loss counters |
+| GET | `/api/admin/logs/metrics` | `logs.view` | queue health, rejection/post-enqueue loss counters, and event timestamps |
 | GET | `/api/admin/security-events` | `security_events.view` | cursor-paged durable security-event facts and delivery state |
 | GET | `/api/admin/security-events/export.csv` | `security_events.view` | bounded, self-audited security-event export |
 
