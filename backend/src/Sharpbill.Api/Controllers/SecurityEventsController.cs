@@ -1,6 +1,8 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 using Sharpbill.Application.Abstractions;
+using Sharpbill.Api.Configuration;
 using Sharpbill.Contracts.Operations;
 using Sharpbill.Domain.Constants;
 
@@ -26,6 +28,7 @@ public sealed class SecurityEventsController(ISecurityEventService securityEvent
             cancellationToken).ConfigureAwait(false));
 
     [HttpGet("export.csv")]
+    [EnableRateLimiting(RateLimitingExtensions.ExportPolicyName)]
     public async Task<IActionResult> ExportAsync(
         [FromQuery] int limit = 1000,
         [FromQuery(Name = "before_id")] long? beforeId = null,
@@ -40,7 +43,7 @@ public sealed class SecurityEventsController(ISecurityEventService securityEvent
             Query(limit, beforeId, eventType, outcome, severity, actorUserId, requestId),
             ActorUserId,
             cancellationToken).ConfigureAwait(false);
-        return File(export.Content.ToArray(), export.ContentType, export.FileName);
+        return await WriteExportAsync(export, cancellationToken).ConfigureAwait(false);
     }
 
     private static SecurityEventQuery Query(

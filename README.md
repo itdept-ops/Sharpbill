@@ -87,7 +87,9 @@ independently committed, bounded batches, so cleanup does not depend on a future
 The approved lifecycle defaults are exact GPS for 24 hours, pending accounts for 30 days, sessions
 for 30 days after expiry/revocation, request logs for 90 days, explicit erasure after a 30-day grace
 period, disabled accounts for 365 days, and repository security events for 400 days. Generated CSV
-exports are streamed and are not retained as server-side files. Versioned legal-acceptance evidence
+exports are byte-capped before response headers, streamed without a whole-document response buffer,
+limited to `EXPORT_MAX_CONCURRENCY` active requests per API process, and not retained as server-side
+files. Versioned legal-acceptance evidence
 has a provisional 2,555-day default that requires deployment-specific counsel approval. See
 [`docs/DATA_RETENTION_PRIVACY.md`](docs/DATA_RETENTION_PRIVACY.md) for anonymization, hold, backup,
 and evidence requirements.
@@ -253,6 +255,7 @@ review. They do not establish production readiness or legal/regulatory complianc
   the session cookie is also `SameSite=Lax`.
 - **Rate limiting.** Per-IP throttling on nonce/sign-in routes plus a global `/api` backstop,
   keyed on the socket peer or a client address accepted only from configured trusted proxies,
+  and a shared no-queue concurrency gate for user/security-event CSV exports,
   returns `429` with `Retry-After`. The limiter is process-local, so the reference production
   topology runs one API replica until an edge or shared limiter is supplied.
 - **Bounded readiness.** Process-only liveness never touches dependencies. Database-backed
@@ -388,7 +391,7 @@ Never use that command against data that must be retained.
 | POST | `/api/users/{id}/approve` | `users.manage` | approve a pending sign-up |
 | POST | `/api/users/{id}/kick` | `presence.kick` | force sign-out |
 | POST | `/api/users/bulk` | `users.manage` (+ `roles.manage` for assign-role) | bulk actions |
-| GET | `/api/users/export.csv` | `users.export` | bounded, self-audited CSV of the filtered directory |
+| GET | `/api/users/export.csv` | `users.export` | byte/concurrency-bounded, streamed, self-audited CSV of the filtered directory |
 | GET · PUT | `/api/admin/settings` | `settings.manage` | site settings (signup mode, providers, default role) |
 | GET · PUT | `/api/admin/privacy[/hold]` | `privacy.manage` | policy/hold status and documented hold update |
 | GET | `/api/admin/privacy/retention/metrics` | `privacy.manage` | retention cycle, failure, hold, backlog, and oldest-eligible health |
@@ -403,7 +406,7 @@ Never use that command against data that must be retained.
 | GET | `/api/admin/logs` | `logs.view` | cursor-paged request activity; path-prefix filters and opt-in `include_total` |
 | GET | `/api/admin/logs/metrics` | `logs.view` | queue health, rejection/post-enqueue loss counters, and event timestamps |
 | GET | `/api/admin/security-events` | `security_events.view` | cursor-paged durable security-event facts and delivery state |
-| GET | `/api/admin/security-events/export.csv` | `security_events.view` | bounded, self-audited security-event export |
+| GET | `/api/admin/security-events/export.csv` | `security_events.view` | byte/concurrency-bounded, streamed, self-audited security-event export |
 
 ---
 

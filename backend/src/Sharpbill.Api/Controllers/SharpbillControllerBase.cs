@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.Security.Claims;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Net.Http.Headers;
 using Sharpbill.Application.Common;
 
 namespace Sharpbill.Api.Controllers;
@@ -29,6 +30,20 @@ public abstract class SharpbillControllerBase : ControllerBase
         UserAgent = Request.Headers.UserAgent.ToString() is { Length: > 0 } value ? value : null,
         SessionJti = SessionJti,
     };
+
+    protected async Task<IActionResult> WriteExportAsync(
+        ExportDocument export,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(export);
+        var disposition = new ContentDispositionHeaderValue("attachment");
+        disposition.SetHttpFileName(export.FileName);
+        Response.ContentType = export.ContentType;
+        Response.Headers.ContentDisposition = disposition.ToString();
+        Response.Headers.CacheControl = "no-store, max-age=0";
+        await export.WriteAsync(Response.Body, cancellationToken).ConfigureAwait(false);
+        return new EmptyResult();
+    }
 }
 
 public static class SharpbillClaimTypes

@@ -30,7 +30,44 @@ public interface IRequestContextAccessor
     RequestContext Current { get; set; }
 }
 
-public sealed record ExportDocument(string FileName, string ContentType, ReadOnlyMemory<byte> Content);
+public sealed class ExportDocument
+{
+    private readonly Func<Stream, CancellationToken, Task> _writeAsync;
+
+    public ExportDocument(
+        string fileName,
+        string contentType,
+        Func<Stream, CancellationToken, Task> writeAsync)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(fileName);
+        ArgumentException.ThrowIfNullOrWhiteSpace(contentType);
+        ArgumentNullException.ThrowIfNull(writeAsync);
+        if (!string.Equals(fileName, Path.GetFileName(fileName), StringComparison.Ordinal) ||
+            fileName.IndexOfAny(['\r', '\n', '"']) >= 0)
+        {
+            throw new ArgumentException("Export file name must be a safe base name.", nameof(fileName));
+        }
+
+        FileName = fileName;
+        ContentType = contentType;
+        _writeAsync = writeAsync;
+    }
+
+    public string FileName { get; }
+
+    public string ContentType { get; }
+
+    public Task WriteAsync(Stream destination, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(destination);
+        if (!destination.CanWrite)
+        {
+            throw new ArgumentException("Export destination must be writable.", nameof(destination));
+        }
+
+        return _writeAsync(destination, cancellationToken);
+    }
+}
 
 public sealed record GeoPlace(string? Place, string? Timezone);
 

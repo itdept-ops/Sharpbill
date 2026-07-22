@@ -2,13 +2,17 @@ using System.Globalization;
 using System.Net;
 using System.Threading.RateLimiting;
 using Microsoft.AspNetCore.RateLimiting;
+using Microsoft.Extensions.Options;
 using Sharpbill.Api.Diagnostics;
 using Sharpbill.Api.Errors;
+using Sharpbill.Infrastructure.Configuration;
 
 namespace Sharpbill.Api.Configuration;
 
 public static class RateLimitingExtensions
 {
+    public const string ExportPolicyName = "exports";
+
     private const int MaximumActivePartitions = 10_000;
     private static readonly TimeSpan Window = TimeSpan.FromMinutes(1);
 
@@ -23,6 +27,7 @@ public static class RateLimitingExtensions
             options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
             options.GlobalLimiter = PartitionedRateLimiter.Create<HttpContext, string>(context =>
                 CreatePartition(context, partitionRegistry));
+            options.AddPolicy<string, ExportConcurrencyRateLimitPolicy>(ExportPolicyName);
             options.OnRejected = async (context, cancellationToken) =>
             {
                 context.HttpContext.RequestServices
@@ -49,6 +54,45 @@ public static class RateLimitingExtensions
             };
         });
         return services;
+    }
+
+    internal sealed class ExportConcurrencyRateLimitPolicy(IOptions<SharpbillOptions> options)
+        : IRateLimiterPolicy<string>
+    {
+        private readonly int _permitLimit = options.Value.RequestPipeline.ExportMaxConcurrency;
+
+        public Func<OnRejectedContext, CancellationToken, ValueTask>? OnRejected =>
+            RejectExportAsync;
+
+        public RateLimitPartition<string> GetPartition(HttpContext httpContext) =>
+            RateLimitPartition.GetConcurrencyLimiter(
+                ExportPolicyName,
+                _ => new ConcurrencyLimiterOptions
+                {
+                    PermitLimit = _permitLimit,
+                    QueueLimit = 0,
+                    QueueProcessingOrder = QueueProcessingOrder.OldestFirst,
+                });
+
+        private static async ValueTask RejectExportAsync(
+            OnRejectedContext context,
+            CancellationToken cancellationToken)
+        {
+            context.HttpContext.Response.Headers.RetryAfter = "1";
+            context.HttpContext.RequestServices
+                .GetRequiredService<BoundaryRejectionLogger>()
+                .Record(
+                    context.HttpContext,
+                    "export_concurrency",
+                    "EXPORT_CAPACITY_EXCEEDED",
+                    StatusCodes.Status429TooManyRequests);
+            await ApiErrorWriter.WriteAsync(
+                context.HttpContext,
+                StatusCodes.Status429TooManyRequests,
+                "EXPORT_CAPACITY_EXCEEDED",
+                "The export capacity is in use; retry shortly.",
+                cancellationToken: cancellationToken).ConfigureAwait(false);
+        }
     }
 
     private static RateLimitPartition<string> CreatePartition(

@@ -11,6 +11,7 @@ using Sharpbill.Domain.Constants;
 using Sharpbill.Domain.Entities;
 using Sharpbill.Domain.Enums;
 using Sharpbill.Infrastructure.Configuration;
+using Sharpbill.Infrastructure.Services;
 
 namespace Sharpbill.Infrastructure.Services.Operations;
 
@@ -90,30 +91,11 @@ public sealed partial class SecurityEventService(
             Math.Clamp(query.Limit, 1, DomainLimits.MaxExportRows),
             cancellationToken).ConfigureAwait(false);
 
-        var csv = new StringBuilder();
-        AppendRow(csv,
-            "id", "occurred_at", "event_type", "outcome", "severity", "request_id",
-            "actor_user_id", "target_type", "target_id", "source_ip", "metadata_json",
-            "delivery_status", "delivery_attempts", "delivered_at", "retention_until");
-        foreach (SecurityEventResponse row in rows)
-        {
-            AppendRow(csv,
-                row.Id.ToString(CultureInfo.InvariantCulture),
-                row.OccurredAt.ToString("O", CultureInfo.InvariantCulture),
-                row.EventType,
-                row.Outcome,
-                row.Severity,
-                row.RequestId ?? string.Empty,
-                row.ActorUserId?.ToString(CultureInfo.InvariantCulture) ?? string.Empty,
-                row.TargetType ?? string.Empty,
-                row.TargetId ?? string.Empty,
-                row.SourceIp ?? string.Empty,
-                JsonSerializer.Serialize(row.Metadata),
-                row.DeliveryStatus,
-                row.DeliveryAttempts.ToString(CultureInfo.InvariantCulture),
-                row.DeliveredAt?.ToString("O", CultureInfo.InvariantCulture) ?? string.Empty,
-                row.RetentionUntil.ToString("O", CultureInfo.InvariantCulture));
-        }
+        IEnumerable<IReadOnlyList<string>> csvRows = BuildCsvRows(rows);
+        CsvExportWriter.EnsureWithinLimit(
+            csvRows,
+            options.Value.RequestPipeline.ExportMaxBytes,
+            cancellationToken);
 
         await RecordAsync(new SecurityEventWrite
         {
@@ -128,7 +110,13 @@ public sealed partial class SecurityEventService(
             },
         }, cancellationToken).ConfigureAwait(false);
 
-        return new ExportDocument("security-events.csv", "text/csv", Encoding.UTF8.GetBytes(csv.ToString()));
+        return new ExportDocument(
+            "security-events.csv",
+            "text/csv; charset=utf-8",
+            (destination, writeCancellationToken) => CsvExportWriter.WriteAsync(
+                destination,
+                csvRows,
+                writeCancellationToken));
     }
 
     private async Task RequireViewerAsync(int actorUserId, CancellationToken cancellationToken)
@@ -137,28 +125,36 @@ public sealed partial class SecurityEventService(
         ServiceAuthorization.Require(actor, PermissionKeys.SecurityEventsView);
     }
 
-    private static void AppendRow(StringBuilder builder, params string[] fields)
+    private static IEnumerable<IReadOnlyList<string>> BuildCsvRows(
+        IReadOnlyList<SecurityEventResponse> rows)
     {
-        for (int index = 0; index < fields.Length; index++)
+        yield return
+        [
+            "id", "occurred_at", "event_type", "outcome", "severity", "request_id",
+            "actor_user_id", "target_type", "target_id", "source_ip", "metadata_json",
+            "delivery_status", "delivery_attempts", "delivered_at", "retention_until",
+        ];
+        foreach (SecurityEventResponse row in rows)
         {
-            if (index > 0)
-            {
-                builder.Append(',');
-            }
-
-            string field = fields[index];
-            bool quote = field.IndexOfAny([',', '"', '\r', '\n']) >= 0;
-            if (quote)
-            {
-                builder.Append('"').Append(field.Replace("\"", "\"\"", StringComparison.Ordinal)).Append('"');
-            }
-            else
-            {
-                builder.Append(field);
-            }
+            yield return
+            [
+                row.Id.ToString(CultureInfo.InvariantCulture),
+                row.OccurredAt.ToString("O", CultureInfo.InvariantCulture),
+                row.EventType,
+                row.Outcome,
+                row.Severity,
+                row.RequestId ?? string.Empty,
+                row.ActorUserId?.ToString(CultureInfo.InvariantCulture) ?? string.Empty,
+                row.TargetType ?? string.Empty,
+                row.TargetId ?? string.Empty,
+                row.SourceIp ?? string.Empty,
+                JsonSerializer.Serialize(row.Metadata),
+                row.DeliveryStatus,
+                row.DeliveryAttempts.ToString(CultureInfo.InvariantCulture),
+                row.DeliveredAt?.ToString("O", CultureInfo.InvariantCulture) ?? string.Empty,
+                row.RetentionUntil.ToString("O", CultureInfo.InvariantCulture),
+            ];
         }
-
-        builder.AppendLine();
     }
 
     private static string? Truncate(string? value, int length) =>

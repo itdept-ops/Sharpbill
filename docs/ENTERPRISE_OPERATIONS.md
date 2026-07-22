@@ -354,6 +354,14 @@ migration rehearsal.
   exports create a security event. `privacy.manage` separately controls retention/erasure/hold
   administration. Review these grants separately and remove them from broad support roles unless
   their duties require bulk data, evidence, or privacy authority.
+- User and security-event CSVs are measured against `EXPORT_MAX_BYTES` (default 25 MiB) before
+  response headers are sent, then written incrementally to the response instead of constructing a
+  whole-document string/byte array. Both endpoints share a process-wide, no-queue concurrency gate
+  configured by `EXPORT_MAX_CONCURRENCY` (default 2, validated range 1–32). A full gate returns
+  `429 EXPORT_CAPACITY_EXCEEDED` with `Retry-After: 1`; alert on sustained rejection. The gate is
+  per process, so the environment must multiply the limit by the intended replica count when
+  capacity-testing and must enforce a fleet-wide ceiling at ingress if a strict global bound is
+  required.
 - Migration `0016` creates those two built-in permissions and grants them only to the built-in admin
   role. Its upgrade refuses a conflicting custom permission with either reserved key, and its
   downgrade refuses to discard retained non-admin grants. Resolve either refusal intentionally;

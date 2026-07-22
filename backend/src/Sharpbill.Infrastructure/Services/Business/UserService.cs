@@ -1,5 +1,4 @@
 using System.Data.Common;
-using System.Text;
 using Microsoft.Extensions.Options;
 using Sharpbill.Application.Abstractions;
 using Sharpbill.Application.Common;
@@ -10,6 +9,7 @@ using Sharpbill.Contracts.Users;
 using Sharpbill.Domain.Constants;
 using Sharpbill.Domain.Entities;
 using Sharpbill.Infrastructure.Configuration;
+using Sharpbill.Infrastructure.Services;
 
 namespace Sharpbill.Infrastructure.Services.Business;
 
@@ -27,6 +27,7 @@ public sealed class UserService : IUserService
     private readonly IClock _clock;
     private readonly IRequestContextAccessor _requestContextAccessor;
     private readonly RetentionOptions _retention;
+    private readonly int _exportMaxBytes;
     private readonly IValidator<UserQuery> _queryValidator;
     private readonly IValidator<ProfileUpdateRequest> _profileValidator;
     private readonly IValidator<BulkActionRequest> _bulkValidator;
@@ -64,6 +65,7 @@ public sealed class UserService : IUserService
             throw new ArgumentNullException(nameof(requestContextAccessor));
         ArgumentNullException.ThrowIfNull(options);
         _retention = options.Value.Retention;
+        _exportMaxBytes = options.Value.RequestPipeline.ExportMaxBytes;
         _queryValidator = queryValidator ?? throw new ArgumentNullException(nameof(queryValidator));
         _profileValidator = profileValidator ?? throw new ArgumentNullException(nameof(profileValidator));
         _bulkValidator = bulkValidator ?? throw new ArgumentNullException(nameof(bulkValidator));
@@ -586,7 +588,11 @@ public sealed class UserService : IUserService
                 }
 
                 bool includeLocation = actor.EffectivePermissionKeys.Contains(PermissionKeys.UsersManage);
-                byte[] content = BuildCsv(users, includeLocation);
+                IEnumerable<IReadOnlyList<string>> csvRows = BuildCsvRows(users, includeLocation);
+                CsvExportWriter.EnsureWithinLimit(
+                    csvRows,
+                    _exportMaxBytes,
+                    cancellationToken);
                 await RecordEventAsync(
                     "users.exported",
                     actor.Id,
@@ -601,7 +607,13 @@ public sealed class UserService : IUserService
                             query.Online is not null,
                     },
                     cancellationToken).ConfigureAwait(false);
-                return new ExportDocument("users.csv", "text/csv", content);
+                return new ExportDocument(
+                    "users.csv",
+                    "text/csv; charset=utf-8",
+                    (destination, writeCancellationToken) => CsvExportWriter.WriteAsync(
+                        destination,
+                        csvRows,
+                        writeCancellationToken));
             },
             cancellationToken);
     }
@@ -961,13 +973,18 @@ public sealed class UserService : IUserService
         _ => throw new ArgumentOutOfRangeException(nameof(action), action, "Unknown action"),
     };
 
-    private static byte[] BuildCsv(IReadOnlyList<User> users, bool includeLocation)
+    private static IEnumerable<IReadOnlyList<string>> BuildCsvRows(
+        IReadOnlyList<User> users,
+        bool includeLocation)
     {
-        var csv = new StringBuilder();
-        csv.Append("id,email,display_name,role,status,title,department,location,created_at,last_login_at\r\n");
+        yield return
+        [
+            "id", "email", "display_name", "role", "status", "title", "department",
+            "location", "created_at", "last_login_at",
+        ];
         foreach (User user in users)
         {
-            string[] cells =
+            yield return
             [
                 user.Id.ToString(System.Globalization.CultureInfo.InvariantCulture),
                 user.Email,
@@ -980,10 +997,6 @@ public sealed class UserService : IUserService
                 BusinessServiceSupport.IsoTimestamp(user.CreatedAt),
                 BusinessServiceSupport.IsoTimestamp(user.LastLoginAt),
             ];
-            csv.AppendJoin(',', cells.Select(BusinessServiceSupport.CsvCell));
-            csv.Append("\r\n");
         }
-
-        return Encoding.UTF8.GetBytes(csv.ToString());
     }
 }

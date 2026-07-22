@@ -42,6 +42,10 @@ public sealed class SharpbillOptionsValidator : IValidateOptions<SharpbillOption
         InRange(options.Session.LifetimeHours, 1, 168, "SESSION_TTL_HOURS", failures);
         InRange(options.Session.MaxActiveSessionsPerUser, 1, 100, "MAX_ACTIVE_SESSIONS_PER_USER", failures);
         InRange(options.RequestPipeline.BodyLimitBytes, 16_384, 10_485_760, "REQUEST_BODY_MAX_BYTES", failures);
+        InRange(options.RequestPipeline.ExportMaxBytes, 1_048_576, 104_857_600,
+            "EXPORT_MAX_BYTES", failures);
+        InRange(options.RequestPipeline.ExportMaxConcurrency, 1, 32,
+            "EXPORT_MAX_CONCURRENCY", failures);
         InRange(options.RequestPipeline.RequestLogQueueCapacity, 100, 100_000, "REQUEST_LOG_QUEUE_CAPACITY", failures);
         InRange(options.RequestPipeline.RequestLogShutdownTimeoutSeconds, 1, 30,
             "REQUEST_LOG_SHUTDOWN_TIMEOUT_SECONDS", failures);

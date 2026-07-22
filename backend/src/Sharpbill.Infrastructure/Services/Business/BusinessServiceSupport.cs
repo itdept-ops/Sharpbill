@@ -255,19 +255,6 @@ internal static class BusinessServiceSupport
         };
     }
 
-    public static string CsvSafe(string value) =>
-        value.Length > 0 && value[0] is '=' or '+' or '-' or '@' or '\t' or '\r'
-            ? $"'{value}"
-            : value;
-
-    public static string CsvCell(string value)
-    {
-        string safe = CsvSafe(value);
-        return safe.IndexOfAny([',', '"', '\r', '\n']) >= 0
-            ? $"\"{safe.Replace("\"", "\"\"", StringComparison.Ordinal)}\""
-            : safe;
-    }
-
     public static string IsoTimestamp(DateTime? value)
     {
         if (value is null)

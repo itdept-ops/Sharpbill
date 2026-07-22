@@ -74,6 +74,8 @@ public sealed class SharpbillOptionsSetup(IConfiguration configuration) : IConfi
         options.RequestPipeline = new RequestPipelineOptions
         {
             BodyLimitBytes = GetLong("REQUEST_BODY_MAX_BYTES", 1_048_576),
+            ExportMaxBytes = GetInt("EXPORT_MAX_BYTES", 25 * 1024 * 1024),
+            ExportMaxConcurrency = GetInt("EXPORT_MAX_CONCURRENCY", 2),
             RequestLogQueueCapacity = GetInt("REQUEST_LOG_QUEUE_CAPACITY", 2048),
             RequestLogShutdownTimeoutSeconds = GetInt("REQUEST_LOG_SHUTDOWN_TIMEOUT_SECONDS", 5),
             RetentionShutdownTimeoutSeconds = GetInt("RETENTION_WORKER_SHUTDOWN_TIMEOUT_SECONDS", 10),

@@ -19,6 +19,8 @@ public sealed class SharpbillOptionsSetupTests
                 ["SESSION_JWT_SECRET"] = "strong-production-session-secret-0123456789ABCDEF",
                 ["PUBLIC_ORIGIN"] = "https://sharpbill.example",
                 ["GOOGLE_CLIENT_ID"] = "123456789-testclientid.apps.googleusercontent.com",
+                ["EXPORT_MAX_BYTES"] = "8388608",
+                ["EXPORT_MAX_CONCURRENCY"] = "3",
             })
             .Build();
         var options = new SharpbillOptions();
@@ -36,6 +38,8 @@ public sealed class SharpbillOptionsSetupTests
         Assert.Equal("p@ss", options.Database.Password);
         Assert.True(options.Database.RequireTls);
         Assert.Equal("/certs/database.pem", options.Database.TlsCaPath);
+        Assert.Equal(8_388_608, options.RequestPipeline.ExportMaxBytes);
+        Assert.Equal(3, options.RequestPipeline.ExportMaxConcurrency);
     }
 
     [Fact]
@@ -117,5 +121,21 @@ public sealed class SharpbillOptionsSetupTests
         Assert.False(DevelopmentAuthenticationGuard.IsStrongIndependentSecret(
             secret,
             "independent-session-secret-0123456789abcdef"));
+    }
+
+    [Theory]
+    [InlineData(0)]
+    [InlineData(33)]
+    public void ExportConcurrencyRejectsUnsafeBounds(int concurrency)
+    {
+        var options = new SharpbillOptions();
+        options.RequestPipeline.ExportMaxConcurrency = concurrency;
+
+        ValidateOptionsResult result = new SharpbillOptionsValidator().Validate(null, options);
+
+        Assert.True(result.Failed);
+        Assert.Contains(
+            result.Failures,
+            static failure => failure.Contains("EXPORT_MAX_CONCURRENCY", StringComparison.Ordinal));
     }
 }

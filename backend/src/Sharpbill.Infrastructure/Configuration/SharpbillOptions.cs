@@ -157,6 +157,10 @@ public sealed class RequestPipelineOptions
 {
     public long BodyLimitBytes { get; set; } = 1_048_576;
 
+    public int ExportMaxBytes { get; set; } = 25 * 1024 * 1024;
+
+    public int ExportMaxConcurrency { get; set; } = 2;
+
     public int RequestLogQueueCapacity { get; set; } = 2048;
 
     public int RequestLogShutdownTimeoutSeconds { get; set; } = 5;

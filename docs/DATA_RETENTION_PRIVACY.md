@@ -88,8 +88,9 @@ decision. Security events remain subject to their independent 400-day schedule.
 - Ordinary user, settings, log, and security-event permissions do not imply privacy-administration
   authority. Administrative privacy operations require the dedicated least-privilege
   `privacy.manage` permission, seeded only to the built-in admin role.
-- Exports are bounded and streamed. Sharpbill does not retain a generated server-side export file;
-  the recipient and environment owner are responsible for downloaded copies.
+- Exports are row- and byte-bounded before response headers, streamed under a no-queue concurrency
+  cap, and never retained as generated server-side files; the recipient and environment owner are
+  responsible for downloaded copies.
 
 ## Holds and exceptions
 

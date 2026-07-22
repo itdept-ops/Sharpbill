@@ -1,6 +1,8 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 using Sharpbill.Application.Abstractions;
+using Sharpbill.Api.Configuration;
 using Sharpbill.Contracts.Auth;
 using Sharpbill.Contracts.Users;
 using Sharpbill.Domain.Constants;
@@ -28,6 +30,7 @@ public sealed class UsersController(IUserService userService, ISessionService se
 
     [HttpGet("export.csv")]
     [Authorize(Policy = PermissionKeys.UsersExport)]
+    [EnableRateLimiting(RateLimitingExtensions.ExportPolicyName)]
     public async Task<IActionResult> ExportAsync(
         [FromQuery] string? search = null,
         [FromQuery] string? status = null,
@@ -38,7 +41,7 @@ public sealed class UsersController(IUserService userService, ISessionService se
         var query = new UserQuery { Limit = 10_000, Search = search, Status = status, RoleId = roleId, Online = online };
         Application.Common.ExportDocument export =
             await userService.ExportAsync(query, ActorUserId, cancellationToken).ConfigureAwait(false);
-        return File(export.Content.ToArray(), export.ContentType, export.FileName);
+        return await WriteExportAsync(export, cancellationToken).ConfigureAwait(false);
     }
 
     [HttpPost("bulk")]

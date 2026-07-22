@@ -201,13 +201,40 @@ public sealed class UserServiceTests
             new UserQuery(),
             1,
             CancellationToken.None);
-        string csv = Encoding.UTF8.GetString(export.Content.Span);
+        await using var destination = new MemoryStream();
+        await export.WriteAsync(destination, CancellationToken.None);
+        string csv = Encoding.UTF8.GetString(destination.ToArray());
 
         Assert.Contains("'=HYPERLINK", csv, StringComparison.Ordinal);
         Assert.Contains("'+SUM", csv, StringComparison.Ordinal);
         Assert.Contains("'@A1", csv, StringComparison.Ordinal);
         Assert.Equal("users.csv", export.FileName);
         Assert.Equal("users.exported", Assert.Single(fixture.SecurityEvents.Writes).EventType);
+    }
+
+    [Fact]
+    public async Task ExportRejectsCsvAboveConfiguredByteLimitBeforeAuditingAsync()
+    {
+        var fixture = new BusinessServiceFixture();
+        fixture.Options.RequestPipeline.ExportMaxBytes = 32;
+        fixture.Users.Items[1] = Administrator(1);
+        fixture.Users.ExportItems =
+        [
+            BusinessTestData.User(
+                2,
+                SystemRoleNames.DefaultUser,
+                [PermissionKeys.UsersRead, PermissionKeys.PresenceView]),
+        ];
+
+        ApiException exception = await Assert.ThrowsAsync<ApiException>(() =>
+            fixture.CreateUserService().ExportAsync(
+                new UserQuery(),
+                1,
+                CancellationToken.None));
+
+        Assert.Equal(413, exception.StatusCode);
+        Assert.Equal("EXPORT_TOO_LARGE", exception.Code);
+        Assert.Empty(fixture.SecurityEvents.Writes);
     }
 
     [Fact]
