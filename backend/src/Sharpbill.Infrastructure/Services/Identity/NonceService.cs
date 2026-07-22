@@ -7,6 +7,7 @@ using Sharpbill.Contracts.Auth;
 using Sharpbill.Domain.Constants;
 using Sharpbill.Domain.Entities;
 using Sharpbill.Infrastructure.Configuration;
+using Sharpbill.Infrastructure.Database;
 
 namespace Sharpbill.Infrastructure.Services.Identity;
 
@@ -15,11 +16,14 @@ public sealed partial class NonceService(
     IUnitOfWork unitOfWork,
     IClock clock,
     IOptions<SharpbillOptions> options,
-    ILogger<NonceService> logger) : INonceService
+    ILogger<NonceService> logger,
+    MySqlTransientRetryExecutor? retryExecutor = null) : INonceService
 {
     private const int NonceByteLength = 32;
     private static readonly TimeSpan NonceLifetime = TimeSpan.FromMinutes(10);
     private readonly SharpbillOptions _options = options.Value;
+    private readonly MySqlTransientRetryExecutor _retryExecutor =
+        retryExecutor ?? MySqlTransientRetryExecutor.Default;
 
     public async Task<NonceResponse> IssueAsync(CancellationToken cancellationToken)
     {
@@ -39,15 +43,19 @@ public sealed partial class NonceService(
         foreach (int shard in CreateRandomShardOrder())
         {
             string nonce = CreateNonceForShard(shard);
-            bool admitted = await nonceRepository.TryAddWithinCapacityAsync(
-                new LoginNonce
-                {
-                    Nonce = nonce,
-                    CreatedAt = now,
-                    ExpiresAt = now.Add(NonceLifetime),
-                },
-                now,
-                DomainLimits.MaxOutstandingLoginNonces,
+            var loginNonce = new LoginNonce
+            {
+                Nonce = nonce,
+                CreatedAt = now,
+                ExpiresAt = now.Add(NonceLifetime),
+            };
+            bool admitted = await _retryExecutor.ExecuteAsync(
+                "nonce.admit",
+                token => nonceRepository.TryAddWithinCapacityAsync(
+                    loginNonce,
+                    now,
+                    DomainLimits.MaxOutstandingLoginNonces,
+                    token),
                 cancellationToken).ConfigureAwait(false);
             if (admitted)
             {
@@ -68,27 +76,28 @@ public sealed partial class NonceService(
             return false;
         }
 
-        await unitOfWork.BeginAsync(cancellationToken).ConfigureAwait(false);
-        try
-        {
-            DateTime now = clock.UtcNow;
-            int pruned = await nonceRepository.PruneExpiredAsync(
-                now,
-                _options.Retention.NonceBatchSize,
-                cancellationToken).ConfigureAwait(false);
-            bool consumed = await nonceRepository.ConsumeAsync(
-                nonce,
-                now,
-                cancellationToken).ConfigureAwait(false);
-            await unitOfWork.CommitAsync(cancellationToken).ConfigureAwait(false);
-            LogConsume(logger, consumed ? "succeeded" : "rejected_invalid_or_replayed", pruned);
-            return consumed;
-        }
-        catch
-        {
-            await unitOfWork.RollbackAsync(CancellationToken.None).ConfigureAwait(false);
-            throw;
-        }
+        (bool Consumed, int Pruned) result = await _retryExecutor.ExecuteTransactionAsync(
+            unitOfWork,
+            "nonce.consume",
+            async token =>
+            {
+                DateTime now = clock.UtcNow;
+                int pruned = await nonceRepository.PruneExpiredAsync(
+                    now,
+                    _options.Retention.NonceBatchSize,
+                    token).ConfigureAwait(false);
+                bool consumed = await nonceRepository.ConsumeAsync(
+                    nonce,
+                    now,
+                    token).ConfigureAwait(false);
+                return (consumed, pruned);
+            },
+            cancellationToken).ConfigureAwait(false);
+        LogConsume(
+            logger,
+            result.Consumed ? "succeeded" : "rejected_invalid_or_replayed",
+            result.Pruned);
+        return result.Consumed;
     }
 
     private static string Base64UrlEncode(byte[] value) =>

@@ -9,6 +9,7 @@ using Sharpbill.Contracts.Users;
 using Sharpbill.Domain.Entities;
 using Sharpbill.Domain.Enums;
 using Sharpbill.Infrastructure.Configuration;
+using Sharpbill.Infrastructure.Database;
 
 namespace Sharpbill.Infrastructure.Services.Identity;
 
@@ -27,13 +28,16 @@ public sealed partial class AuthService(
     IValidator<DevLoginRequest> devRequestValidator,
     IClock clock,
     IOptions<SharpbillOptions> options,
-    ILogger<AuthService> logger) : IAuthService
+    ILogger<AuthService> logger,
+    MySqlTransientRetryExecutor? retryExecutor = null) : IAuthService
 {
     private const string AdministratorRole = "admin";
     private const string DefaultRole = "user";
     private readonly Dictionary<ProviderContract, IIdentityTokenVerifier> _tokenVerifiers =
         tokenVerifiers.ToDictionary(static verifier => verifier.Provider);
     private readonly SharpbillOptions _options = options.Value;
+    private readonly MySqlTransientRetryExecutor _retryExecutor =
+        retryExecutor ?? MySqlTransientRetryExecutor.Default;
 
     public async Task<AuthConfigResponse> GetConfigurationAsync(CancellationToken cancellationToken)
     {
@@ -147,124 +151,132 @@ public sealed partial class AuthService(
 
         devRequestValidator.Validate(request).ThrowIfInvalid();
         legalService.RequireCurrentAcceptance(request.LegalAccepted, request.LegalBundleVersion);
-        await unitOfWork.BeginAsync(cancellationToken).ConfigureAwait(false);
-        try
-        {
-            DateTime now = clock.UtcNow;
-            string email = request.Email.Trim().ToLowerInvariant();
-            UserIdentity? devIdentity = await identityRepository.FindAsync(
-                "dev",
-                string.Empty,
-                email,
-                false,
-                cancellationToken).ConfigureAwait(false);
-            User? user = devIdentity is null
-                ? await userRepository.FindByEmailForAuthenticationAsync(
-                    email,
-                    cancellationToken).ConfigureAwait(false)
-                : await userRepository.FindForAuthenticationAsync(
-                    devIdentity.UserId,
-                    cancellationToken).ConfigureAwait(false);
-            if (devIdentity is not null && user is null)
+        return await _retryExecutor.ExecuteAsync(
+            "auth.dev_login",
+            async _ =>
             {
-                throw ApiException.Forbidden("ACCOUNT_DISABLED", "This account is unavailable");
-            }
-
-            if (user is null)
-            {
-                string roleName = request.Role ??
-                    (_options.IdentityProviders.DevelopmentAdminEmails.Contains(email)
-                        ? AdministratorRole
-                        : DefaultRole);
-                Role role = await FindRoleOrDefaultAsync(roleName, cancellationToken).ConfigureAwait(false);
-                var newUser = new User
+                await unitOfWork.BeginAsync(cancellationToken).ConfigureAwait(false);
+                try
                 {
-                    Id = 0,
-                    Email = email,
-                    DisplayName = string.IsNullOrEmpty(request.DisplayName)
-                        ? email.Split('@')[0]
-                        : request.DisplayName,
-                    RoleId = role.Id,
-                    RoleName = role.Name,
-                    IsActive = true,
-                    IsApproved = true,
-                    AccessVersion = 1,
-                    LastLoginAt = now,
-                    LastSeenAt = now,
-                    CreatedAt = now,
-                    UpdatedAt = now,
-                    RolePermissionKeys = role.PermissionKeys,
-                };
-                int userId = await userRepository.AddAsync(
-                    newUser,
-                    cancellationToken).ConfigureAwait(false);
-                var identity = new UserIdentity
-                {
-                    Id = 0,
-                    UserId = userId,
-                    Provider = IdentityProvider.Dev,
-                    ProviderNamespace = string.Empty,
-                    ProviderSubject = email,
-                    CreatedAt = now,
-                    UpdatedAt = now,
-                };
-                int identityId = await identityRepository.AddAsync(
-                    identity,
-                    cancellationToken).ConfigureAwait(false);
-                user = newUser with
-                {
-                    Id = userId,
-                    Identities = [identity with { Id = identityId }],
-                };
-            }
-            else
-            {
-                RequireAuthenticatable(user);
-                if (devIdentity is null)
-                {
-                    var identity = new UserIdentity
-                    {
-                        Id = 0,
-                        UserId = user.Id,
-                        Provider = IdentityProvider.Dev,
-                        ProviderNamespace = string.Empty,
-                        ProviderSubject = email,
-                        CreatedAt = now,
-                        UpdatedAt = now,
-                    };
-                    int identityId = await identityRepository.AddAsync(
-                        identity,
+                    DateTime now = clock.UtcNow;
+                    string email = request.Email.Trim().ToLowerInvariant();
+                    UserIdentity? devIdentity = await identityRepository.FindAsync(
+                        "dev",
+                        string.Empty,
+                        email,
+                        false,
                         cancellationToken).ConfigureAwait(false);
-                    user = user with
+                    User? user = devIdentity is null
+                        ? await userRepository.FindByEmailForAuthenticationAsync(
+                            email,
+                            cancellationToken).ConfigureAwait(false)
+                        : await userRepository.FindForAuthenticationAsync(
+                            devIdentity.UserId,
+                            cancellationToken).ConfigureAwait(false);
+                    if (devIdentity is not null && user is null)
                     {
-                        Identities = [.. user.Identities, identity with { Id = identityId }],
-                    };
+                        throw ApiException.Forbidden("ACCOUNT_DISABLED", "This account is unavailable");
+                    }
+
+                    if (user is null)
+                    {
+                        string roleName = request.Role ??
+                            (_options.IdentityProviders.DevelopmentAdminEmails.Contains(email)
+                                ? AdministratorRole
+                                : DefaultRole);
+                        Role role = await FindRoleOrDefaultAsync(roleName, cancellationToken).ConfigureAwait(false);
+                        var newUser = new User
+                        {
+                            Id = 0,
+                            Email = email,
+                            DisplayName = string.IsNullOrEmpty(request.DisplayName)
+                                ? email.Split('@')[0]
+                                : request.DisplayName,
+                            RoleId = role.Id,
+                            RoleName = role.Name,
+                            IsActive = true,
+                            IsApproved = true,
+                            AccessVersion = 1,
+                            LastLoginAt = now,
+                            LastSeenAt = now,
+                            CreatedAt = now,
+                            UpdatedAt = now,
+                            RolePermissionKeys = role.PermissionKeys,
+                        };
+                        int userId = await userRepository.AddAsync(
+                            newUser,
+                            cancellationToken).ConfigureAwait(false);
+                        var identity = new UserIdentity
+                        {
+                            Id = 0,
+                            UserId = userId,
+                            Provider = IdentityProvider.Dev,
+                            ProviderNamespace = string.Empty,
+                            ProviderSubject = email,
+                            CreatedAt = now,
+                            UpdatedAt = now,
+                        };
+                        int identityId = await identityRepository.AddAsync(
+                            identity,
+                            cancellationToken).ConfigureAwait(false);
+                        user = newUser with
+                        {
+                            Id = userId,
+                            Identities = [identity with { Id = identityId }],
+                        };
+                    }
+                    else
+                    {
+                        RequireAuthenticatable(user);
+                        if (devIdentity is null)
+                        {
+                            var identity = new UserIdentity
+                            {
+                                Id = 0,
+                                UserId = user.Id,
+                                Provider = IdentityProvider.Dev,
+                                ProviderNamespace = string.Empty,
+                                ProviderSubject = email,
+                                CreatedAt = now,
+                                UpdatedAt = now,
+                            };
+                            int identityId = await identityRepository.AddAsync(
+                                identity,
+                                cancellationToken).ConfigureAwait(false);
+                            user = user with
+                            {
+                                Identities = [.. user.Identities, identity with { Id = identityId }],
+                            };
+                        }
+
+                        user = user with { LastLoginAt = now, LastSeenAt = now, UpdatedAt = now };
+                        await userRepository.UpdateAsync(user, cancellationToken).ConfigureAwait(false);
+                    }
+
+                    await AddLoginSuccessEventAsync(
+                        user.Id,
+                        "dev",
+                        context,
+                        now,
+                        cancellationToken).ConfigureAwait(false);
+                    SessionToken token = await sessionService.StageStartAsync(
+                        user.Id,
+                        request.LegalAccepted,
+                        request.LegalBundleVersion,
+                        context,
+                        cancellationToken).ConfigureAwait(false);
+                    await unitOfWork.CommitAsync(cancellationToken).ConfigureAwait(false);
+                    return new AuthenticatedSession(
+                        IdentityUserMapper.ToResponse(user, online: true),
+                        token);
                 }
-
-                user = user with { LastLoginAt = now, LastSeenAt = now, UpdatedAt = now };
-                await userRepository.UpdateAsync(user, cancellationToken).ConfigureAwait(false);
-            }
-
-            await AddLoginSuccessEventAsync(
-                user.Id,
-                "dev",
-                context,
-                now,
-                cancellationToken).ConfigureAwait(false);
-            SessionToken token = await sessionService.StageStartAsync(
-                user.Id,
-                request.LegalAccepted,
-                request.LegalBundleVersion,
-                context,
-                cancellationToken).ConfigureAwait(false);
-            await unitOfWork.CommitAsync(cancellationToken).ConfigureAwait(false);
-            return new AuthenticatedSession(IdentityUserMapper.ToResponse(user, online: true), token);
-        }
-        catch
-        {
-            await unitOfWork.RollbackAsync(CancellationToken.None).ConfigureAwait(false);
-            throw;
-        }
+                catch
+                {
+                    await unitOfWork.RollbackAsync(CancellationToken.None).ConfigureAwait(false);
+                    throw;
+                }
+            },
+            cancellationToken).ConfigureAwait(false);
     }
 
     public async Task LogoutAsync(RequestContext context, CancellationToken cancellationToken)
@@ -274,57 +286,63 @@ public sealed partial class AuthService(
             return;
         }
 
-        await unitOfWork.BeginAsync(cancellationToken).ConfigureAwait(false);
-        try
-        {
-            UserSession? session = await sessionRepository.FindByJtiAsync(
-                jti,
-                true,
-                cancellationToken).ConfigureAwait(false);
-            if (context.SessionUserId.HasValue && session?.UserId != context.SessionUserId.Value)
+        await _retryExecutor.ExecuteAsync(
+            "auth.logout",
+            async _ =>
             {
-                session = null;
-            }
+                await unitOfWork.BeginAsync(cancellationToken).ConfigureAwait(false);
+                try
+                {
+                    UserSession? session = await sessionRepository.FindByJtiAsync(
+                        jti,
+                        true,
+                        cancellationToken).ConfigureAwait(false);
+                    if (context.SessionUserId.HasValue && session?.UserId != context.SessionUserId.Value)
+                    {
+                        session = null;
+                    }
 
-            int? auditUserId = session?.UserId ?? context.SessionUserId;
-            if (!auditUserId.HasValue)
-            {
-                await unitOfWork.RollbackAsync(cancellationToken).ConfigureAwait(false);
-                return;
-            }
+                    int? auditUserId = session?.UserId ?? context.SessionUserId;
+                    if (!auditUserId.HasValue)
+                    {
+                        await unitOfWork.RollbackAsync(cancellationToken).ConfigureAwait(false);
+                        return;
+                    }
 
-            DateTime now = clock.UtcNow;
-            bool revoked = session?.RevokedAt is null && session is not null;
-            if (revoked)
-            {
-                await sessionRepository.RevokeAsync(session!.Id, now, cancellationToken).ConfigureAwait(false);
-            }
+                    DateTime now = clock.UtcNow;
+                    bool revoked = session?.RevokedAt is null && session is not null;
+                    if (revoked)
+                    {
+                        await sessionRepository.RevokeAsync(session!.Id, now, cancellationToken).ConfigureAwait(false);
+                    }
 
-            var metadata = new Dictionary<string, object?>(StringComparer.Ordinal)
-            {
-                ["session_revoked"] = revoked,
-            };
-            SecurityEvent securityEvent = IdentitySecurityEventFactory.Create(
-                "auth.logout",
-                SecurityEventOutcome.Success,
-                SecurityEventSeverity.Info,
-                context,
-                now,
-                _options.Retention.SecurityEventDays,
-                auditUserId.Value,
-                "user",
-                auditUserId.Value.ToString(System.Globalization.CultureInfo.InvariantCulture),
-                metadata);
-            _ = await securityEventRepository.AddWithPendingDeliveryAsync(
-                securityEvent,
-                cancellationToken).ConfigureAwait(false);
-            await unitOfWork.CommitAsync(cancellationToken).ConfigureAwait(false);
-        }
-        catch
-        {
-            await unitOfWork.RollbackAsync(CancellationToken.None).ConfigureAwait(false);
-            throw;
-        }
+                    var metadata = new Dictionary<string, object?>(StringComparer.Ordinal)
+                    {
+                        ["session_revoked"] = revoked,
+                    };
+                    SecurityEvent securityEvent = IdentitySecurityEventFactory.Create(
+                        "auth.logout",
+                        SecurityEventOutcome.Success,
+                        SecurityEventSeverity.Info,
+                        context,
+                        now,
+                        _options.Retention.SecurityEventDays,
+                        auditUserId.Value,
+                        "user",
+                        auditUserId.Value.ToString(System.Globalization.CultureInfo.InvariantCulture),
+                        metadata);
+                    await securityEventRepository.AddWithPendingDeliveryAsync(
+                        securityEvent,
+                        cancellationToken).ConfigureAwait(false);
+                    await unitOfWork.CommitAsync(cancellationToken).ConfigureAwait(false);
+                }
+                catch
+                {
+                    await unitOfWork.RollbackAsync(CancellationToken.None).ConfigureAwait(false);
+                    throw;
+                }
+            },
+            cancellationToken).ConfigureAwait(false);
     }
 
     public async Task<UserResponse> GetCurrentUserAsync(
@@ -350,62 +368,68 @@ public sealed partial class AuthService(
         RequestContext context,
         CancellationToken cancellationToken)
     {
-        for (int attempt = 0; ; attempt++)
-        {
-            await unitOfWork.BeginAsync(cancellationToken).ConfigureAwait(false);
-            try
+        return await _retryExecutor.ExecuteAsync(
+            "auth.provider_login",
+            async _ =>
             {
-                SiteSettings site = await settingsRepository.GetForShareAsync(
-                    cancellationToken).ConfigureAwait(false)
-                    ?? throw new ApiException(500, "INTERNAL_ERROR", "Site settings row is missing");
-                if (!ProviderEnabled(site, identity.Provider))
+                for (int attempt = 0; ; attempt++)
                 {
-                    throw ProviderDisabled(identity.Provider);
-                }
+                    await unitOfWork.BeginAsync(cancellationToken).ConfigureAwait(false);
+                    try
+                    {
+                        SiteSettings site = await settingsRepository.GetForShareAsync(
+                            cancellationToken).ConfigureAwait(false)
+                            ?? throw new ApiException(500, "INTERNAL_ERROR", "Site settings row is missing");
+                        if (!ProviderEnabled(site, identity.Provider))
+                        {
+                            throw ProviderDisabled(identity.Provider);
+                        }
 
-                ProvisionedUser provisioned = await FindOrProvisionAsync(
-                    site,
-                    identity,
-                    cancellationToken).ConfigureAwait(false);
-                if (!provisioned.User.IsApproved)
-                {
-                    await unitOfWork.CommitAsync(cancellationToken).ConfigureAwait(false);
-                    throw ApiException.Forbidden(
-                        "PENDING_APPROVAL",
-                        provisioned.WasCreated
-                            ? "Your account was created and is awaiting approval"
-                            : "Your account is awaiting administrator approval");
-                }
+                        ProvisionedUser provisioned = await FindOrProvisionAsync(
+                            site,
+                            identity,
+                            cancellationToken).ConfigureAwait(false);
+                        if (!provisioned.User.IsApproved)
+                        {
+                            await unitOfWork.CommitAsync(cancellationToken).ConfigureAwait(false);
+                            throw ApiException.Forbidden(
+                                "PENDING_APPROVAL",
+                                provisioned.WasCreated
+                                    ? "Your account was created and is awaiting approval"
+                                    : "Your account is awaiting administrator approval");
+                        }
 
-                RequireAuthenticatable(provisioned.User);
-                DateTime now = clock.UtcNow;
-                await AddLoginSuccessEventAsync(
-                    provisioned.User.Id,
-                    ProviderName(identity.Provider),
-                    context,
-                    now,
-                    cancellationToken).ConfigureAwait(false);
-                SessionToken token = await sessionService.StageStartAsync(
-                    provisioned.User.Id,
-                    request.LegalAccepted,
-                    request.LegalBundleVersion,
-                    context,
-                    cancellationToken).ConfigureAwait(false);
-                await unitOfWork.CommitAsync(cancellationToken).ConfigureAwait(false);
-                return new AuthenticatedSession(
-                    IdentityUserMapper.ToResponse(provisioned.User, online: true),
-                    token);
-            }
-            catch (MySqlException exception) when (exception.Number == 1062 && attempt == 0)
-            {
-                await unitOfWork.RollbackAsync(CancellationToken.None).ConfigureAwait(false);
-            }
-            catch
-            {
-                await unitOfWork.RollbackAsync(CancellationToken.None).ConfigureAwait(false);
-                throw;
-            }
-        }
+                        RequireAuthenticatable(provisioned.User);
+                        DateTime now = clock.UtcNow;
+                        await AddLoginSuccessEventAsync(
+                            provisioned.User.Id,
+                            ProviderName(identity.Provider),
+                            context,
+                            now,
+                            cancellationToken).ConfigureAwait(false);
+                        SessionToken token = await sessionService.StageStartAsync(
+                            provisioned.User.Id,
+                            request.LegalAccepted,
+                            request.LegalBundleVersion,
+                            context,
+                            cancellationToken).ConfigureAwait(false);
+                        await unitOfWork.CommitAsync(cancellationToken).ConfigureAwait(false);
+                        return new AuthenticatedSession(
+                            IdentityUserMapper.ToResponse(provisioned.User, online: true),
+                            token);
+                    }
+                    catch (MySqlException exception) when (exception.Number == 1062 && attempt == 0)
+                    {
+                        await unitOfWork.RollbackAsync(CancellationToken.None).ConfigureAwait(false);
+                    }
+                    catch
+                    {
+                        await unitOfWork.RollbackAsync(CancellationToken.None).ConfigureAwait(false);
+                        throw;
+                    }
+                }
+            },
+            cancellationToken).ConfigureAwait(false);
     }
 
     private async Task<ProvisionedUser> FindOrProvisionAsync(
@@ -564,27 +588,32 @@ public sealed partial class AuthService(
         try
         {
             await unitOfWork.RollbackAsync(auditTimeout.Token).ConfigureAwait(false);
-            await unitOfWork.BeginAsync(auditTimeout.Token).ConfigureAwait(false);
-            DateTime now = clock.UtcNow;
-            var metadata = new Dictionary<string, object?>(StringComparer.Ordinal)
-            {
-                ["provider"] = provider,
-                ["reason"] = reason,
-            };
-            SecurityEvent securityEvent = IdentitySecurityEventFactory.Create(
-                "auth.login",
-                outcome,
-                SecurityEventSeverity.Warning,
-                context,
-                now,
-                _options.Retention.SecurityEventDays,
-                targetType: "identity_provider",
-                targetId: provider,
-                metadata: metadata);
-            _ = await securityEventRepository.AddWithPendingDeliveryAsync(
-                securityEvent,
+            await _retryExecutor.ExecuteTransactionAsync(
+                unitOfWork,
+                "auth.audit_failure",
+                async token =>
+                {
+                    DateTime now = clock.UtcNow;
+                    var metadata = new Dictionary<string, object?>(StringComparer.Ordinal)
+                    {
+                        ["provider"] = provider,
+                        ["reason"] = reason,
+                    };
+                    SecurityEvent securityEvent = IdentitySecurityEventFactory.Create(
+                        "auth.login",
+                        outcome,
+                        SecurityEventSeverity.Warning,
+                        context,
+                        now,
+                        _options.Retention.SecurityEventDays,
+                        targetType: "identity_provider",
+                        targetId: provider,
+                        metadata: metadata);
+                    await securityEventRepository.AddWithPendingDeliveryAsync(
+                        securityEvent,
+                        token).ConfigureAwait(false);
+                },
                 auditTimeout.Token).ConfigureAwait(false);
-            await unitOfWork.CommitAsync(auditTimeout.Token).ConfigureAwait(false);
         }
         catch (Exception exception)
         {

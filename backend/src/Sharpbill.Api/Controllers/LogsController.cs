@@ -3,15 +3,22 @@ using Microsoft.AspNetCore.Mvc;
 using Sharpbill.Application.Abstractions;
 using Sharpbill.Contracts.Operations;
 using Sharpbill.Domain.Constants;
+using Sharpbill.Infrastructure.Database;
 
 namespace Sharpbill.Api.Controllers;
 
 [Route("api/admin/logs")]
 [Authorize(Policy = PermissionKeys.LogsView)]
-public sealed class LogsController(IRequestLogService requestLogService) : SharpbillControllerBase
+public sealed class LogsController(
+    IRequestLogService requestLogService,
+    DatabaseRetryTelemetry databaseRetryTelemetry) : SharpbillControllerBase
 {
     [HttpGet("metrics")]
     public ActionResult<RequestLogMetricsResponse> Metrics() => Ok(requestLogService.GetMetrics());
+
+    [HttpGet("database-retry-metrics")]
+    public ActionResult<DatabaseRetryMetricsResponse> DatabaseRetryMetrics() =>
+        Ok(databaseRetryTelemetry.GetMetrics());
 
     [HttpGet]
     public async Task<ActionResult<RequestLogListResponse>> ListAsync(

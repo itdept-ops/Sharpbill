@@ -473,6 +473,17 @@ older rows. Keep exact counts for deliberate investigations, not polling. Profil
 other filters with production-shaped cardinality before adding an index or widening search
 semantics; the frozen `0021` schema must not be changed without a reviewed forward migration.
 
+Replay-safe database work uses one bounded transient policy across repository-owned transactions,
+provider/dev authentication, session start/revoke/validation and conditional activity refresh,
+nonce admission/consumption, retention batches, and request-log persistence. Only MySQL error 1205
+(lock-wait timeout) and 1213 (deadlock) are retried; each failed attempt is fully rolled back before
+exponential jitter, and the third failure is returned to the existing availability error boundary.
+Do not wrap external calls or non-transactional side effects in this policy. The standard .NET
+`Sharpbill.Database` meter tags retry/recovery/exhaustion counters by bounded operation name and
+MySQL error code. `GET /api/admin/logs/database-retry-metrics` (permission `logs.view`) exposes
+process totals and last-event timestamps. Alert on any exhaustion and on sustained retry growth;
+establish normal rates with representative concurrency and inject 1205/1213 during rehearsal.
+
 Privileged changes and authentication outcomes are staged transactionally as append-only event
 facts with separate mutable retry/lease state. The repository supplies bounded cursor reads,
 self-audited CSV export, an approved 400-day application retention schedule, and worker-facing

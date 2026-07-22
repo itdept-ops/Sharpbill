@@ -42,6 +42,8 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<IClock, TimeProviderClock>();
         services.AddScoped<IRequestContextAccessor, RequestContextAccessor>();
         services.AddSingleton<IDatabaseConnectionFactory, MySqlConnectionFactory>();
+        services.AddSingleton(DatabaseRetryTelemetry.Shared);
+        services.AddSingleton<MySqlTransientRetryExecutor>();
         services.AddScoped<DatabaseSession>();
         services.AddScoped<IUnitOfWork>(static provider => provider.GetRequiredService<DatabaseSession>());
         services.AddMemoryCache();

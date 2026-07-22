@@ -243,6 +243,10 @@ review. They do not establish production readiness or legal/regulatory complianc
   cookies are rejected on the next request (and reactivation can't resurrect them).
 - **Per-device sessions.** Each cookie is bound to a server-side session row (`jti`); revoking one
   signs out one device, kick revokes them all — a stateless JWT with server-tracked revocation.
+- **Bounded lock-fault recovery.** Replay-safe database transaction boundaries retry only MySQL
+  deadlock/lock-wait errors (`1213`/`1205`) up to three attempts with exponential jitter. Auth,
+  session, nonce, retention, request-log, and repository-owned transactions share the policy and
+  emit retry/recovery/exhaustion telemetry; arbitrary failures and side effects are not retried.
 - **Session-token contract and rotation.** Session JWTs require an explicit issuer, audience,
   token type, subject, `jti`, issue time, expiry, and key ID. A bounded previous-key ring supports
   overlap rotation (at most five previous secrets); production cookies use the browser-enforced
@@ -405,6 +409,7 @@ Never use that command against data that must be retained.
 | WS | `/api/ws/presence` | session | real-time presence stream |
 | GET | `/api/admin/logs` | `logs.view` | cursor-paged request activity; path-prefix filters and opt-in `include_total` |
 | GET | `/api/admin/logs/metrics` | `logs.view` | queue health, rejection/post-enqueue loss counters, and event timestamps |
+| GET | `/api/admin/logs/database-retry-metrics` | `logs.view` | bounded MySQL lock-retry, recovery, exhaustion counters, and timestamps |
 | GET | `/api/admin/security-events` | `security_events.view` | cursor-paged durable security-event facts and delivery state |
 | GET | `/api/admin/security-events/export.csv` | `security_events.view` | byte/concurrency-bounded, streamed, self-audited security-event export |
 

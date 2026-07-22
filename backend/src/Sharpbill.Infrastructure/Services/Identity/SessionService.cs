@@ -8,6 +8,7 @@ using Sharpbill.Domain.Constants;
 using Sharpbill.Domain.Entities;
 using Sharpbill.Domain.Enums;
 using Sharpbill.Infrastructure.Configuration;
+using Sharpbill.Infrastructure.Database;
 
 namespace Sharpbill.Infrastructure.Services.Identity;
 
@@ -21,11 +22,14 @@ public sealed class SessionService(
     IClock clock,
     IRequestContextAccessor requestContextAccessor,
     SessionJwtIssuer jwtIssuer,
-    IOptions<SharpbillOptions> options) : ISessionService
+    IOptions<SharpbillOptions> options,
+    MySqlTransientRetryExecutor? retryExecutor = null) : ISessionService
 {
     private const int PresenceRefreshSeconds = 15;
     private const int CorruptSessionRecoveryThreshold = 500;
     private readonly SharpbillOptions _options = options.Value;
+    private readonly MySqlTransientRetryExecutor _retryExecutor =
+        retryExecutor ?? MySqlTransientRetryExecutor.Default;
 
     public async Task<SessionToken> StartAsync(
         int userId,
@@ -34,23 +38,16 @@ public sealed class SessionService(
         RequestContext context,
         CancellationToken cancellationToken)
     {
-        await unitOfWork.BeginAsync(cancellationToken).ConfigureAwait(false);
-        try
-        {
-            SessionToken token = await StageStartAsync(
+        return await _retryExecutor.ExecuteTransactionAsync(
+            unitOfWork,
+            "session.start",
+            token => StageStartAsync(
                 userId,
                 legalAccepted,
                 legalBundleVersion,
                 context,
-                cancellationToken).ConfigureAwait(false);
-            await unitOfWork.CommitAsync(cancellationToken).ConfigureAwait(false);
-            return token;
-        }
-        catch
-        {
-            await unitOfWork.RollbackAsync(CancellationToken.None).ConfigureAwait(false);
-            throw;
-        }
+                token),
+            cancellationToken).ConfigureAwait(false);
     }
 
     public async Task<SessionToken> StageStartAsync(
@@ -142,69 +139,66 @@ public sealed class SessionService(
         int sessionId,
         CancellationToken cancellationToken)
     {
-        await unitOfWork.BeginAsync(cancellationToken).ConfigureAwait(false);
-        try
-        {
-            (User actor, User target) = await LoadActorAndTargetForUpdateAsync(
-                actorUserId,
-                targetUserId,
-                cancellationToken).ConfigureAwait(false);
-            bool selfService = actorUserId == targetUserId;
-            if (!selfService)
+        await _retryExecutor.ExecuteTransactionAsync(
+            unitOfWork,
+            "session.revoke",
+            async token =>
             {
-                RbacHierarchyPolicy.RequirePermission(actor, PermissionKeys.PresenceKick);
-                RbacHierarchyPolicy.EnsureCanManageTarget(actor, target);
-            }
-
-            UserSession session = await sessionRepository.FindAsync(
-                sessionId,
-                true,
-                cancellationToken).ConfigureAwait(false)
-                ?? throw ApiException.NotFound("Session not found");
-            if (session.UserId != targetUserId)
-            {
-                throw ApiException.NotFound("Session not found");
-            }
-
-            DateTime now = clock.UtcNow;
-            bool wasActive = session.RevokedAt is null;
-            if (wasActive)
-            {
-                await sessionRepository.RevokeAsync(session.Id, now, cancellationToken).ConfigureAwait(false);
-            }
-
-            IReadOnlyDictionary<string, object?> metadata = selfService
-                ? new Dictionary<string, object?>(StringComparer.Ordinal)
+                (User actor, User target) = await LoadActorAndTargetForUpdateAsync(
+                    actorUserId,
+                    targetUserId,
+                    token).ConfigureAwait(false);
+                bool selfService = actorUserId == targetUserId;
+                if (!selfService)
                 {
-                    ["scope"] = "self",
+                    RbacHierarchyPolicy.RequirePermission(actor, PermissionKeys.PresenceKick);
+                    RbacHierarchyPolicy.EnsureCanManageTarget(actor, target);
                 }
-                : new Dictionary<string, object?>(StringComparer.Ordinal)
+
+                UserSession session = await sessionRepository.FindAsync(
+                    sessionId,
+                    true,
+                    token).ConfigureAwait(false)
+                    ?? throw ApiException.NotFound("Session not found");
+                if (session.UserId != targetUserId)
                 {
-                    ["scope"] = "single",
-                    ["session_id"] = session.Id,
-                };
-            SecurityEvent securityEvent = IdentitySecurityEventFactory.Create(
-                "session.revoked",
-                SecurityEventOutcome.Success,
-                selfService ? SecurityEventSeverity.Info : SecurityEventSeverity.Warning,
-                requestContextAccessor.Current,
-                now,
-                _options.Retention.SecurityEventDays,
-                actorUserId,
-                selfService ? "user_session" : "user",
-                (selfService ? session.Id : target.Id)
-                    .ToString(System.Globalization.CultureInfo.InvariantCulture),
-                metadata);
-            _ = await securityEventRepository.AddWithPendingDeliveryAsync(
-                securityEvent,
-                cancellationToken).ConfigureAwait(false);
-            await unitOfWork.CommitAsync(cancellationToken).ConfigureAwait(false);
-        }
-        catch
-        {
-            await unitOfWork.RollbackAsync(CancellationToken.None).ConfigureAwait(false);
-            throw;
-        }
+                    throw ApiException.NotFound("Session not found");
+                }
+
+                DateTime now = clock.UtcNow;
+                bool wasActive = session.RevokedAt is null;
+                if (wasActive)
+                {
+                    await sessionRepository.RevokeAsync(session.Id, now, token).ConfigureAwait(false);
+                }
+
+                IReadOnlyDictionary<string, object?> metadata = selfService
+                    ? new Dictionary<string, object?>(StringComparer.Ordinal)
+                    {
+                        ["scope"] = "self",
+                    }
+                    : new Dictionary<string, object?>(StringComparer.Ordinal)
+                    {
+                        ["scope"] = "single",
+                        ["session_id"] = session.Id,
+                    };
+                SecurityEvent securityEvent = IdentitySecurityEventFactory.Create(
+                    "session.revoked",
+                    SecurityEventOutcome.Success,
+                    selfService ? SecurityEventSeverity.Info : SecurityEventSeverity.Warning,
+                    requestContextAccessor.Current,
+                    now,
+                    _options.Retention.SecurityEventDays,
+                    actorUserId,
+                    selfService ? "user_session" : "user",
+                    (selfService ? session.Id : target.Id)
+                        .ToString(System.Globalization.CultureInfo.InvariantCulture),
+                    metadata);
+                _ = await securityEventRepository.AddWithPendingDeliveryAsync(
+                    securityEvent,
+                    token).ConfigureAwait(false);
+            },
+            cancellationToken).ConfigureAwait(false);
     }
 
     /// <remarks>Stages revocation in the caller's ambient unit of work.</remarks>
@@ -223,84 +217,97 @@ public sealed class SessionService(
         DateTime issuedAt,
         CancellationToken cancellationToken)
     {
-        User? user;
-        UserSession? session;
-        bool refreshUserPresence = false;
-        bool refreshSessionPresence = false;
         DateTime now = clock.UtcNow;
         DateTime staleBefore = now.AddSeconds(-PresenceRefreshSeconds);
+        SessionValidationSnapshot snapshot = await _retryExecutor.ExecuteTransactionAsync(
+            unitOfWork,
+            "session.validate",
+            async token =>
+            {
+                User? user = await userRepository.FindForAuthenticationAsync(
+                    userId,
+                    token).ConfigureAwait(false);
+                UserSession? session = await sessionRepository.FindByJtiForAuthenticationAsync(
+                    jti,
+                    token).ConfigureAwait(false);
+                if (user is null || !IsAuthenticatable(user))
+                {
+                    return SessionValidationSnapshot.Invalid(
+                        "INVALID_SESSION",
+                        "Session invalid or expired");
+                }
 
-        await unitOfWork.BeginAsync(cancellationToken).ConfigureAwait(false);
-        try
+                if (IsGloballyRevoked(user, issuedAt))
+                {
+                    return SessionValidationSnapshot.Invalid(
+                        "SESSION_REVOKED",
+                        "Your session was ended by an administrator");
+                }
+
+                if (session is null || session.UserId != userId || session.RevokedAt is not null ||
+                    session.ExpiresAt <= now)
+                {
+                    return SessionValidationSnapshot.Invalid(
+                        "SESSION_REVOKED",
+                        "This session was signed out");
+                }
+
+                bool refreshUserPresence = user.LastSeenAt is null || user.LastSeenAt < staleBefore;
+                if (refreshUserPresence)
+                {
+                    user = user with { LastSeenAt = now, UpdatedAt = now };
+                }
+
+                bool refreshSessionPresence = session.LastSeenAt is null ||
+                    session.LastSeenAt < staleBefore;
+                return new SessionValidationSnapshot(
+                    user,
+                    session,
+                    refreshUserPresence,
+                    refreshSessionPresence,
+                    Failure: null);
+            },
+            cancellationToken).ConfigureAwait(false);
+        if (snapshot.Failure is not null)
         {
-            user = await userRepository.FindForAuthenticationAsync(
-                userId,
-                cancellationToken).ConfigureAwait(false);
-            session = await sessionRepository.FindByJtiForAuthenticationAsync(
-                jti,
-                cancellationToken).ConfigureAwait(false);
-            if (user is null || !IsAuthenticatable(user))
-            {
-                await unitOfWork.RollbackAsync(cancellationToken).ConfigureAwait(false);
-                return SessionValidationResult.Invalid(
-                    "INVALID_SESSION",
-                    "Session invalid or expired");
-            }
-
-            if (IsGloballyRevoked(user, issuedAt))
-            {
-                await unitOfWork.RollbackAsync(cancellationToken).ConfigureAwait(false);
-                return SessionValidationResult.Invalid(
-                    "SESSION_REVOKED",
-                    "Your session was ended by an administrator");
-            }
-
-            if (session is null || session.UserId != userId || session.RevokedAt is not null ||
-                session.ExpiresAt <= now)
-            {
-                await unitOfWork.RollbackAsync(cancellationToken).ConfigureAwait(false);
-                return SessionValidationResult.Invalid(
-                    "SESSION_REVOKED",
-                    "This session was signed out");
-            }
-
-            refreshUserPresence = user.LastSeenAt is null || user.LastSeenAt < staleBefore;
-            if (refreshUserPresence)
-            {
-                user = user with { LastSeenAt = now, UpdatedAt = now };
-            }
-
-            refreshSessionPresence = session.LastSeenAt is null || session.LastSeenAt < staleBefore;
-
-            await unitOfWork.CommitAsync(cancellationToken).ConfigureAwait(false);
-        }
-        catch
-        {
-            await unitOfWork.RollbackAsync(CancellationToken.None).ConfigureAwait(false);
-            throw;
+            return snapshot.Failure;
         }
 
         // Activity writes are deliberately performed after releasing the authorization snapshot's
         // shared locks. Conditional updates retain the refresh throttle under concurrent requests.
-        if (refreshUserPresence)
+        if (snapshot.RefreshUserPresence)
         {
-            await presenceRepository.TouchAsync(
-                userId,
-                now,
-                staleBefore,
+            await _retryExecutor.ExecuteAsync(
+                "session.touch_user_presence",
+                token => presenceRepository.TouchAsync(userId, now, staleBefore, token),
                 cancellationToken).ConfigureAwait(false);
         }
 
-        if (refreshSessionPresence)
+        if (snapshot.RefreshSessionPresence)
         {
-            await sessionRepository.TouchAsync(
-                session!.Id,
-                now,
-                staleBefore,
+            await _retryExecutor.ExecuteAsync(
+                "session.touch_session_presence",
+                token => sessionRepository.TouchAsync(snapshot.Session!.Id, now, staleBefore, token),
                 cancellationToken).ConfigureAwait(false);
         }
 
-        return SessionValidationResult.Valid(IdentityUserMapper.ToResponse(user!, online: true));
+        return SessionValidationResult.Valid(
+            IdentityUserMapper.ToResponse(snapshot.User!, online: true));
+    }
+
+    private sealed record SessionValidationSnapshot(
+        User? User,
+        UserSession? Session,
+        bool RefreshUserPresence,
+        bool RefreshSessionPresence,
+        SessionValidationResult? Failure)
+    {
+        public static SessionValidationSnapshot Invalid(string code, string message) => new(
+            User: null,
+            Session: null,
+            RefreshUserPresence: false,
+            RefreshSessionPresence: false,
+            SessionValidationResult.Invalid(code, message));
     }
 
     private async Task EnforceConcurrentSessionCapAsync(

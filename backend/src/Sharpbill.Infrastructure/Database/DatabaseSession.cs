@@ -1,19 +1,24 @@
-using System.Data;
 using MySqlConnector;
 using Sharpbill.Application.Abstractions;
 
 namespace Sharpbill.Infrastructure.Database;
 
-public sealed class DatabaseSession(IDatabaseConnectionFactory connectionFactory) : IUnitOfWork
+public sealed class DatabaseSession(
+    IDatabaseConnectionFactory connectionFactory,
+    MySqlTransientRetryExecutor? retryExecutor = null) : IUnitOfWork
 {
     private MySqlConnection? _connection;
     private MySqlTransaction? _transaction;
     private bool _completed;
+    private readonly MySqlTransientRetryExecutor _retryExecutor =
+        retryExecutor ?? MySqlTransientRetryExecutor.Default;
 
     public MySqlConnection Connection => _connection
         ?? throw new InvalidOperationException("The database session has not been opened.");
 
     public MySqlTransaction? Transaction => _transaction;
+
+    internal MySqlTransientRetryExecutor RetryExecutor => _retryExecutor;
 
     /// <summary>
     /// Executes a repository operation in the current unit-of-work transaction, or creates a
@@ -21,7 +26,8 @@ public sealed class DatabaseSession(IDatabaseConnectionFactory connectionFactory
     /// </summary>
     public async Task<T> ExecuteTransactionallyAsync<T>(
         Func<MySqlConnection, MySqlTransaction, CancellationToken, Task<T>> operation,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        [System.Runtime.CompilerServices.CallerMemberName] string operationName = "repository.transaction")
     {
         ArgumentNullException.ThrowIfNull(operation);
 
@@ -31,20 +37,11 @@ public sealed class DatabaseSession(IDatabaseConnectionFactory connectionFactory
             return await operation(connection, _transaction, cancellationToken).ConfigureAwait(false);
         }
 
-        await using MySqlTransaction transaction = await connection.BeginTransactionAsync(
-            IsolationLevel.RepeatableRead,
+        return await _retryExecutor.ExecuteTransactionAsync(
+            this,
+            operationName,
+            token => operation(Connection, Transaction!, token),
             cancellationToken).ConfigureAwait(false);
-        try
-        {
-            T result = await operation(connection, transaction, cancellationToken).ConfigureAwait(false);
-            await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
-            return result;
-        }
-        catch
-        {
-            await transaction.RollbackAsync(CancellationToken.None).ConfigureAwait(false);
-            throw;
-        }
     }
 
     public async ValueTask<MySqlConnection> GetOpenConnectionAsync(CancellationToken cancellationToken)
@@ -62,7 +59,7 @@ public sealed class DatabaseSession(IDatabaseConnectionFactory connectionFactory
 
         MySqlConnection connection = await GetOpenConnectionAsync(cancellationToken).ConfigureAwait(false);
         _transaction = await connection.BeginTransactionAsync(
-            IsolationLevel.RepeatableRead,
+            System.Data.IsolationLevel.RepeatableRead,
             cancellationToken).ConfigureAwait(false);
         _completed = false;
     }

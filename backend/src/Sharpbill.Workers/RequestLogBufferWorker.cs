@@ -8,6 +8,7 @@ using Sharpbill.Application.Abstractions;
 using Sharpbill.Contracts.Operations;
 using Sharpbill.Domain.Entities;
 using Sharpbill.Infrastructure.Configuration;
+using Sharpbill.Infrastructure.Database;
 using Sharpbill.Infrastructure.Services.Operations;
 
 namespace Sharpbill.Workers;
@@ -23,6 +24,7 @@ public sealed partial class RequestLogBufferWorker : BackgroundService, IRequest
     private readonly TimeProvider _timeProvider;
     private readonly Meter _meter = new(MeterName, "1.0.0");
     private readonly Counter<long> _events;
+    private readonly MySqlTransientRetryExecutor _retryExecutor;
     private readonly int _capacity;
     private readonly TimeSpan _shutdownTimeout;
     private long _accepted;
@@ -42,11 +44,13 @@ public sealed partial class RequestLogBufferWorker : BackgroundService, IRequest
         IServiceScopeFactory scopeFactory,
         IOptions<SharpbillOptions> options,
         TimeProvider timeProvider,
-        ILogger<RequestLogBufferWorker> logger)
+        ILogger<RequestLogBufferWorker> logger,
+        MySqlTransientRetryExecutor? retryExecutor = null)
     {
         _scopeFactory = scopeFactory;
         _logger = logger;
         _timeProvider = timeProvider;
+        _retryExecutor = retryExecutor ?? MySqlTransientRetryExecutor.Default;
         _capacity = options.Value.RequestPipeline.RequestLogQueueCapacity;
         _shutdownTimeout = TimeSpan.FromSeconds(
             options.Value.RequestPipeline.RequestLogShutdownTimeoutSeconds);
@@ -236,20 +240,14 @@ public sealed partial class RequestLogBufferWorker : BackgroundService, IRequest
             await using AsyncServiceScope scope = _scopeFactory.CreateAsyncScope();
             var repository = scope.ServiceProvider.GetRequiredService<IRequestLogRepository>();
             var unitOfWork = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
-            await unitOfWork.BeginAsync(cancellationToken).ConfigureAwait(false);
-            try
-            {
-                await repository.AddBatchAsync(batch, cancellationToken).ConfigureAwait(false);
-                await unitOfWork.CommitAsync(cancellationToken).ConfigureAwait(false);
-                Interlocked.Add(ref _persisted, batch.Count);
-                RecordNow(ref _lastPersistedUnixMilliseconds);
-                RecordEvent("persisted", batch.Count);
-            }
-            catch
-            {
-                await unitOfWork.RollbackAsync(CancellationToken.None).ConfigureAwait(false);
-                throw;
-            }
+            await _retryExecutor.ExecuteTransactionAsync(
+                unitOfWork,
+                "request_logs.persist_batch",
+                token => repository.AddBatchAsync(batch, token),
+                cancellationToken).ConfigureAwait(false);
+            Interlocked.Add(ref _persisted, batch.Count);
+            RecordNow(ref _lastPersistedUnixMilliseconds);
+            RecordEvent("persisted", batch.Count);
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {

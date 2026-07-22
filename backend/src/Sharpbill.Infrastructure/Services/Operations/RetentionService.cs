@@ -5,6 +5,7 @@ using Sharpbill.Application.Abstractions;
 using Sharpbill.Application.Common;
 using Sharpbill.Contracts.Privacy;
 using Sharpbill.Infrastructure.Configuration;
+using Sharpbill.Infrastructure.Database;
 
 namespace Sharpbill.Infrastructure.Services.Operations;
 
@@ -13,8 +14,12 @@ public sealed partial class RetentionService(
     IClock clock,
     IOptions<SharpbillOptions> options,
     RetentionTelemetry telemetry,
-    ILogger<RetentionService> logger) : IRetentionService
+    ILogger<RetentionService> logger,
+    MySqlTransientRetryExecutor? retryExecutor = null) : IRetentionService
 {
+    private readonly MySqlTransientRetryExecutor _retryExecutor =
+        retryExecutor ?? MySqlTransientRetryExecutor.Default;
+
     public async Task<RetentionCycleResponse> RunCycleAsync(CancellationToken cancellationToken)
     {
         RetentionOptions policy = options.Value.Retention;
@@ -171,6 +176,7 @@ public sealed partial class RetentionService(
                 maximumBatches,
                 (limit, token) => operation(provider, limit, token),
                 governed,
+                category,
                 cancellationToken).ConfigureAwait(false);
             if (result.Failure is not null)
             {
@@ -190,27 +196,30 @@ public sealed partial class RetentionService(
         }
     }
 
-    private static async Task<DrainResult> DrainAsync(
+    private async Task<DrainResult> DrainAsync(
         IUnitOfWork unitOfWork,
         IRetentionRepository retention,
         int batchSize,
         int maximumBatches,
         Func<int, CancellationToken, Task<int>> operation,
         bool governed,
+        string category,
         CancellationToken cancellationToken)
     {
         int total = 0;
         int batches = 0;
         for (int index = 0; index < maximumBatches; index++)
         {
-            await unitOfWork.BeginAsync(cancellationToken).ConfigureAwait(false);
             try
             {
-                int changed = governed &&
-                    await retention.IsHoldActiveAsync(true, cancellationToken).ConfigureAwait(false)
-                    ? 0
-                    : await operation(batchSize, cancellationToken).ConfigureAwait(false);
-                await unitOfWork.CommitAsync(cancellationToken).ConfigureAwait(false);
+                int changed = await _retryExecutor.ExecuteTransactionAsync(
+                    unitOfWork,
+                    $"retention.{category}",
+                    async token => governed &&
+                        await retention.IsHoldActiveAsync(true, token).ConfigureAwait(false)
+                        ? 0
+                        : await operation(batchSize, token).ConfigureAwait(false),
+                    cancellationToken).ConfigureAwait(false);
                 total += changed;
                 batches++;
                 if (changed < batchSize)
@@ -220,16 +229,6 @@ public sealed partial class RetentionService(
             }
             catch (Exception exception)
             {
-                try
-                {
-                    await unitOfWork.RollbackAsync(CancellationToken.None).ConfigureAwait(false);
-                }
-                catch
-                {
-                    // Preserve the category's initiating failure; the category scope is disposed
-                    // before the next category starts with a fresh connection and transaction.
-                }
-
                 if (exception is OperationCanceledException && cancellationToken.IsCancellationRequested)
                 {
                     throw;

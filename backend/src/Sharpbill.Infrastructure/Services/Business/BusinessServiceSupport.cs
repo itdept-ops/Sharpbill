@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.Globalization;
+using System.Runtime.CompilerServices;
 using System.Security.Cryptography;
 using System.Text;
 using MySqlConnector;
@@ -14,24 +15,32 @@ using Sharpbill.Domain.Entities;
 using Sharpbill.Domain.Enums;
 using Sharpbill.Domain.Constants;
 using Sharpbill.Domain.ValueObjects;
+using Sharpbill.Infrastructure.Database;
 
 namespace Sharpbill.Infrastructure.Services.Business;
 
 internal static class BusinessServiceSupport
 {
-    private const int MaximumTransactionAttempts = 3;
+    private const int MaximumTransactionAttempts = MySqlTransientRetryExecutor.MaximumAttempts;
     public const int OnlineWindowSeconds = 90;
 
     public static async Task<T> InTransactionAsync<T>(
         IUnitOfWork unitOfWork,
         Func<Task<T>> operation,
-        CancellationToken cancellationToken) =>
-        await InTransactionAsync(
+        CancellationToken cancellationToken,
+        [CallerMemberName] string operationName = "business.transaction")
+    {
+        ArgumentNullException.ThrowIfNull(unitOfWork);
+        ArgumentNullException.ThrowIfNull(operation);
+        MySqlTransientRetryExecutor retryExecutor = unitOfWork is DatabaseSession session
+            ? session.RetryExecutor
+            : MySqlTransientRetryExecutor.Default;
+        return await retryExecutor.ExecuteTransactionAsync(
             unitOfWork,
-            operation,
-            IsRetryableTransactionException,
-            DelayBeforeRetryAsync,
+            operationName,
+            _ => operation(),
             cancellationToken).ConfigureAwait(false);
+    }
 
     internal static async Task<T> InTransactionAsync<T>(
         IUnitOfWork unitOfWork,
@@ -75,7 +84,8 @@ internal static class BusinessServiceSupport
     public static async Task InTransactionAsync(
         IUnitOfWork unitOfWork,
         Func<Task> operation,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        [CallerMemberName] string operationName = "business.transaction")
     {
         ArgumentNullException.ThrowIfNull(operation);
         await InTransactionAsync(
@@ -85,24 +95,12 @@ internal static class BusinessServiceSupport
                 await operation().ConfigureAwait(false);
                 return true;
             },
-            cancellationToken).ConfigureAwait(false);
+            cancellationToken,
+            operationName).ConfigureAwait(false);
     }
 
     internal static bool IsRetryableTransactionError(MySqlErrorCode errorCode) =>
-        errorCode is MySqlErrorCode.LockDeadlock or MySqlErrorCode.LockWaitTimeout;
-
-    private static bool IsRetryableTransactionException(Exception exception) =>
-        exception is MySqlException mysqlException &&
-        IsRetryableTransactionError(mysqlException.ErrorCode);
-
-    private static Task DelayBeforeRetryAsync(int failedAttempt, CancellationToken cancellationToken)
-    {
-        int exponentialMilliseconds = Math.Min(100, 25 * (1 << (failedAttempt - 1)));
-        int jitterMilliseconds = Random.Shared.Next(0, 26);
-        return Task.Delay(
-            TimeSpan.FromMilliseconds(exponentialMilliseconds + jitterMilliseconds),
-            cancellationToken);
-    }
+        MySqlTransientRetryExecutor.IsRetryableError(errorCode);
 
     private static async Task RollbackPreservingOriginalErrorAsync(IUnitOfWork unitOfWork)
     {

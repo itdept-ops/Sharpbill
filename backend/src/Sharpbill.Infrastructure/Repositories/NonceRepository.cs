@@ -1,4 +1,5 @@
 using System.Data;
+using System.Runtime.ExceptionServices;
 using System.Security.Cryptography;
 using System.Text;
 using Dapper;
@@ -126,9 +127,18 @@ public sealed class NonceRepository(DatabaseSession session) : DapperRepository(
                 await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
                 return true;
             }
-            catch
+            catch (Exception exception)
             {
-                await transaction.RollbackAsync(CancellationToken.None).ConfigureAwait(false);
+                try
+                {
+                    await transaction.RollbackAsync(CancellationToken.None).ConfigureAwait(false);
+                }
+                catch
+                {
+                    // Preserve the lock/deadlock error so the bounded caller retry can classify it.
+                }
+
+                ExceptionDispatchInfo.Capture(exception).Throw();
                 throw;
             }
         }

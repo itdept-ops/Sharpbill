@@ -68,6 +68,22 @@ public sealed record RequestLogMetricsResponse
     public DateTime? LastErrorAt { get; init; }
 }
 
+public sealed record DatabaseRetryMetricsResponse
+{
+    [JsonPropertyName("retry_attempts")]
+    public long RetryAttempts { get; init; }
+    [JsonPropertyName("recovered_transactions")]
+    public long RecoveredTransactions { get; init; }
+    [JsonPropertyName("exhausted_transactions")]
+    public long ExhaustedTransactions { get; init; }
+    [JsonPropertyName("last_retry_at")]
+    public DateTime? LastRetryAt { get; init; }
+    [JsonPropertyName("last_recovered_at")]
+    public DateTime? LastRecoveredAt { get; init; }
+    [JsonPropertyName("last_exhausted_at")]
+    public DateTime? LastExhaustedAt { get; init; }
+}
+
 public sealed record RequestLogQuery
 {
     public int Limit { get; init; } = 100;

@@ -1,5 +1,6 @@
 using System.Data;
 using Dapper;
+using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using MySqlConnector;
 using Sharpbill.Application.Abstractions;
@@ -522,6 +523,84 @@ public sealed class RepositoryIntegrationTests
         finally
         {
             await session.RollbackAsync(CancellationToken.None);
+        }
+    }
+
+    [Fact]
+    public async Task OwnedTransactionRetriesARealLockWaitTimeoutWhenDatabaseIsConfiguredAsync()
+    {
+        string? connectionString = GetConfiguredDatabase();
+        if (connectionString is null)
+        {
+            return;
+        }
+
+        await using var setup = await new TestConnectionFactory(connectionString)
+            .OpenConnectionAsync(CancellationToken.None);
+        long requestLogId = await setup.ExecuteScalarAsync<long>(new CommandDefinition(
+            """
+            INSERT INTO request_logs (method, path, status_code, created_at)
+            VALUES ('GET', @Path, 200, UTC_TIMESTAMP(6));
+            SELECT LAST_INSERT_ID();
+            """,
+            new { Path = $"/api/retry-probe/{Guid.NewGuid():N}" }));
+        await using var blocker = await new TestConnectionFactory(connectionString)
+            .OpenConnectionAsync(CancellationToken.None);
+        await using MySqlTransaction blockerTransaction = await blocker.BeginTransactionAsync(
+            IsolationLevel.ReadCommitted,
+            CancellationToken.None);
+        _ = await blocker.ExecuteAsync(new CommandDefinition(
+            "UPDATE request_logs SET status_code = status_code WHERE id = @Id",
+            new { Id = requestLogId },
+            blockerTransaction));
+
+        using var telemetry = new DatabaseRetryTelemetry();
+        var executor = new MySqlTransientRetryExecutor(
+            NullLogger<MySqlTransientRetryExecutor>.Instance,
+            telemetry);
+        await using var session = new DatabaseSession(
+            new TestConnectionFactory(connectionString),
+            executor);
+        MySqlConnection retryConnection = await session.GetOpenConnectionAsync(CancellationToken.None);
+        _ = await retryConnection.ExecuteAsync("SET SESSION innodb_lock_wait_timeout = 1");
+        int invocations = 0;
+        Task<int> updateTask = session.ExecuteTransactionallyAsync(
+            async (connection, transaction, token) =>
+            {
+                invocations++;
+                return await connection.ExecuteAsync(new CommandDefinition(
+                    "UPDATE request_logs SET status_code = 204 WHERE id = @Id",
+                    new { Id = requestLogId },
+                    transaction,
+                    cancellationToken: token));
+            },
+            CancellationToken.None,
+            "integration.lock_wait");
+
+        bool blockerReleased = false;
+        try
+        {
+            await Task.Delay(TimeSpan.FromMilliseconds(1_200));
+            await blockerTransaction.RollbackAsync(CancellationToken.None);
+            blockerReleased = true;
+            int changed = await updateTask;
+
+            Assert.Equal(1, changed);
+            Assert.True(invocations >= 2);
+            Assert.True(telemetry.RetryAttempts >= 1);
+            Assert.Equal(1, telemetry.RecoveredTransactions);
+            Assert.Equal(0, telemetry.ExhaustedTransactions);
+        }
+        finally
+        {
+            if (!blockerReleased)
+            {
+                await blockerTransaction.RollbackAsync(CancellationToken.None);
+            }
+
+            _ = await setup.ExecuteAsync(
+                "DELETE FROM request_logs WHERE id = @Id",
+                new { Id = requestLogId });
         }
     }
 
