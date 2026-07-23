@@ -6,6 +6,7 @@ using Sharpbill.Api.Controllers;
 using Sharpbill.Domain.Entities;
 using Sharpbill.Infrastructure.Configuration;
 using Sharpbill.Infrastructure.Database;
+using Sharpbill.Infrastructure.Services.Business;
 
 namespace Sharpbill.ArchitectureTests;
 
@@ -59,6 +60,24 @@ public sealed class LayerDependencyTests
             .ToArray();
 
         Assert.Empty(violations);
+    }
+
+    [Fact]
+    public void UserServiceFacadeDependsOnlyOnFocusedServices()
+    {
+        ConstructorInfo constructor = Assert.Single(typeof(UserService).GetConstructors());
+        Type[] dependencies = constructor.GetParameters()
+            .Select(static parameter => parameter.ParameterType)
+            .ToArray();
+
+        Assert.Equal(
+            [
+                typeof(IUserQueryService),
+                typeof(IUserProfileService),
+                typeof(IUserAccessService),
+                typeof(IUserLifecycleService),
+            ],
+            dependencies);
     }
 
     private static bool IsPersistenceBoundary(Type type) =>
