@@ -3,7 +3,7 @@ using Sharpbill.Application.Common;
 using Sharpbill.Contracts.Auth;
 using Sharpbill.Contracts.Users;
 
-namespace Sharpbill.Infrastructure.Services.Business;
+namespace Sharpbill.Application.Users;
 
 public sealed class UserService : IUserService
 {

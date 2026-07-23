@@ -1,4 +1,3 @@
-using Microsoft.Extensions.Options;
 using Sharpbill.Application.Abstractions;
 using Sharpbill.Application.Common;
 using Sharpbill.Application.Policies;
@@ -7,38 +6,40 @@ using Sharpbill.Contracts.Common;
 using Sharpbill.Contracts.Users;
 using Sharpbill.Domain.Constants;
 using Sharpbill.Domain.Entities;
-using Sharpbill.Infrastructure.Configuration;
 
-namespace Sharpbill.Infrastructure.Services.Business;
+namespace Sharpbill.Application.Users;
 
-internal sealed class UserProfileService : IUserProfileService
+public sealed class UserProfileService : IUserProfileService
 {
     private readonly IUnitOfWork _unitOfWork;
+    private readonly ITransactionExecutor _transactions;
     private readonly IUserRepository _users;
     private readonly UserOperationContext _context;
     private readonly IGeoService _geo;
     private readonly IClock _clock;
-    private readonly RetentionOptions _retention;
+    private readonly int _preciseLocationHours;
     private readonly IValidator<ProfileUpdateRequest> _profileValidator;
     private readonly IValidator<LocationUpdateRequest> _locationValidator;
 
     public UserProfileService(
         IUnitOfWork unitOfWork,
+        ITransactionExecutor transactions,
         IUserRepository users,
         UserOperationContext context,
         IGeoService geo,
         IClock clock,
-        IOptions<SharpbillOptions> options,
+        UserUseCaseOptions options,
         IValidator<ProfileUpdateRequest> profileValidator,
         IValidator<LocationUpdateRequest> locationValidator)
     {
         _unitOfWork = unitOfWork ?? throw new ArgumentNullException(nameof(unitOfWork));
+        _transactions = transactions ?? throw new ArgumentNullException(nameof(transactions));
         _users = users ?? throw new ArgumentNullException(nameof(users));
         _context = context ?? throw new ArgumentNullException(nameof(context));
         _geo = geo ?? throw new ArgumentNullException(nameof(geo));
         _clock = clock ?? throw new ArgumentNullException(nameof(clock));
         ArgumentNullException.ThrowIfNull(options);
-        _retention = options.Value.Retention;
+        _preciseLocationHours = options.PreciseLocationHours;
         _profileValidator = profileValidator ?? throw new ArgumentNullException(nameof(profileValidator));
         _locationValidator = locationValidator ?? throw new ArgumentNullException(nameof(locationValidator));
     }
@@ -51,9 +52,10 @@ internal sealed class UserProfileService : IUserProfileService
     {
         ArgumentNullException.ThrowIfNull(request);
         _profileValidator.Validate(request).ThrowIfInvalid();
-        return BusinessServiceSupport.InTransactionAsync(
+        return _transactions.ExecuteTransactionAsync(
             _unitOfWork,
-            async () =>
+            nameof(UpdateProfileAsync),
+            async _ =>
             {
                 (User actor, User target) = await _context.LoadActorAndTargetForUpdateAsync(
                     actorUserId,
@@ -70,7 +72,7 @@ internal sealed class UserProfileService : IUserProfileService
                 RbacHierarchyPolicy.EnsureCanManageTarget(actor, target);
                 User updated = ApplyProfilePatch(target, request) with { UpdatedAt = _clock.UtcNow };
                 await _users.UpdateAsync(updated, cancellationToken).ConfigureAwait(false);
-                return BusinessServiceSupport.ToUserResponse(
+                return UserResponseMapper.ToResponse(
                     updated,
                     actor,
                     _clock.UtcNow,
@@ -86,16 +88,17 @@ internal sealed class UserProfileService : IUserProfileService
     {
         ArgumentNullException.ThrowIfNull(request);
         _locationValidator.Validate(request).ThrowIfInvalid();
-        return BusinessServiceSupport.InTransactionAsync(
+        return _transactions.ExecuteTransactionAsync(
             _unitOfWork,
-            async () =>
+            nameof(UpdateLocationAsync),
+            async _ =>
             {
                 User user = await _users.FindAsync(userId, true, cancellationToken)
                     .ConfigureAwait(false)
                     ?? throw ApiException.Unauthorized(
                         "INVALID_SESSION",
                         "Session invalid or expired");
-                if (!BusinessServiceSupport.IsAuthenticatable(user))
+                if (!UserAccountPolicy.IsAuthenticatable(user))
                 {
                     throw ApiException.Unauthorized(
                         "INVALID_SESSION",
@@ -110,7 +113,7 @@ internal sealed class UserProfileService : IUserProfileService
                     LastLongitude = request.Longitude,
                     LastLocationAccuracy = request.Accuracy,
                     LastLocationAt = now,
-                    LocationRetentionUntil = now.AddHours(_retention.PreciseLocationHours),
+                    LocationRetentionUntil = now.AddHours(_preciseLocationHours),
                     Location = place.Place ?? user.Location,
                     Timezone = place.Timezone ?? user.Timezone,
                     UpdatedAt = now,

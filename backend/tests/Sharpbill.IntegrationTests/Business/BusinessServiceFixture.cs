@@ -1,7 +1,10 @@
+using Sharpbill.Application.Abstractions;
 using Sharpbill.Application.Validation;
+using Sharpbill.Application.Users;
 using Sharpbill.Domain.Constants;
 using Sharpbill.Domain.Entities;
 using Sharpbill.Infrastructure.Configuration;
+using Sharpbill.Infrastructure.Database;
 using Sharpbill.Infrastructure.Services.Business;
 
 namespace Sharpbill.IntegrationTests.Business;
@@ -60,27 +63,33 @@ public sealed class BusinessServiceFixture
     {
         var context = new UserOperationContext(Users, Settings, Health);
         var audit = new UserAuditWriter(SecurityEvents, RequestContext);
-        var options = BusinessTestData.WrappedOptions(Options);
+        var userOptions = new UserUseCaseOptions(
+            Options.RequestPipeline.ExportMaxBytes,
+            Options.Retention.PreciseLocationHours);
+        ITransactionExecutor transactions = MySqlTransientRetryExecutor.Default;
         return new UserService(
             new UserQueryService(
                 UnitOfWork,
+                transactions,
                 Users,
                 context,
                 audit,
                 Clock,
-                options,
+                userOptions,
                 new UserQueryValidator()),
             new UserProfileService(
                 UnitOfWork,
+                transactions,
                 Users,
                 context,
                 Geo,
                 Clock,
-                options,
+                userOptions,
                 new ProfileUpdateRequestValidator(),
                 new LocationUpdateRequestValidator()),
             new UserAccessService(
                 UnitOfWork,
+                transactions,
                 Users,
                 Roles,
                 Permissions,
@@ -89,6 +98,7 @@ public sealed class BusinessServiceFixture
                 Clock),
             new UserLifecycleService(
                 UnitOfWork,
+                transactions,
                 Users,
                 Roles,
                 Sessions,
