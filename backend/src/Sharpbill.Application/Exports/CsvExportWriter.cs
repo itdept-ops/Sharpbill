@@ -1,9 +1,9 @@
 using System.Text;
 using Sharpbill.Application.Common;
 
-namespace Sharpbill.Infrastructure.Services;
+namespace Sharpbill.Application.Exports;
 
-internal static class CsvExportWriter
+public static class CsvExportWriter
 {
     private static readonly Encoding Utf8 = new UTF8Encoding(false, true);
 
