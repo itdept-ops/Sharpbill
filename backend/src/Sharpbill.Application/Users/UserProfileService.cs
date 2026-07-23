@@ -55,12 +55,12 @@ public sealed class UserProfileService : IUserProfileService
         return _transactions.ExecuteTransactionAsync(
             _unitOfWork,
             nameof(UpdateProfileAsync),
-            async _ =>
+            async transactionToken =>
             {
                 (User actor, User target) = await _context.LoadActorAndTargetForUpdateAsync(
                     actorUserId,
                     userId,
-                    cancellationToken).ConfigureAwait(false);
+                    transactionToken).ConfigureAwait(false);
                 if (userId != actorUserId &&
                     !actor.EffectivePermissionKeys.Contains(PermissionKeys.UsersManage))
                 {
@@ -71,7 +71,7 @@ public sealed class UserProfileService : IUserProfileService
 
                 RbacHierarchyPolicy.EnsureCanManageTarget(actor, target);
                 User updated = ApplyProfilePatch(target, request) with { UpdatedAt = _clock.UtcNow };
-                await _users.UpdateAsync(updated, cancellationToken).ConfigureAwait(false);
+                await _users.UpdateAsync(updated, transactionToken).ConfigureAwait(false);
                 return UserResponseMapper.ToResponse(
                     updated,
                     actor,
@@ -91,9 +91,9 @@ public sealed class UserProfileService : IUserProfileService
         return _transactions.ExecuteTransactionAsync(
             _unitOfWork,
             nameof(UpdateLocationAsync),
-            async _ =>
+            async transactionToken =>
             {
-                User user = await _users.FindAsync(userId, true, cancellationToken)
+                User user = await _users.FindAsync(userId, true, transactionToken)
                     .ConfigureAwait(false)
                     ?? throw ApiException.Unauthorized(
                         "INVALID_SESSION",
@@ -118,7 +118,7 @@ public sealed class UserProfileService : IUserProfileService
                     Timezone = place.Timezone ?? user.Timezone,
                     UpdatedAt = now,
                 };
-                await _users.UpdateAsync(updated, cancellationToken).ConfigureAwait(false);
+                await _users.UpdateAsync(updated, transactionToken).ConfigureAwait(false);
             },
             cancellationToken);
     }
