@@ -56,23 +56,47 @@ public sealed class BusinessServiceFixture
     public FakeRequestContextAccessor RequestContext { get; } = new();
     public SharpbillOptions Options { get; } = BusinessTestData.Options();
 
-    public UserService CreateUserService() => new(
-        UnitOfWork,
-        Users,
-        Roles,
-        Permissions,
-        Settings,
-        Health,
-        Sessions,
-        SecurityEvents,
-        Geo,
-        Clock,
-        RequestContext,
-        BusinessTestData.WrappedOptions(Options),
-        new UserQueryValidator(),
-        new ProfileUpdateRequestValidator(),
-        new BulkActionRequestValidator(),
-        new LocationUpdateRequestValidator());
+    public UserService CreateUserService()
+    {
+        var context = new UserOperationContext(Users, Settings, Health);
+        var audit = new UserAuditWriter(SecurityEvents, RequestContext);
+        var options = BusinessTestData.WrappedOptions(Options);
+        return new UserService(
+            new UserQueryService(
+                UnitOfWork,
+                Users,
+                context,
+                audit,
+                Clock,
+                options,
+                new UserQueryValidator()),
+            new UserProfileService(
+                UnitOfWork,
+                Users,
+                context,
+                Geo,
+                Clock,
+                options,
+                new ProfileUpdateRequestValidator(),
+                new LocationUpdateRequestValidator()),
+            new UserAccessService(
+                UnitOfWork,
+                Users,
+                Roles,
+                Permissions,
+                context,
+                audit,
+                Clock),
+            new UserLifecycleService(
+                UnitOfWork,
+                Users,
+                Roles,
+                Sessions,
+                context,
+                audit,
+                Clock,
+                new BulkActionRequestValidator()));
+    }
 
     public RoleService CreateRoleService() => new(
         UnitOfWork,

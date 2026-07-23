@@ -87,6 +87,12 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IDashboardService, DashboardService>();
         services.AddScoped<IHealthService, HealthService>();
         services.AddScoped<IRetentionService, RetentionService>();
+        services.AddScoped<UserOperationContext>();
+        services.AddScoped<UserAuditWriter>();
+        services.AddScoped<IUserQueryService, UserQueryService>();
+        services.AddScoped<IUserProfileService, UserProfileService>();
+        services.AddScoped<IUserAccessService, UserAccessService>();
+        services.AddScoped<IUserLifecycleService, UserLifecycleService>();
         services.AddScoped<IUserService, UserService>();
         services.AddScoped<IRoleService, RoleService>();
         services.AddScoped<IPermissionService, PermissionService>();
