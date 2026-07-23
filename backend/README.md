@@ -25,8 +25,8 @@ See [`../docs/TECH_STACK.md`](../docs/TECH_STACK.md) for the repository-wide tec
 | --- | --- |
 | `Sharpbill.Domain` | Entities, value objects, and business invariants with no infrastructure dependencies |
 | `Sharpbill.Contracts` | Stable HTTP/request/response contracts shared at system boundaries |
-| `Sharpbill.Application` | Use cases and service/repository abstractions (`IService`-style ports) |
-| `Sharpbill.Infrastructure` | MySQL, identity-provider, token, clock, and other adapter implementations |
+| `Sharpbill.Application` | User use cases, cross-provider authentication policy/admission, mappings, export primitives, and service/repository/transaction ports |
+| `Sharpbill.Infrastructure` | MySQL transaction/repository, identity-provider, token/session, request-context, telemetry, and other runtime adapters |
 | `Sharpbill.Workers` | Bounded background and retention workloads |
 | `Sharpbill.Api` | ASP.NET Core middleware, authentication/authorization, endpoints, and DI composition |
 | `Sharpbill.Migrator` | The single-purpose, fail-closed database migration executable |
@@ -34,6 +34,29 @@ See [`../docs/TECH_STACK.md`](../docs/TECH_STACK.md) for the repository-wide tec
 The dependency direction and prohibited cross-layer references are enforced by
 `Sharpbill.ArchitectureTests`. See
 [`ADR-002`](../docs/architecture/ADR-002-dotnet-backend.md) for the governing decision.
+
+## Service boundaries
+
+Controllers are transport adapters. They map HTTP contracts and call injected service interfaces;
+an architecture test rejects controller constructor dependencies on repositories, units of work,
+database sessions, connection factories, and database connection or transaction types. Route-level
+self/administrator guards and development-authentication validation therefore execute in services,
+before protected persistence work begins.
+
+The public `IUserService` contract is preserved by a small Application-owned facade that delegates
+to focused query, profile, access, and lifecycle use cases. Those use cases depend on Application
+ports such as `ITransactionExecutor`, repositories, `IClock`, and `IRequestContextAccessor`; the
+MySQL transaction executor is the sole runtime implementation. `IAuthService` similarly delegates
+to configuration, external-login, development-login, account, and session-operation services.
+Authentication policy, admission, identity mapping, and security-event construction live in
+Application and receive a secret-free options projection; provider verification and transactional
+login/session coordination remain Infrastructure adapters.
+
+`RequestContextMiddleware` creates one canonical request context per request. Controllers and
+services consume that same value through `IRequestContextAccessor` rather than reconstructing it.
+Business and query cutoffs use `IClock`, which keeps time-sensitive behavior deterministic in tests.
+Architecture tests pin both facade dependency sets, enforce ownership of the user/authentication
+Application code, and prevent runtime types from leaking into user use-case constructors.
 
 ## Prerequisites
 

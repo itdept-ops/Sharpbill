@@ -82,10 +82,14 @@ before it shipped, and each has a test named after the failure it prevents.
 - **Backend:** the rewritten .NET 10 solution has xUnit suites split across domain,
   application, architecture, migrator, and integration projects. It verifies business invariants,
   transport contracts, dependency direction, identity/session behavior, authorization services,
-  HTTP boundaries, Dapper repository behavior against real MySQL, and the schema bridge. The
-  dedicated `Sharpbill.Migrator` dry-runs and applies the reviewed `0021` snapshot to an empty
-  database, or validates and journals an existing exact `0021` database without replaying partial
-  history. Alembic `0001`…`0021` remains frozen as historical schema provenance.
+  HTTP boundaries, Dapper repository behavior against real MySQL, and the schema bridge.
+  Architecture tests prohibit persistence dependencies in controllers, enforce Application
+  ownership of user use cases and provider-neutral authentication boundaries, and pin the focused
+  dependencies of both compatibility facades. Characterization tests preserve authorization,
+  lifecycle, login, logout, and unavailable-account behavior during decomposition. The dedicated
+  `Sharpbill.Migrator` dry-runs and applies the reviewed `0021` snapshot to an empty database, or
+  validates and journals an existing exact `0021` database without replaying partial history.
+  Alembic `0001`…`0021` remains frozen as historical schema provenance.
 - **Frontend:** Vitest + Testing Library over the code that gates access in the browser.
 - **End-to-end:** a Playwright job boots the local stack (Vite + ASP.NET Core + MySQL via Docker Compose)
   and checks, in a browser, that an admin can sign in and drive selected console workflows — and

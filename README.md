@@ -199,13 +199,17 @@ per-request permission gate.
 ## Architecture
 
 - **Backend** — **.NET 10 + ASP.NET Core** with explicit Domain, Contracts, Application,
-  Infrastructure, Workers, and API projects. Controllers are thin; application services and
-  repository ports are injected through the built-in DI container; middleware owns request context,
-  security headers, CSRF checks, body limits, request logging, and error handling. Persistence uses
-  **Dapper + MySqlConnector**, with bounded retry only for MySQL deadlock/lock-wait faults. All
-  routes live under `/api`, and errors preserve the `{"detail": {"code", "message"}}` envelope.
-  The C# runtime cutover is complete; no Python service is part of the active application or
-  container path.
+  Infrastructure, Workers, and API projects. Controllers are transport-only; architecture tests
+  reject persistence dependencies in controllers and pin the focused dependencies of the user and
+  authentication facades. User query, profile, access, and lifecycle use cases live in Application,
+  together with authentication policy, admission, identity mapping, and security-event
+  construction; provider, database, token, and session adapters remain in Infrastructure. The
+  built-in DI container supplies every boundary. Middleware owns canonical request context,
+  security headers, CSRF checks, body limits, request logging, and error handling, while
+  business/query time is supplied through `IClock`. Persistence uses **Dapper + MySqlConnector**,
+  with bounded retry only for MySQL deadlock/lock-wait faults. All routes live under `/api`, and
+  errors preserve the `{"detail": {"code", "message"}}` envelope. The C# runtime cutover is
+  complete; no Python service is part of the active application or container path.
 - **Frontend** — **React 18 + TypeScript + Vite**, React Router v6, hand-written CSS
   (the "DATASTREAM" terminal theme), Vitest unit coverage, and Playwright E2E coverage. Vite
   proxies `/api` (including WebSocket upgrade) to the API in local development.
