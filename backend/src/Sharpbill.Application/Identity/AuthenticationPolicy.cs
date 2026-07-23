@@ -1,36 +1,32 @@
-using Microsoft.Extensions.Options;
 using Sharpbill.Application.Common;
 using Sharpbill.Contracts.Auth;
 using Sharpbill.Contracts.Common;
 using Sharpbill.Domain.Entities;
 using Sharpbill.Domain.Enums;
-using Sharpbill.Infrastructure.Configuration;
 
-namespace Sharpbill.Infrastructure.Services.Identity;
+namespace Sharpbill.Application.Identity;
 
-internal sealed class AuthenticationPolicy
+public sealed class AuthenticationPolicy
 {
-    private readonly SharpbillOptions _options;
+    private readonly AuthenticationPolicyOptions _options;
 
-    public AuthenticationPolicy(IOptions<SharpbillOptions> options)
+    public AuthenticationPolicy(AuthenticationPolicyOptions options)
     {
-        ArgumentNullException.ThrowIfNull(options);
-        _options = options.Value;
+        _options = options ?? throw new ArgumentNullException(nameof(options));
     }
 
     public bool IsAdministratorBootstrap(VerifiedIdentity identity) => identity.Provider switch
     {
         ProviderContract.Google =>
-            _options.IdentityProviders.GoogleAdminSubjects.Contains(identity.Subject) ||
-            (_options.IsLocal &&
-             _options.IdentityProviders.DevelopmentAdminEmails.Contains(identity.Email)),
+            _options.GoogleAdminSubjects.Contains(identity.Subject) ||
+            (_options.IsLocal && IsDevelopmentAdministratorEmail(identity.Email)),
         ProviderContract.Microsoft =>
-            !string.IsNullOrWhiteSpace(_options.IdentityProviders.MicrosoftAdminTenantId) &&
+            !string.IsNullOrWhiteSpace(_options.MicrosoftAdminTenantId) &&
             string.Equals(
                 identity.TenantId,
-                _options.IdentityProviders.MicrosoftAdminTenantId,
+                _options.MicrosoftAdminTenantId,
                 StringComparison.OrdinalIgnoreCase) &&
-            _options.IdentityProviders.MicrosoftAdminObjectIds.Contains(identity.Subject),
+            _options.MicrosoftAdminObjectIds.Contains(identity.Subject),
         _ => false,
     };
 
@@ -38,14 +34,24 @@ internal sealed class AuthenticationPolicy
         settings is not null && provider switch
         {
             ProviderContract.Google => settings.AllowGoogle &&
-                !string.IsNullOrWhiteSpace(_options.IdentityProviders.GoogleClientId),
+                !string.IsNullOrWhiteSpace(ClientId(provider)),
             ProviderContract.Microsoft => settings.AllowMicrosoft &&
-                !string.IsNullOrWhiteSpace(_options.IdentityProviders.MicrosoftClientId),
+                !string.IsNullOrWhiteSpace(ClientId(provider)),
             _ => false,
         };
 
+    public string? ClientId(ProviderContract provider) => provider switch
+    {
+        ProviderContract.Google => _options.GoogleClientId,
+        ProviderContract.Microsoft => _options.MicrosoftClientId,
+        _ => null,
+    };
+
     public bool DevelopmentAuthenticationEnabled() =>
-        DevelopmentAuthenticationGuard.IsEnabled(_options);
+        _options.DevelopmentAuthenticationEnabled;
+
+    public bool IsDevelopmentAdministratorEmail(string email) =>
+        _options.DevelopmentAdminEmails.Contains(email);
 
     public static string IdentityNamespace(VerifiedIdentity identity)
     {

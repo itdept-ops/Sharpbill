@@ -1,6 +1,7 @@
 using MySqlConnector;
 using Sharpbill.Application.Abstractions;
 using Sharpbill.Application.Common;
+using Sharpbill.Application.Identity;
 using Sharpbill.Contracts.Auth;
 using Sharpbill.Contracts.Common;
 using Sharpbill.Domain.Entities;

@@ -2,6 +2,7 @@ using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using Sharpbill.Application.Abstractions;
 using Sharpbill.Application.Common;
+using Sharpbill.Application.Identity;
 using Sharpbill.Application.Validation;
 using Sharpbill.Contracts.Auth;
 using Sharpbill.Contracts.Common;
@@ -90,7 +91,21 @@ internal sealed class AuthServiceTestFixture
     public AuthService CreateService()
     {
         IOptions<SharpbillOptions> options = Options.Create(Configuration);
-        var policy = new AuthenticationPolicy(options);
+        var policy = new AuthenticationPolicy(new AuthenticationPolicyOptions
+        {
+            IsLocal = Configuration.IsLocal,
+            GoogleClientId = Configuration.IdentityProviders.GoogleClientId,
+            MicrosoftClientId = Configuration.IdentityProviders.MicrosoftClientId,
+            DevelopmentAuthenticationEnabled =
+                DevelopmentAuthenticationGuard.IsEnabled(Configuration),
+            GoogleAdminSubjects = Configuration.IdentityProviders.GoogleAdminSubjects,
+            MicrosoftAdminTenantId =
+                Configuration.IdentityProviders.MicrosoftAdminTenantId,
+            MicrosoftAdminObjectIds =
+                Configuration.IdentityProviders.MicrosoftAdminObjectIds,
+            DevelopmentAdminEmails =
+                Configuration.IdentityProviders.DevelopmentAdminEmails,
+        });
         var sessionService = new SessionService(
             Sessions,
             Users,
@@ -115,7 +130,7 @@ internal sealed class AuthServiceTestFixture
             Clock,
             policy);
         return new AuthService(
-            new AuthConfigurationService(Settings, policy, options),
+            new AuthConfigurationService(Settings, policy),
             new ExternalLoginService(
                 [Verifier],
                 Settings,
@@ -138,7 +153,7 @@ internal sealed class AuthServiceTestFixture
                 policy,
                 admission,
                 audit,
-                options),
+                retryExecutor: null),
             new AuthAccountService(Users),
             new AuthSessionOperationsService(
                 Sessions,

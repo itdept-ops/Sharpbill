@@ -1,10 +1,9 @@
-using Microsoft.Extensions.Options;
 using Sharpbill.Application.Abstractions;
 using Sharpbill.Application.Common;
+using Sharpbill.Application.Identity;
 using Sharpbill.Contracts.Auth;
 using Sharpbill.Domain.Entities;
 using Sharpbill.Domain.Enums;
-using Sharpbill.Infrastructure.Configuration;
 using Sharpbill.Infrastructure.Database;
 
 namespace Sharpbill.Infrastructure.Services.Identity;
@@ -24,7 +23,6 @@ internal sealed class DevelopmentLoginService : IDevelopmentLoginService
     private readonly AuthenticationPolicy _policy;
     private readonly AuthenticationAdmissionService _admission;
     private readonly AuthenticationAuditService _audit;
-    private readonly SharpbillOptions _options;
     private readonly MySqlTransientRetryExecutor _retryExecutor;
 
     public DevelopmentLoginService(
@@ -38,7 +36,6 @@ internal sealed class DevelopmentLoginService : IDevelopmentLoginService
         AuthenticationPolicy policy,
         AuthenticationAdmissionService admission,
         AuthenticationAuditService audit,
-        IOptions<SharpbillOptions> options,
         MySqlTransientRetryExecutor? retryExecutor = null)
     {
         _identityRepository = identityRepository ??
@@ -53,8 +50,6 @@ internal sealed class DevelopmentLoginService : IDevelopmentLoginService
         _policy = policy ?? throw new ArgumentNullException(nameof(policy));
         _admission = admission ?? throw new ArgumentNullException(nameof(admission));
         _audit = audit ?? throw new ArgumentNullException(nameof(audit));
-        ArgumentNullException.ThrowIfNull(options);
-        _options = options.Value;
         _retryExecutor = retryExecutor ?? MySqlTransientRetryExecutor.Default;
     }
 
@@ -102,7 +97,7 @@ internal sealed class DevelopmentLoginService : IDevelopmentLoginService
                     if (user is null)
                     {
                         string roleName = request.Role ??
-                            (_options.IdentityProviders.DevelopmentAdminEmails.Contains(email)
+                            (_policy.IsDevelopmentAdministratorEmail(email)
                                 ? AdministratorRole
                                 : DefaultRole);
                         Role role = await _admission.FindRoleOrDefaultAsync(
