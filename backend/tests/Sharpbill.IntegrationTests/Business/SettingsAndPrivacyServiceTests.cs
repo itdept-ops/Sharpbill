@@ -110,8 +110,7 @@ public sealed class SettingsAndPrivacyServiceTests
         fixture.Users.Items[2] = Member(2);
         fixture.Options.Retention.AccountErasureGraceDays = 17;
 
-        PrivacyStatusResponse response = await fixture.CreatePrivacyService().RequestErasureAsync(
-            2,
+        PrivacyStatusResponse response = await fixture.CreatePrivacyService().RequestOwnErasureAsync(
             2,
             CancellationToken.None);
 
@@ -119,6 +118,25 @@ public sealed class SettingsAndPrivacyServiceTests
         Assert.Equal(fixture.Clock.UtcNow.AddDays(17), response.ErasureDueAt);
         Assert.Equal("privacy.erasure.requested", Assert.Single(fixture.SecurityEvents.Writes).EventType);
         Assert.Equal(1, fixture.UnitOfWork.Commits);
+    }
+
+    [Fact]
+    public async Task AdministrativeErasureOperationsRejectSelfBeforeStartingATransactionAsync()
+    {
+        var fixture = new BusinessServiceFixture();
+        fixture.Users.Items[1] = Administrator(1);
+        var service = fixture.CreatePrivacyService();
+
+        ApiException requestException = await Assert.ThrowsAsync<ApiException>(() =>
+            service.RequestUserErasureAsync(1, 1, CancellationToken.None));
+        ApiException cancellationException = await Assert.ThrowsAsync<ApiException>(() =>
+            service.CancelUserErasureAsync(1, 1, CancellationToken.None));
+
+        Assert.Equal("CANNOT_MODIFY_SELF", requestException.Code);
+        Assert.Equal("CANNOT_MODIFY_SELF", cancellationException.Code);
+        Assert.Equal(0, fixture.UnitOfWork.Begins);
+        Assert.Empty(fixture.Users.Updates);
+        Assert.Empty(fixture.SecurityEvents.Writes);
     }
 
     [Fact]
@@ -132,8 +150,7 @@ public sealed class SettingsAndPrivacyServiceTests
         };
         fixture.Settings.Value = fixture.Settings.Value! with { RetentionHold = true };
 
-        PrivacyStatusResponse response = await fixture.CreatePrivacyService().CancelErasureAsync(
-            2,
+        PrivacyStatusResponse response = await fixture.CreatePrivacyService().CancelOwnErasureAsync(
             2,
             CancellationToken.None);
 

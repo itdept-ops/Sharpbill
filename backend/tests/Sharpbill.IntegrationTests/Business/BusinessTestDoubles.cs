@@ -314,7 +314,12 @@ public sealed class FakeSessionService : ISessionService
         CancellationToken cancellationToken) =>
         Task.FromResult<IReadOnlyList<SessionResponse>>([]);
 
-    public Task RevokeAsync(
+    public Task RevokeOwnAsync(
+        int userId,
+        int sessionId,
+        CancellationToken cancellationToken) => Task.CompletedTask;
+
+    public Task RevokeAdministrativelyAsync(
         int actorUserId,
         int targetUserId,
         int sessionId,

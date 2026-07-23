@@ -78,8 +78,7 @@ public sealed class AuthController(
     [Authorize]
     public async Task<IActionResult> RevokeSessionAsync(int sessionId, CancellationToken cancellationToken)
     {
-        await sessionService.RevokeAsync(
-            ActorUserId,
+        await sessionService.RevokeOwnAsync(
             ActorUserId,
             sessionId,
             cancellationToken).ConfigureAwait(false);

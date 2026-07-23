@@ -61,6 +61,18 @@ public interface IAuthService
     Task<UserResponse> GetCurrentUserAsync(int userId, CancellationToken cancellationToken);
 }
 
+public interface IDevelopmentAuthService
+{
+    Task<AuthenticatedSession> LoginAsync(
+        DevLoginRequest request,
+        string? suppliedSecret,
+        CancellationToken cancellationToken);
+
+    Task<IReadOnlyList<string>> ListRolesAsync(
+        string? suppliedSecret,
+        CancellationToken cancellationToken);
+}
+
 public interface IIdentityTokenVerifier
 {
     ProviderContract Provider { get; }
@@ -90,7 +102,11 @@ public interface ISessionService
         bool includeDeviceDetails,
         Guid? currentJti,
         CancellationToken cancellationToken);
-    Task RevokeAsync(
+    Task RevokeOwnAsync(
+        int userId,
+        int sessionId,
+        CancellationToken cancellationToken);
+    Task RevokeAdministrativelyAsync(
         int actorUserId,
         int targetUserId,
         int sessionId,
@@ -199,11 +215,17 @@ public interface IPrivacyService
         int actorUserId,
         CancellationToken cancellationToken);
     Task DeleteLocationAsync(int userId, CancellationToken cancellationToken);
-    Task<PrivacyStatusResponse> RequestErasureAsync(
+    Task<PrivacyStatusResponse> RequestOwnErasureAsync(
+        int userId,
+        CancellationToken cancellationToken);
+    Task<PrivacyStatusResponse> RequestUserErasureAsync(
         int actorUserId,
         int targetUserId,
         CancellationToken cancellationToken);
-    Task<PrivacyStatusResponse> CancelErasureAsync(
+    Task<PrivacyStatusResponse> CancelOwnErasureAsync(
+        int userId,
+        CancellationToken cancellationToken);
+    Task<PrivacyStatusResponse> CancelUserErasureAsync(
         int actorUserId,
         int targetUserId,
         CancellationToken cancellationToken);

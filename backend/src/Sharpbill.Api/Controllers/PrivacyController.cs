@@ -1,7 +1,6 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Sharpbill.Application.Abstractions;
-using Sharpbill.Application.Common;
 using Sharpbill.Contracts.Privacy;
 using Sharpbill.Domain.Constants;
 
@@ -24,11 +23,11 @@ public sealed class PrivacyController(IPrivacyService privacyService) : Sharpbil
 
     [HttpPost("erasure-request")]
     public async Task<ActionResult<PrivacyStatusResponse>> RequestErasureAsync(CancellationToken cancellationToken) =>
-        Ok(await privacyService.RequestErasureAsync(ActorUserId, ActorUserId, cancellationToken).ConfigureAwait(false));
+        Ok(await privacyService.RequestOwnErasureAsync(ActorUserId, cancellationToken).ConfigureAwait(false));
 
     [HttpDelete("erasure-request")]
     public async Task<ActionResult<PrivacyStatusResponse>> CancelErasureAsync(CancellationToken cancellationToken) =>
-        Ok(await privacyService.CancelErasureAsync(ActorUserId, ActorUserId, cancellationToken).ConfigureAwait(false));
+        Ok(await privacyService.CancelOwnErasureAsync(ActorUserId, cancellationToken).ConfigureAwait(false));
 }
 
 [Route("api/admin/privacy")]
@@ -54,22 +53,18 @@ public sealed class PrivacyAdministrationController(
     [HttpPost("users/{userId:int}/erasure-request")]
     public async Task<ActionResult<PrivacyStatusResponse>> RequestUserErasureAsync(
         int userId,
-        CancellationToken cancellationToken)
-    {
-        if (userId == ActorUserId)
-        {
-            throw ApiException.BadRequest("CANNOT_MODIFY_SELF", "Use the personal privacy endpoint");
-        }
-
-        return Ok(await privacyService.RequestErasureAsync(
+        CancellationToken cancellationToken) =>
+        Ok(await privacyService.RequestUserErasureAsync(
             ActorUserId,
             userId,
             cancellationToken).ConfigureAwait(false));
-    }
 
     [HttpDelete("users/{userId:int}/erasure-request")]
     public async Task<ActionResult<PrivacyStatusResponse>> CancelUserErasureAsync(
         int userId,
         CancellationToken cancellationToken) =>
-        Ok(await privacyService.CancelErasureAsync(ActorUserId, userId, cancellationToken).ConfigureAwait(false));
+        Ok(await privacyService.CancelUserErasureAsync(
+            ActorUserId,
+            userId,
+            cancellationToken).ConfigureAwait(false));
 }

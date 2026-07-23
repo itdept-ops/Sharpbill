@@ -120,9 +120,32 @@ public sealed class PrivacyService : IPrivacyService
             },
             cancellationToken);
 
-    public async Task<PrivacyStatusResponse> RequestErasureAsync(
+    public Task<PrivacyStatusResponse> RequestOwnErasureAsync(
+        int userId,
+        CancellationToken cancellationToken) =>
+        RequestErasureCoreAsync(
+            userId,
+            userId,
+            administrative: false,
+            cancellationToken);
+
+    public async Task<PrivacyStatusResponse> RequestUserErasureAsync(
         int actorUserId,
         int targetUserId,
+        CancellationToken cancellationToken)
+    {
+        EnsureAdministrativeTarget(actorUserId, targetUserId);
+        return await RequestErasureCoreAsync(
+            actorUserId,
+            targetUserId,
+            administrative: true,
+            cancellationToken).ConfigureAwait(false);
+    }
+
+    private async Task<PrivacyStatusResponse> RequestErasureCoreAsync(
+        int actorUserId,
+        int targetUserId,
+        bool administrative,
         CancellationToken cancellationToken)
     {
         (User target, SiteSettings settings) result =
@@ -137,7 +160,7 @@ public sealed class PrivacyService : IPrivacyService
                         actorUserId,
                         targetUserId,
                         cancellationToken).ConfigureAwait(false);
-                    if (actorUserId != targetUserId)
+                    if (administrative)
                     {
                         RbacHierarchyPolicy.RequirePermission(actor, PermissionKeys.PrivacyManage);
                     }
@@ -159,9 +182,7 @@ public sealed class PrivacyService : IPrivacyService
                         new Dictionary<string, object?>
                         {
                             ["due_at"] = BusinessServiceSupport.IsoTimestamp(dueAt),
-                            ["requested_by"] = actorUserId == targetUserId
-                                ? "self"
-                                : "administrator",
+                            ["requested_by"] = administrative ? "administrator" : "self",
                         },
                         cancellationToken).ConfigureAwait(false);
                     return (scheduled, settings);
@@ -170,9 +191,32 @@ public sealed class PrivacyService : IPrivacyService
         return ToStatus(result.target, result.settings);
     }
 
-    public async Task<PrivacyStatusResponse> CancelErasureAsync(
+    public Task<PrivacyStatusResponse> CancelOwnErasureAsync(
+        int userId,
+        CancellationToken cancellationToken) =>
+        CancelErasureCoreAsync(
+            userId,
+            userId,
+            administrative: false,
+            cancellationToken);
+
+    public async Task<PrivacyStatusResponse> CancelUserErasureAsync(
         int actorUserId,
         int targetUserId,
+        CancellationToken cancellationToken)
+    {
+        EnsureAdministrativeTarget(actorUserId, targetUserId);
+        return await CancelErasureCoreAsync(
+            actorUserId,
+            targetUserId,
+            administrative: true,
+            cancellationToken).ConfigureAwait(false);
+    }
+
+    private async Task<PrivacyStatusResponse> CancelErasureCoreAsync(
+        int actorUserId,
+        int targetUserId,
+        bool administrative,
         CancellationToken cancellationToken)
     {
         User cancelled = await BusinessServiceSupport.InTransactionAsync(
@@ -183,7 +227,7 @@ public sealed class PrivacyService : IPrivacyService
                     actorUserId,
                     targetUserId,
                     cancellationToken).ConfigureAwait(false);
-                if (actorUserId != targetUserId)
+                if (administrative)
                 {
                     RbacHierarchyPolicy.RequirePermission(actor, PermissionKeys.PrivacyManage);
                 }
@@ -204,7 +248,7 @@ public sealed class PrivacyService : IPrivacyService
                 };
                 await _users.UpdateAsync(updated, cancellationToken).ConfigureAwait(false);
                 var metadata = new Dictionary<string, object?> { ["changed"] = changed };
-                if (actorUserId != targetUserId)
+                if (administrative)
                 {
                     metadata["cancelled_by"] = "administrator";
                 }
@@ -296,6 +340,16 @@ public sealed class PrivacyService : IPrivacyService
         }
 
         return actor!;
+    }
+
+    private static void EnsureAdministrativeTarget(int actorUserId, int targetUserId)
+    {
+        if (actorUserId == targetUserId)
+        {
+            throw ApiException.BadRequest(
+                "CANNOT_MODIFY_SELF",
+                "Use the personal privacy endpoint");
+        }
     }
 
     private async Task<(User Actor, User Target)> LoadActorAndTargetForUpdateAsync(
