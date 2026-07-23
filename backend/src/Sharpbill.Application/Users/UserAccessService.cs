@@ -5,11 +5,12 @@ using Sharpbill.Contracts.Users;
 using Sharpbill.Domain.Constants;
 using Sharpbill.Domain.Entities;
 
-namespace Sharpbill.Infrastructure.Services.Business;
+namespace Sharpbill.Application.Users;
 
-internal sealed class UserAccessService : IUserAccessService
+public sealed class UserAccessService : IUserAccessService
 {
     private readonly IUnitOfWork _unitOfWork;
+    private readonly ITransactionExecutor _transactions;
     private readonly IUserRepository _users;
     private readonly IRoleRepository _roles;
     private readonly IPermissionRepository _permissions;
@@ -19,6 +20,7 @@ internal sealed class UserAccessService : IUserAccessService
 
     public UserAccessService(
         IUnitOfWork unitOfWork,
+        ITransactionExecutor transactions,
         IUserRepository users,
         IRoleRepository roles,
         IPermissionRepository permissions,
@@ -27,6 +29,7 @@ internal sealed class UserAccessService : IUserAccessService
         IClock clock)
     {
         _unitOfWork = unitOfWork ?? throw new ArgumentNullException(nameof(unitOfWork));
+        _transactions = transactions ?? throw new ArgumentNullException(nameof(transactions));
         _users = users ?? throw new ArgumentNullException(nameof(users));
         _roles = roles ?? throw new ArgumentNullException(nameof(roles));
         _permissions = permissions ?? throw new ArgumentNullException(nameof(permissions));
@@ -50,9 +53,10 @@ internal sealed class UserAccessService : IUserAccessService
                 "You cannot change your own role");
         }
 
-        return BusinessServiceSupport.InTransactionAsync(
+        return _transactions.ExecuteTransactionAsync(
             _unitOfWork,
-            async () =>
+            nameof(AssignRoleAsync),
+            async _ =>
             {
                 await _context.RequireSettingsAsync(true, cancellationToken).ConfigureAwait(false);
                 Role role = await _roles.FindAsync(request.RoleId, true, cancellationToken)
@@ -110,7 +114,7 @@ internal sealed class UserAccessService : IUserAccessService
                         },
                     },
                     cancellationToken).ConfigureAwait(false);
-                return BusinessServiceSupport.ToUserResponse(updated, actor, _clock.UtcNow);
+                return UserResponseMapper.ToResponse(updated, actor, _clock.UtcNow);
             },
             cancellationToken);
     }
@@ -132,9 +136,10 @@ internal sealed class UserAccessService : IUserAccessService
 
         string[] requestedKeys = RbacHierarchyPolicy.NormalizePermissionKeys(request.PermissionKeys)
             .ToArray();
-        return BusinessServiceSupport.InTransactionAsync(
+        return _transactions.ExecuteTransactionAsync(
             _unitOfWork,
-            async () =>
+            nameof(SetPermissionsAsync),
+            async _ =>
             {
                 IReadOnlyList<Permission> permissions = requestedKeys.Length == 0
                     ? []
@@ -183,18 +188,18 @@ internal sealed class UserAccessService : IUserAccessService
                     {
                         ["before"] = new Dictionary<string, object?>
                         {
-                            ["permissions"] = BusinessServiceSupport.SummarizeStrings(
+                            ["permissions"] = SecurityEventMetadata.SummarizeStrings(
                                 target.DirectPermissionKeys),
                             ["access_version"] = target.AccessVersion,
                         },
                         ["after"] = new Dictionary<string, object?>
                         {
-                            ["permissions"] = BusinessServiceSupport.SummarizeStrings(requestedKeys),
+                            ["permissions"] = SecurityEventMetadata.SummarizeStrings(requestedKeys),
                             ["access_version"] = updated.AccessVersion,
                         },
                     },
                     cancellationToken).ConfigureAwait(false);
-                return BusinessServiceSupport.ToUserResponse(updated, actor, _clock.UtcNow);
+                return UserResponseMapper.ToResponse(updated, actor, _clock.UtcNow);
             },
             cancellationToken);
     }

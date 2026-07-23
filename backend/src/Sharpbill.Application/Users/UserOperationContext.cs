@@ -3,9 +3,9 @@ using Sharpbill.Application.Common;
 using Sharpbill.Application.Policies;
 using Sharpbill.Domain.Entities;
 
-namespace Sharpbill.Infrastructure.Services.Business;
+namespace Sharpbill.Application.Users;
 
-internal sealed class UserOperationContext
+public sealed class UserOperationContext
 {
     private readonly IUserRepository _users;
     private readonly ISettingsRepository _settings;
@@ -29,7 +29,7 @@ internal sealed class UserOperationContext
     {
         User? actor = await _users.FindAsync(actorUserId, forUpdate, cancellationToken)
             .ConfigureAwait(false);
-        if (!BusinessServiceSupport.IsAuthenticatable(actor))
+        if (!UserAccountPolicy.IsAuthenticatable(actor))
         {
             throw ApiException.Forbidden(
                 "FORBIDDEN",
@@ -60,7 +60,7 @@ internal sealed class UserOperationContext
         {
             User same = await FindUserAsync(actorUserId, true, cancellationToken)
                 .ConfigureAwait(false);
-            if (!BusinessServiceSupport.IsAuthenticatable(same))
+            if (!UserAccountPolicy.IsAuthenticatable(same))
             {
                 throw ApiException.Forbidden(
                     "FORBIDDEN",
@@ -78,7 +78,7 @@ internal sealed class UserOperationContext
             .ConfigureAwait(false);
         User? actor = actorUserId == firstId ? first : second;
         User? target = targetUserId == firstId ? first : second;
-        if (!BusinessServiceSupport.IsAuthenticatable(actor))
+        if (!UserAccountPolicy.IsAuthenticatable(actor))
         {
             throw ApiException.Forbidden(
                 "FORBIDDEN",
@@ -92,7 +92,7 @@ internal sealed class UserOperationContext
         bool forUpdate,
         CancellationToken cancellationToken) =>
         await _settings.GetAsync(forUpdate, cancellationToken).ConfigureAwait(false)
-            ?? throw BusinessServiceSupport.SettingsNotInitialized();
+            ?? throw BusinessErrors.SettingsNotInitialized();
 
     public async Task EnsureAdministrationAvailableAsync(CancellationToken cancellationToken)
     {

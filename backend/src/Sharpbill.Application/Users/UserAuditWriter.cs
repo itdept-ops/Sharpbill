@@ -1,9 +1,9 @@
 using Sharpbill.Application.Abstractions;
 using Sharpbill.Application.Common;
 
-namespace Sharpbill.Infrastructure.Services.Business;
+namespace Sharpbill.Application.Users;
 
-internal sealed class UserAuditWriter
+public sealed class UserAuditWriter
 {
     private readonly ISecurityEventService _securityEvents;
     private readonly IRequestContextAccessor _requestContextAccessor;
@@ -26,7 +26,7 @@ internal sealed class UserAuditWriter
         CancellationToken cancellationToken,
         string severity = "info") =>
         _securityEvents.RecordAsync(
-            BusinessServiceSupport.SecurityEvent(
+            SecurityEventWriteFactory.Create(
                 _requestContextAccessor,
                 eventType,
                 actorUserId,

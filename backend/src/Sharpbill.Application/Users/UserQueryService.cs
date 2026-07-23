@@ -1,4 +1,3 @@
-using Microsoft.Extensions.Options;
 using Sharpbill.Application.Abstractions;
 using Sharpbill.Application.Common;
 using Sharpbill.Application.Exports;
@@ -6,13 +5,13 @@ using Sharpbill.Application.Policies;
 using Sharpbill.Contracts.Users;
 using Sharpbill.Domain.Constants;
 using Sharpbill.Domain.Entities;
-using Sharpbill.Infrastructure.Configuration;
 
-namespace Sharpbill.Infrastructure.Services.Business;
+namespace Sharpbill.Application.Users;
 
-internal sealed class UserQueryService : IUserQueryService
+public sealed class UserQueryService : IUserQueryService
 {
     private readonly IUnitOfWork _unitOfWork;
+    private readonly ITransactionExecutor _transactions;
     private readonly IUserRepository _users;
     private readonly UserOperationContext _context;
     private readonly UserAuditWriter _audit;
@@ -22,20 +21,22 @@ internal sealed class UserQueryService : IUserQueryService
 
     public UserQueryService(
         IUnitOfWork unitOfWork,
+        ITransactionExecutor transactions,
         IUserRepository users,
         UserOperationContext context,
         UserAuditWriter audit,
         IClock clock,
-        IOptions<SharpbillOptions> options,
+        UserUseCaseOptions options,
         IValidator<UserQuery> queryValidator)
     {
         _unitOfWork = unitOfWork ?? throw new ArgumentNullException(nameof(unitOfWork));
+        _transactions = transactions ?? throw new ArgumentNullException(nameof(transactions));
         _users = users ?? throw new ArgumentNullException(nameof(users));
         _context = context ?? throw new ArgumentNullException(nameof(context));
         _audit = audit ?? throw new ArgumentNullException(nameof(audit));
         _clock = clock ?? throw new ArgumentNullException(nameof(clock));
         ArgumentNullException.ThrowIfNull(options);
-        _exportMaxBytes = options.Value.RequestPipeline.ExportMaxBytes;
+        _exportMaxBytes = options.ExportMaxBytes;
         _queryValidator = queryValidator ?? throw new ArgumentNullException(nameof(queryValidator));
     }
 
@@ -57,7 +58,7 @@ internal sealed class UserQueryService : IUserQueryService
         return new UserListResponse
         {
             Items = items
-                .Select(user => BusinessServiceSupport.ToUserResponse(user, actor, now))
+                .Select(user => UserResponseMapper.ToResponse(user, actor, now))
                 .ToArray(),
             Total = total,
         };
@@ -80,7 +81,7 @@ internal sealed class UserQueryService : IUserQueryService
 
         User target = await _context.FindUserAsync(userId, false, cancellationToken)
             .ConfigureAwait(false);
-        return BusinessServiceSupport.ToUserResponse(target, actor, _clock.UtcNow);
+        return UserResponseMapper.ToResponse(target, actor, _clock.UtcNow);
     }
 
     public Task<ExportDocument> ExportAsync(
@@ -91,9 +92,10 @@ internal sealed class UserQueryService : IUserQueryService
         ArgumentNullException.ThrowIfNull(query);
         UserQuery validationQuery = query with { Limit = 100, Offset = 0 };
         _queryValidator.Validate(validationQuery).ThrowIfInvalid();
-        return BusinessServiceSupport.InTransactionAsync(
+        return _transactions.ExecuteTransactionAsync(
             _unitOfWork,
-            async () =>
+            nameof(ExportAsync),
+            async _ =>
             {
                 User actor = await _context.RequireActorAsync(
                     actorUserId,
@@ -164,8 +166,8 @@ internal sealed class UserQueryService : IUserQueryService
                 user.Title ?? string.Empty,
                 user.Department ?? string.Empty,
                 includeLocation ? user.Location ?? string.Empty : string.Empty,
-                BusinessServiceSupport.IsoTimestamp(user.CreatedAt),
-                BusinessServiceSupport.IsoTimestamp(user.LastLoginAt),
+                InvariantTimestamp.Format(user.CreatedAt),
+                InvariantTimestamp.Format(user.LastLoginAt),
             ];
         }
     }

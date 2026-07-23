@@ -7,11 +7,12 @@ using Sharpbill.Contracts.Users;
 using Sharpbill.Domain.Constants;
 using Sharpbill.Domain.Entities;
 
-namespace Sharpbill.Infrastructure.Services.Business;
+namespace Sharpbill.Application.Users;
 
-internal sealed class UserLifecycleService : IUserLifecycleService
+public sealed class UserLifecycleService : IUserLifecycleService
 {
     private readonly IUnitOfWork _unitOfWork;
+    private readonly ITransactionExecutor _transactions;
     private readonly IUserRepository _users;
     private readonly IRoleRepository _roles;
     private readonly ISessionService _sessions;
@@ -22,6 +23,7 @@ internal sealed class UserLifecycleService : IUserLifecycleService
 
     public UserLifecycleService(
         IUnitOfWork unitOfWork,
+        ITransactionExecutor transactions,
         IUserRepository users,
         IRoleRepository roles,
         ISessionService sessions,
@@ -31,6 +33,7 @@ internal sealed class UserLifecycleService : IUserLifecycleService
         IValidator<BulkActionRequest> bulkValidator)
     {
         _unitOfWork = unitOfWork ?? throw new ArgumentNullException(nameof(unitOfWork));
+        _transactions = transactions ?? throw new ArgumentNullException(nameof(transactions));
         _users = users ?? throw new ArgumentNullException(nameof(users));
         _roles = roles ?? throw new ArgumentNullException(nameof(roles));
         _sessions = sessions ?? throw new ArgumentNullException(nameof(sessions));
@@ -54,9 +57,10 @@ internal sealed class UserLifecycleService : IUserLifecycleService
                 "You cannot deactivate yourself");
         }
 
-        return BusinessServiceSupport.InTransactionAsync(
+        return _transactions.ExecuteTransactionAsync(
             _unitOfWork,
-            async () =>
+            nameof(SetStatusAsync),
+            async _ =>
             {
                 await _context.RequireSettingsAsync(true, cancellationToken).ConfigureAwait(false);
                 (User actor, User target) = await _context.LoadActorAndTargetForUpdateAsync(
@@ -113,7 +117,7 @@ internal sealed class UserLifecycleService : IUserLifecycleService
                         },
                     },
                     cancellationToken).ConfigureAwait(false);
-                return BusinessServiceSupport.ToUserResponse(updated, actor, now);
+                return UserResponseMapper.ToResponse(updated, actor, now);
             },
             cancellationToken);
     }
@@ -122,9 +126,10 @@ internal sealed class UserLifecycleService : IUserLifecycleService
         int userId,
         int actorUserId,
         CancellationToken cancellationToken) =>
-        BusinessServiceSupport.InTransactionAsync(
+        _transactions.ExecuteTransactionAsync(
             _unitOfWork,
-            async () =>
+            nameof(ApproveAsync),
+            async _ =>
             {
                 (User actor, User target) = await _context.LoadActorAndTargetForUpdateAsync(
                     actorUserId,
@@ -151,7 +156,7 @@ internal sealed class UserLifecycleService : IUserLifecycleService
                         },
                     },
                     cancellationToken).ConfigureAwait(false);
-                return BusinessServiceSupport.ToUserResponse(updated, actor, _clock.UtcNow);
+                return UserResponseMapper.ToResponse(updated, actor, _clock.UtcNow);
             },
             cancellationToken);
 
@@ -167,9 +172,10 @@ internal sealed class UserLifecycleService : IUserLifecycleService
                 "You cannot kick your own session");
         }
 
-        return BusinessServiceSupport.InTransactionAsync(
+        return _transactions.ExecuteTransactionAsync(
             _unitOfWork,
-            async () =>
+            nameof(KickAsync),
+            async _ =>
             {
                 (User actor, User target) = await _context.LoadActorAndTargetForUpdateAsync(
                     actorUserId,
@@ -190,7 +196,7 @@ internal sealed class UserLifecycleService : IUserLifecycleService
                     new Dictionary<string, object?> { ["scope"] = "all" },
                     cancellationToken,
                     "warning").ConfigureAwait(false);
-                return BusinessServiceSupport.ToUserResponse(updated, actor, now);
+                return UserResponseMapper.ToResponse(updated, actor, now);
             },
             cancellationToken);
     }
@@ -251,9 +257,10 @@ internal sealed class UserLifecycleService : IUserLifecycleService
         int roleId,
         CancellationToken cancellationToken)
     {
-        await BusinessServiceSupport.InTransactionAsync(
+        await _transactions.ExecuteTransactionAsync(
             _unitOfWork,
-            async () =>
+            nameof(ValidateBulkRoleAsync),
+            async _ =>
             {
                 await _context.RequireSettingsAsync(true, cancellationToken).ConfigureAwait(false);
                 Role role = await _roles.FindAsync(roleId, true, cancellationToken)
@@ -274,9 +281,10 @@ internal sealed class UserLifecycleService : IUserLifecycleService
         int userId,
         BulkActionRequest request,
         CancellationToken cancellationToken) =>
-        BusinessServiceSupport.InTransactionAsync(
+        _transactions.ExecuteTransactionAsync(
             _unitOfWork,
-            async () =>
+            nameof(ApplyBulkItemAsync),
+            async _ =>
             {
                 await _context.RequireSettingsAsync(true, cancellationToken).ConfigureAwait(false);
                 Role? role = null;
