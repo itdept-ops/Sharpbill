@@ -61,6 +61,42 @@ public interface IAuthService
     Task<UserResponse> GetCurrentUserAsync(int userId, CancellationToken cancellationToken);
 }
 
+public interface IAuthConfigurationService
+{
+    Task<AuthConfigResponse> GetConfigurationAsync(CancellationToken cancellationToken);
+}
+
+public interface IExternalLoginService
+{
+    Task<AuthenticatedSession> LoginAsync(
+        ProviderContract provider,
+        TokenLoginRequest request,
+        RequestContext context,
+        CancellationToken cancellationToken);
+}
+
+public interface IDevelopmentLoginService
+{
+    Task<AuthenticatedSession> LoginAsync(
+        DevLoginRequest request,
+        RequestContext context,
+        CancellationToken cancellationToken);
+}
+
+public interface IAuthAccountService
+{
+    Task<UserResponse> GetCurrentUserAsync(
+        int userId,
+        CancellationToken cancellationToken);
+}
+
+public interface IAuthSessionOperationsService
+{
+    Task LogoutAsync(
+        RequestContext context,
+        CancellationToken cancellationToken);
+}
+
 public interface IDevelopmentAuthService
 {
     Task<AuthenticatedSession> LoginAsync(
