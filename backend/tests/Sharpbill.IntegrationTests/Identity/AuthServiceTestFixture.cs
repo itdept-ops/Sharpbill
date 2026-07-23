@@ -90,6 +90,7 @@ internal sealed class AuthServiceTestFixture
     public AuthService CreateService()
     {
         IOptions<SharpbillOptions> options = Options.Create(Configuration);
+        var policy = new AuthenticationPolicy(options);
         var sessionService = new SessionService(
             Sessions,
             Users,
@@ -101,22 +102,50 @@ internal sealed class AuthServiceTestFixture
             RequestContextAccessor,
             new SessionJwtIssuer(options),
             options);
-        return new AuthService(
-            [Verifier],
-            Identities,
-            Users,
-            Roles,
-            Settings,
-            Sessions,
+        var audit = new AuthenticationAuditService(
             SecurityEvents,
             UnitOfWork,
-            sessionService,
-            Legal,
-            new TokenLoginRequestValidator(),
-            new DevLoginRequestValidator(),
             Clock,
             options,
             NullLogger<AuthService>.Instance);
+        var admission = new AuthenticationAdmissionService(
+            Identities,
+            Users,
+            Roles,
+            Clock,
+            policy);
+        return new AuthService(
+            new AuthConfigurationService(Settings, policy, options),
+            new ExternalLoginService(
+                [Verifier],
+                Settings,
+                UnitOfWork,
+                sessionService,
+                Legal,
+                new TokenLoginRequestValidator(),
+                Clock,
+                policy,
+                admission,
+                audit),
+            new DevelopmentLoginService(
+                Identities,
+                Users,
+                UnitOfWork,
+                sessionService,
+                Legal,
+                new DevLoginRequestValidator(),
+                Clock,
+                policy,
+                admission,
+                audit,
+                options),
+            new AuthAccountService(Users),
+            new AuthSessionOperationsService(
+                Sessions,
+                SecurityEvents,
+                UnitOfWork,
+                Clock,
+                options));
     }
 
     public static SiteSettings CreateSettings(

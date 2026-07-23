@@ -110,6 +110,14 @@ public static class ServiceCollectionExtensions
         services.AddScoped<ISessionService>(static provider => provider.GetRequiredService<SessionService>());
         services.AddScoped<IIdentityTokenVerifier, GoogleIdentityTokenVerifier>();
         services.AddScoped<IIdentityTokenVerifier, MicrosoftIdentityTokenVerifier>();
+        services.AddScoped<AuthenticationPolicy>();
+        services.AddScoped<AuthenticationAuditService>();
+        services.AddScoped<AuthenticationAdmissionService>();
+        services.AddScoped<IAuthConfigurationService, AuthConfigurationService>();
+        services.AddScoped<IExternalLoginService, ExternalLoginService>();
+        services.AddScoped<IDevelopmentLoginService, DevelopmentLoginService>();
+        services.AddScoped<IAuthAccountService, AuthAccountService>();
+        services.AddScoped<IAuthSessionOperationsService, AuthSessionOperationsService>();
         services.AddScoped<IAuthService, AuthService>();
         services.AddScoped<IDevelopmentAuthService, DevelopmentAuthService>();
         services.AddHttpClient(IdentityProviderHttpClientNames.SigningKeys)
