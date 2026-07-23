@@ -169,6 +169,70 @@ public interface IUserService
         CancellationToken cancellationToken);
 }
 
+public interface IUserQueryService
+{
+    Task<UserListResponse> ListAsync(
+        UserQuery query,
+        int actorUserId,
+        CancellationToken cancellationToken);
+    Task<UserResponse> GetAsync(
+        int userId,
+        int actorUserId,
+        CancellationToken cancellationToken);
+    Task<ExportDocument> ExportAsync(
+        UserQuery query,
+        int actorUserId,
+        CancellationToken cancellationToken);
+}
+
+public interface IUserProfileService
+{
+    Task<UserResponse> UpdateProfileAsync(
+        int userId,
+        int actorUserId,
+        ProfileUpdateRequest request,
+        CancellationToken cancellationToken);
+    Task UpdateLocationAsync(
+        int userId,
+        LocationUpdateRequest request,
+        CancellationToken cancellationToken);
+}
+
+public interface IUserAccessService
+{
+    Task<UserResponse> AssignRoleAsync(
+        int userId,
+        int actorUserId,
+        RoleAssignRequest request,
+        CancellationToken cancellationToken);
+    Task<UserResponse> SetPermissionsAsync(
+        int userId,
+        int actorUserId,
+        PermissionGrantRequest request,
+        CancellationToken cancellationToken);
+}
+
+public interface IUserLifecycleService
+{
+    Task<UserResponse> SetStatusAsync(
+        int userId,
+        int actorUserId,
+        StatusUpdateRequest request,
+        CancellationToken cancellationToken);
+    Task<UserResponse> ApproveAsync(
+        int userId,
+        int actorUserId,
+        CancellationToken cancellationToken);
+    Task<UserResponse> KickAsync(
+        int userId,
+        int actorUserId,
+        CancellationToken cancellationToken);
+    Task<BulkActionResponse> BulkAsync(
+        int actorUserId,
+        BulkActionRequest request,
+        CancellationToken cancellationToken);
+}
+
 public interface IRoleService
 {
     Task<IReadOnlyList<RoleResponse>> ListAsync(int actorUserId, CancellationToken cancellationToken);
