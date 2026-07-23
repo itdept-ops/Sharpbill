@@ -21,6 +21,8 @@ public sealed class RepositoryIntegrationTests
 {
     private static readonly string? ConnectionString =
         Environment.GetEnvironmentVariable("SHARPBILL_TEST_DATABASE");
+    private static readonly TestClock RepositoryClock =
+        new(new DateTime(2026, 1, 15, 12, 0, 0, DateTimeKind.Utc));
 
     [Fact]
     public void EveryRepositoryContractHasAConcreteDapperImplementation()
@@ -42,6 +44,27 @@ public sealed class RepositoryIntegrationTests
     }
 
     [Fact]
+    public async Task UserOnlineFilterUsesInjectedClockAsync()
+    {
+        DateTime now = new(2030, 6, 15, 18, 30, 45, DateTimeKind.Utc);
+        await using var session = new DatabaseSession(new TestConnectionFactory(string.Empty));
+        var repository = new UserRepository(session, TestOptions(), new TestClock(now));
+
+        (string onlineWhere, DynamicParameters onlineParameters) = repository.BuildFilters(
+            new UserQuery { Online = true });
+        (string offlineWhere, DynamicParameters offlineParameters) = repository.BuildFilters(
+            new UserQuery { Online = false });
+
+        DateTime expectedCutoff = DateTime.SpecifyKind(
+            now.AddSeconds(-90),
+            DateTimeKind.Unspecified);
+        Assert.Equal(expectedCutoff, onlineParameters.Get<DateTime>("OnlineCutoff"));
+        Assert.Equal(expectedCutoff, offlineParameters.Get<DateTime>("OnlineCutoff"));
+        Assert.Contains("u.last_seen_at >= @OnlineCutoff", onlineWhere, StringComparison.Ordinal);
+        Assert.Contains("u.last_seen_at < @OnlineCutoff", offlineWhere, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task CanonicalSeedAndBoundedQueriesRoundTripWhenDatabaseIsConfiguredAsync()
     {
         string? connectionString = GetConfiguredDatabase();
@@ -53,7 +76,7 @@ public sealed class RepositoryIntegrationTests
         await using var session = new DatabaseSession(new TestConnectionFactory(connectionString));
         var roleRepository = new RoleRepository(session);
         var permissionRepository = new PermissionRepository(session);
-        var userRepository = new UserRepository(session, TestOptions());
+        var userRepository = new UserRepository(session, TestOptions(), RepositoryClock);
         var healthRepository = new HealthRepository(session, TestOptions());
 
         IReadOnlyList<Role> roles = await roleRepository.ListAsync(CancellationToken.None);
@@ -109,7 +132,7 @@ public sealed class RepositoryIntegrationTests
                 "user",
                 false,
                 CancellationToken.None) ?? throw new InvalidOperationException("Seed role is missing.");
-            var users = new UserRepository(session, TestOptions());
+            var users = new UserRepository(session, TestOptions(), RepositoryClock);
             string email = $"literal%_{Guid.NewGuid():N}@example.invalid";
             int userId = await users.AddAsync(new User
             {
@@ -271,7 +294,7 @@ public sealed class RepositoryIntegrationTests
                     "user",
                     false,
                     CancellationToken.None) ?? throw new InvalidOperationException("Seed role is missing.");
-                var users = new UserRepository(setup, TestOptions());
+                var users = new UserRepository(setup, TestOptions(), RepositoryClock);
                 userId = await users.AddAsync(new User
                 {
                     Id = 0,
@@ -295,8 +318,8 @@ public sealed class RepositoryIntegrationTests
             await secondSession.BeginAsync(CancellationToken.None);
             try
             {
-                var firstUsers = new UserRepository(firstSession, TestOptions());
-                var secondUsers = new UserRepository(secondSession, TestOptions());
+                var firstUsers = new UserRepository(firstSession, TestOptions(), RepositoryClock);
+                var secondUsers = new UserRepository(secondSession, TestOptions(), RepositoryClock);
                 Assert.NotNull(await firstUsers.FindForAuthenticationAsync(userId, CancellationToken.None));
 
                 using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(5));

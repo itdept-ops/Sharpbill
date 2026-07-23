@@ -2,6 +2,7 @@ using System.Data;
 using Dapper;
 using Microsoft.Extensions.Options;
 using Sharpbill.Application.Abstractions;
+using Sharpbill.Application.Common;
 using Sharpbill.Contracts.Users;
 using Sharpbill.Domain.Entities;
 using Sharpbill.Infrastructure.Configuration;
@@ -11,7 +12,8 @@ namespace Sharpbill.Infrastructure.Repositories;
 
 public sealed class UserRepository(
     DatabaseSession session,
-    IOptions<SharpbillOptions> options) : DapperRepository(session), IUserRepository
+    IOptions<SharpbillOptions> options,
+    IClock clock) : DapperRepository(session), IUserRepository
 {
     private const int OnlineWindowSeconds = 90;
     private const string UserColumns = """
@@ -570,7 +572,7 @@ public sealed class UserRepository(
             static group => group.Key,
             static group => group.Select(static row => row.Key).ToHashSet(StringComparer.Ordinal));
 
-    private static (string Where, DynamicParameters Parameters) BuildFilters(UserQuery query)
+    internal (string Where, DynamicParameters Parameters) BuildFilters(UserQuery query)
     {
         List<string> conditions = ["1 = 1"];
         DynamicParameters parameters = new();
@@ -601,7 +603,7 @@ public sealed class UserRepository(
 
         if (query.Online is not null)
         {
-            DateTime cutoff = DateTime.UtcNow.AddSeconds(-OnlineWindowSeconds);
+            DateTime cutoff = clock.UtcNow.AddSeconds(-OnlineWindowSeconds);
             parameters.Add("OnlineCutoff", RepositoryMapping.ToDatabaseUtc(cutoff));
             conditions.Add(query.Online.Value
                 ? "u.is_active = 1 AND u.is_approved = 1 AND u.last_seen_at >= @OnlineCutoff"
