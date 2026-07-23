@@ -1,4 +1,3 @@
-using System.Data.Common;
 using Sharpbill.Application.Abstractions;
 using Sharpbill.Application.Common;
 using Sharpbill.Application.Policies;
@@ -239,7 +238,7 @@ public sealed class UserLifecycleService : IUserLifecycleService
                     Error = exception.Code,
                 });
             }
-            catch (DbException)
+            catch (PersistenceOperationException)
             {
                 results.Add(new BulkItemResponse { Id = userId, Ok = false, Error = "DB_ERROR" });
             }

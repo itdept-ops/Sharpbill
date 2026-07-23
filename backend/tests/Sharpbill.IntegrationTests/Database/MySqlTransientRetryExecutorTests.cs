@@ -1,4 +1,5 @@
 using Microsoft.Extensions.Logging.Abstractions;
+using Sharpbill.Application.Abstractions;
 using Sharpbill.Contracts.Operations;
 using Sharpbill.Infrastructure.Database;
 using Sharpbill.IntegrationTests.Business;
@@ -70,6 +71,26 @@ public sealed class MySqlTransientRetryExecutorTests
         Assert.Equal(0, telemetry.RecoveredTransactions);
         Assert.Equal(1, telemetry.ExhaustedTransactions);
         Assert.NotNull(telemetry.GetMetrics().LastExhaustedAt);
+    }
+
+    [Fact]
+    public async Task ApplicationBoundaryTranslatesDatabaseExceptionsAsync()
+    {
+        ITransactionExecutor executor = MySqlTransientRetryExecutor.Default;
+        var unitOfWork = new FakeUnitOfWork();
+
+        PersistenceOperationException exception =
+            await Assert.ThrowsAsync<PersistenceOperationException>(() =>
+                executor.ExecuteTransactionAsync(
+                    unitOfWork,
+                    "test.persistence-boundary",
+                    static _ => Task.FromException(new FakeDatabaseException()),
+                    CancellationToken.None));
+
+        Assert.IsType<FakeDatabaseException>(exception.InnerException);
+        Assert.Equal(1, unitOfWork.Begins);
+        Assert.Equal(1, unitOfWork.Rollbacks);
+        Assert.Equal(0, unitOfWork.Commits);
     }
 
     private sealed class RetryableTestException : Exception;
