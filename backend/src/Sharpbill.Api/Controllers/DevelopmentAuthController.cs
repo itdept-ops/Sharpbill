@@ -1,10 +1,7 @@
-using System.Security.Cryptography;
-using System.Text;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Options;
 using Sharpbill.Application.Abstractions;
-using Sharpbill.Application.Common;
 using Sharpbill.Contracts.Auth;
 using Sharpbill.Contracts.Users;
 using Sharpbill.Infrastructure.Configuration;
@@ -15,9 +12,7 @@ namespace Sharpbill.Api.Controllers;
 [Route("api/auth")]
 [AllowAnonymous]
 public sealed class DevelopmentAuthController(
-    IAuthService authService,
-    IRoleRepository roles,
-    IRequestContextAccessor requestContextAccessor,
+    IDevelopmentAuthService developmentAuthService,
     IOptions<SharpbillOptions> options) : ControllerBase
 {
     private readonly SharpbillOptions _options = options.Value;
@@ -28,10 +23,9 @@ public sealed class DevelopmentAuthController(
         [FromHeader(Name = "X-Dev-Auth-Secret")] string? suppliedSecret,
         CancellationToken cancellationToken)
     {
-        RequireSecret(suppliedSecret);
-        AuthenticatedSession authenticated = await authService.DevLoginAsync(
+        AuthenticatedSession authenticated = await developmentAuthService.LoginAsync(
             request,
-            requestContextAccessor.Current,
+            suppliedSecret,
             cancellationToken).ConfigureAwait(false);
         Response.Cookies.Append(CookieName, authenticated.Session.Value, Cookie(authenticated.Session));
         return Ok(authenticated.User);
@@ -42,21 +36,10 @@ public sealed class DevelopmentAuthController(
         [FromHeader(Name = "X-Dev-Auth-Secret")] string? suppliedSecret,
         CancellationToken cancellationToken)
     {
-        RequireSecret(suppliedSecret);
-        var rows = await roles.ListAsync(cancellationToken).ConfigureAwait(false);
-        return Ok(rows.OrderBy(static role => role.Id).Select(static role => role.Name).ToArray());
-    }
-
-    private void RequireSecret(string? supplied)
-    {
-        string? expected = _options.DevelopmentAuthentication.Secret;
-        if (string.IsNullOrEmpty(expected) || string.IsNullOrEmpty(supplied) ||
-            !CryptographicOperations.FixedTimeEquals(
-                Encoding.UTF8.GetBytes(expected),
-                Encoding.UTF8.GetBytes(supplied)))
-        {
-            throw ApiException.NotFound("Not found");
-        }
+        IReadOnlyList<string> roles = await developmentAuthService.ListRolesAsync(
+            suppliedSecret,
+            cancellationToken).ConfigureAwait(false);
+        return Ok(roles);
     }
 
     private string CookieName => _options.Session.LocalCookieName;
