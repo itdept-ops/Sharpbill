@@ -1,13 +1,12 @@
 using Sharpbill.Application.Abstractions;
 using Sharpbill.Application.Common;
-using Sharpbill.Application.Identity;
 using Sharpbill.Contracts.Auth;
 using Sharpbill.Domain.Entities;
 using Sharpbill.Domain.Enums;
 
-namespace Sharpbill.Infrastructure.Services.Identity;
+namespace Sharpbill.Application.Identity;
 
-internal sealed class AuthenticationAdmissionService
+public sealed class AuthenticationAdmissionService
 {
     private const string AdministratorRole = "admin";
     private const string DefaultRole = "user";
@@ -154,4 +153,4 @@ internal sealed class AuthenticationAdmissionService
     }
 }
 
-internal sealed record AuthenticationAdmissionResult(User User, bool WasCreated);
+public sealed record AuthenticationAdmissionResult(User User, bool WasCreated);
