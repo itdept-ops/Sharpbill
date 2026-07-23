@@ -105,6 +105,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IIdentityTokenVerifier, GoogleIdentityTokenVerifier>();
         services.AddScoped<IIdentityTokenVerifier, MicrosoftIdentityTokenVerifier>();
         services.AddScoped<IAuthService, AuthService>();
+        services.AddScoped<IDevelopmentAuthService, DevelopmentAuthService>();
         services.AddHttpClient(IdentityProviderHttpClientNames.SigningKeys)
             .ConfigureHttpClient(static client => client.Timeout = Timeout.InfiniteTimeSpan)
             .ConfigurePrimaryHttpMessageHandler(provider =>
