@@ -153,15 +153,15 @@ internal sealed class AuthServiceTestFixture
         bool allowMicrosoft = true,
         SignupMode signupMode = SignupMode.Open,
         bool calmMode = false) => new()
-    {
-        Id = 1,
-        DefaultRoleId = 2,
-        AllowGoogle = allowGoogle,
-        AllowMicrosoft = allowMicrosoft,
-        SignupMode = signupMode,
-        CalmMode = calmMode,
-        UpdatedAt = Now,
-    };
+        {
+            Id = 1,
+            DefaultRoleId = 2,
+            AllowGoogle = allowGoogle,
+            AllowMicrosoft = allowMicrosoft,
+            SignupMode = signupMode,
+            CalmMode = calmMode,
+            UpdatedAt = Now,
+        };
 
     public static VerifiedIdentity CreateVerifiedIdentity() => new()
     {
