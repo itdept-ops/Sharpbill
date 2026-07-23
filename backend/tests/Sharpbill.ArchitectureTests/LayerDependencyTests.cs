@@ -36,6 +36,7 @@ public sealed class LayerDependencyTests
         string[] providerReferences = AssemblyReferences(applicationAssembly);
         Assert.DoesNotContain("MySqlConnector", providerReferences);
         Assert.DoesNotContain("Microsoft.Extensions.Options", providerReferences);
+        Assert.DoesNotContain("System.Data.Common", providerReferences);
     }
 
     [Fact]

@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.Diagnostics.Metrics;
+using System.Data.Common;
 using System.Runtime.ExceptionServices;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -145,6 +146,50 @@ public sealed partial class MySqlTransientRetryExecutor : ITransactionExecutor
                 return true;
             },
             cancellationToken).ConfigureAwait(false);
+    }
+
+    async Task<T> ITransactionExecutor.ExecuteTransactionAsync<T>(
+        IUnitOfWork unitOfWork,
+        string operationName,
+        Func<CancellationToken, Task<T>> operation,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            return await ExecuteTransactionAsync(
+                unitOfWork,
+                operationName,
+                operation,
+                cancellationToken).ConfigureAwait(false);
+        }
+        catch (DbException exception)
+        {
+            throw new PersistenceOperationException(
+                "The persistence operation failed.",
+                exception);
+        }
+    }
+
+    async Task ITransactionExecutor.ExecuteTransactionAsync(
+        IUnitOfWork unitOfWork,
+        string operationName,
+        Func<CancellationToken, Task> operation,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            await ExecuteTransactionAsync(
+                unitOfWork,
+                operationName,
+                operation,
+                cancellationToken).ConfigureAwait(false);
+        }
+        catch (DbException exception)
+        {
+            throw new PersistenceOperationException(
+                "The persistence operation failed.",
+                exception);
+        }
     }
 
     internal static bool IsRetryableError(MySqlErrorCode errorCode) =>
