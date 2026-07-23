@@ -2,6 +2,8 @@ using System.Reflection;
 using System.Data.Common;
 using Microsoft.AspNetCore.Mvc;
 using Sharpbill.Application.Abstractions;
+using Sharpbill.Application.Common;
+using Sharpbill.Application.Identity;
 using Sharpbill.Api.Controllers;
 using Sharpbill.Domain.Entities;
 using Sharpbill.Infrastructure.Configuration;
@@ -96,6 +98,74 @@ public sealed class LayerDependencyTests
                 typeof(IDevelopmentLoginService),
                 typeof(IAuthAccountService),
                 typeof(IAuthSessionOperationsService),
+            ],
+            dependencies);
+    }
+
+    [Fact]
+    public void AuthenticationBoundaryCodeIsOwnedByApplication()
+    {
+        Assembly applicationAssembly = typeof(IAuthService).Assembly;
+        Type[] boundaryTypes =
+        [
+            typeof(AuthenticationPolicy),
+            typeof(AuthenticationAdmissionService),
+            typeof(IdentityUserMapper),
+            typeof(IdentitySecurityEventFactory),
+        ];
+
+        Assert.All(
+            boundaryTypes,
+            type =>
+            {
+                Assert.Equal(applicationAssembly, type.Assembly);
+                Assert.Equal("Sharpbill.Application.Identity", type.Namespace);
+            });
+    }
+
+    [Fact]
+    public void AuthenticationPolicyReceivesOnlySecretFreeProjection()
+    {
+        ConstructorInfo constructor = Assert.Single(typeof(AuthenticationPolicy).GetConstructors());
+        Type[] dependencies = constructor.GetParameters()
+            .Select(static parameter => parameter.ParameterType)
+            .ToArray();
+        string[] optionProperties = typeof(AuthenticationPolicyOptions).GetProperties()
+            .Select(static property => property.Name)
+            .Order(StringComparer.Ordinal)
+            .ToArray();
+
+        Assert.Equal([typeof(AuthenticationPolicyOptions)], dependencies);
+        Assert.Equal(
+            [
+                nameof(AuthenticationPolicyOptions.DevelopmentAdminEmails),
+                nameof(AuthenticationPolicyOptions.DevelopmentAuthenticationEnabled),
+                nameof(AuthenticationPolicyOptions.GoogleAdminSubjects),
+                nameof(AuthenticationPolicyOptions.GoogleClientId),
+                nameof(AuthenticationPolicyOptions.IsLocal),
+                nameof(AuthenticationPolicyOptions.MicrosoftAdminObjectIds),
+                nameof(AuthenticationPolicyOptions.MicrosoftAdminTenantId),
+                nameof(AuthenticationPolicyOptions.MicrosoftClientId),
+            ],
+            optionProperties);
+    }
+
+    [Fact]
+    public void AuthenticationAdmissionDependsOnlyOnApplicationBoundaries()
+    {
+        ConstructorInfo constructor =
+            Assert.Single(typeof(AuthenticationAdmissionService).GetConstructors());
+        Type[] dependencies = constructor.GetParameters()
+            .Select(static parameter => parameter.ParameterType)
+            .ToArray();
+
+        Assert.Equal(
+            [
+                typeof(IIdentityRepository),
+                typeof(IUserRepository),
+                typeof(IRoleRepository),
+                typeof(IClock),
+                typeof(AuthenticationPolicy),
             ],
             dependencies);
     }
