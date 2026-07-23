@@ -1,5 +1,6 @@
 using Sharpbill.Application.Abstractions;
 using Sharpbill.Application.Common;
+using Sharpbill.Application.Identity;
 using Sharpbill.Contracts.Auth;
 using Sharpbill.Domain.Entities;
 using Sharpbill.Domain.Enums;

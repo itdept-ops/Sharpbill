@@ -3,6 +3,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 using Sharpbill.Application.Abstractions;
 using Sharpbill.Application.Common;
+using Sharpbill.Application.Identity;
 using Sharpbill.Application.Policies;
 using Sharpbill.Application.Validation;
 using Sharpbill.Contracts.Access;
@@ -110,7 +111,28 @@ public static class ServiceCollectionExtensions
         services.AddScoped<ISessionService>(static provider => provider.GetRequiredService<SessionService>());
         services.AddScoped<IIdentityTokenVerifier, GoogleIdentityTokenVerifier>();
         services.AddScoped<IIdentityTokenVerifier, MicrosoftIdentityTokenVerifier>();
-        services.AddScoped<AuthenticationPolicy>();
+        services.AddSingleton(static provider =>
+        {
+            SharpbillOptions runtimeOptions = provider
+                .GetRequiredService<IOptions<SharpbillOptions>>().Value;
+            IdentityProviderOptions identity = runtimeOptions.IdentityProviders;
+            return new AuthenticationPolicyOptions
+            {
+                IsLocal = runtimeOptions.IsLocal,
+                GoogleClientId = identity.GoogleClientId,
+                MicrosoftClientId = identity.MicrosoftClientId,
+                DevelopmentAuthenticationEnabled =
+                    DevelopmentAuthenticationGuard.IsEnabled(runtimeOptions),
+                GoogleAdminSubjects = identity.GoogleAdminSubjects.ToHashSet(
+                    StringComparer.Ordinal),
+                MicrosoftAdminTenantId = identity.MicrosoftAdminTenantId,
+                MicrosoftAdminObjectIds = identity.MicrosoftAdminObjectIds.ToHashSet(
+                    StringComparer.OrdinalIgnoreCase),
+                DevelopmentAdminEmails = identity.DevelopmentAdminEmails.ToHashSet(
+                    StringComparer.OrdinalIgnoreCase),
+            };
+        });
+        services.AddSingleton<AuthenticationPolicy>();
         services.AddScoped<AuthenticationAuditService>();
         services.AddScoped<AuthenticationAdmissionService>();
         services.AddScoped<IAuthConfigurationService, AuthConfigurationService>();
