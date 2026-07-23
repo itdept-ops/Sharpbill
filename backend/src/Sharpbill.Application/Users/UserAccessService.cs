@@ -56,16 +56,16 @@ public sealed class UserAccessService : IUserAccessService
         return _transactions.ExecuteTransactionAsync(
             _unitOfWork,
             nameof(AssignRoleAsync),
-            async _ =>
+            async transactionToken =>
             {
-                await _context.RequireSettingsAsync(true, cancellationToken).ConfigureAwait(false);
-                Role role = await _roles.FindAsync(request.RoleId, true, cancellationToken)
+                await _context.RequireSettingsAsync(true, transactionToken).ConfigureAwait(false);
+                Role role = await _roles.FindAsync(request.RoleId, true, transactionToken)
                     .ConfigureAwait(false)
                     ?? throw ApiException.BadRequest("UNKNOWN_ROLE", "No such role");
                 (User actor, User target) = await _context.LoadActorAndTargetForUpdateAsync(
                     actorUserId,
                     userId,
-                    cancellationToken).ConfigureAwait(false);
+                    transactionToken).ConfigureAwait(false);
                 RbacHierarchyPolicy.RequirePermission(actor, PermissionKeys.UsersManage);
                 RbacHierarchyPolicy.EnsureRoleAssignable(actor, role);
                 RbacHierarchyPolicy.EnsureCanManageTarget(actor, target);
@@ -75,7 +75,7 @@ public sealed class UserAccessService : IUserAccessService
                     "User access");
                 if (RbacHierarchyPolicy.IsAdministrator(target) &&
                     !string.Equals(role.Name, SystemRoleNames.Administrator, StringComparison.Ordinal) &&
-                    await _users.CountActiveAdministratorsAsync(true, cancellationToken)
+                    await _users.CountActiveAdministratorsAsync(true, transactionToken)
                         .ConfigureAwait(false) <= 1)
                 {
                     throw ApiException.Forbidden(
@@ -91,8 +91,8 @@ public sealed class UserAccessService : IUserAccessService
                     AccessVersion = target.AccessVersion + 1,
                     UpdatedAt = _clock.UtcNow,
                 };
-                await _users.UpdateAsync(updated, cancellationToken).ConfigureAwait(false);
-                await _context.EnsureAdministrationAvailableAsync(cancellationToken).ConfigureAwait(false);
+                await _users.UpdateAsync(updated, transactionToken).ConfigureAwait(false);
+                await _context.EnsureAdministrationAvailableAsync(transactionToken).ConfigureAwait(false);
                 await _audit.RecordAsync(
                     "user.role.changed",
                     actor.Id,
@@ -113,7 +113,7 @@ public sealed class UserAccessService : IUserAccessService
                             ["access_version"] = updated.AccessVersion,
                         },
                     },
-                    cancellationToken).ConfigureAwait(false);
+                    transactionToken).ConfigureAwait(false);
                 return UserResponseMapper.ToResponse(updated, actor, _clock.UtcNow);
             },
             cancellationToken);
@@ -139,11 +139,11 @@ public sealed class UserAccessService : IUserAccessService
         return _transactions.ExecuteTransactionAsync(
             _unitOfWork,
             nameof(SetPermissionsAsync),
-            async _ =>
+            async transactionToken =>
             {
                 IReadOnlyList<Permission> permissions = requestedKeys.Length == 0
                     ? []
-                    : await _permissions.FindByKeysAsync(requestedKeys, cancellationToken)
+                    : await _permissions.FindByKeysAsync(requestedKeys, transactionToken)
                         .ConfigureAwait(false);
                 string[] unknown = requestedKeys
                     .Except(permissions.Select(static permission => permission.Key), StringComparer.Ordinal)
@@ -159,7 +159,7 @@ public sealed class UserAccessService : IUserAccessService
                 (User actor, User target) = await _context.LoadActorAndTargetForUpdateAsync(
                     actorUserId,
                     userId,
-                    cancellationToken).ConfigureAwait(false);
+                    transactionToken).ConfigureAwait(false);
                 RbacHierarchyPolicy.RequirePermission(actor, PermissionKeys.UsersManage);
                 RbacHierarchyPolicy.EnsurePermissionsGrantable(actor, requestedKeys);
                 RbacHierarchyPolicy.EnsureCanManageTarget(actor, target);
@@ -177,8 +177,8 @@ public sealed class UserAccessService : IUserAccessService
                 await _users.ReplaceDirectPermissionsAsync(
                     target.Id,
                     permissions.Select(static permission => permission.Id).ToArray(),
-                    cancellationToken).ConfigureAwait(false);
-                await _users.UpdateAsync(updated, cancellationToken).ConfigureAwait(false);
+                    transactionToken).ConfigureAwait(false);
+                await _users.UpdateAsync(updated, transactionToken).ConfigureAwait(false);
                 await _audit.RecordAsync(
                     "user.permissions.changed",
                     actor.Id,
@@ -198,7 +198,7 @@ public sealed class UserAccessService : IUserAccessService
                             ["access_version"] = updated.AccessVersion,
                         },
                     },
-                    cancellationToken).ConfigureAwait(false);
+                    transactionToken).ConfigureAwait(false);
                 return UserResponseMapper.ToResponse(updated, actor, _clock.UtcNow);
             },
             cancellationToken);

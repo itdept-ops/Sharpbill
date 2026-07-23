@@ -95,17 +95,17 @@ public sealed class UserQueryService : IUserQueryService
         return _transactions.ExecuteTransactionAsync(
             _unitOfWork,
             nameof(ExportAsync),
-            async _ =>
+            async transactionToken =>
             {
                 User actor = await _context.RequireActorAsync(
                     actorUserId,
                     PermissionKeys.UsersExport,
                     false,
-                    cancellationToken).ConfigureAwait(false);
+                    transactionToken).ConfigureAwait(false);
                 IReadOnlyList<User> users = await _users.ListForExportAsync(
                     query,
                     DomainLimits.MaxExportRows + 1,
-                    cancellationToken).ConfigureAwait(false);
+                    transactionToken).ConfigureAwait(false);
                 if (users.Count > DomainLimits.MaxExportRows)
                 {
                     throw new ApiException(
@@ -119,7 +119,7 @@ public sealed class UserQueryService : IUserQueryService
                 CsvExportWriter.EnsureWithinLimit(
                     csvRows,
                     _exportMaxBytes,
-                    cancellationToken);
+                    transactionToken);
                 await _audit.RecordAsync(
                     "users.exported",
                     actor.Id,
@@ -133,7 +133,7 @@ public sealed class UserQueryService : IUserQueryService
                             query.Status is not null ||
                             query.Online is not null,
                     },
-                    cancellationToken).ConfigureAwait(false);
+                    transactionToken).ConfigureAwait(false);
                 return new ExportDocument(
                     "users.csv",
                     "text/csv; charset=utf-8",

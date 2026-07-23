@@ -59,19 +59,19 @@ public sealed class UserLifecycleService : IUserLifecycleService
         return _transactions.ExecuteTransactionAsync(
             _unitOfWork,
             nameof(SetStatusAsync),
-            async _ =>
+            async transactionToken =>
             {
-                await _context.RequireSettingsAsync(true, cancellationToken).ConfigureAwait(false);
+                await _context.RequireSettingsAsync(true, transactionToken).ConfigureAwait(false);
                 (User actor, User target) = await _context.LoadActorAndTargetForUpdateAsync(
                     actorUserId,
                     userId,
-                    cancellationToken).ConfigureAwait(false);
+                    transactionToken).ConfigureAwait(false);
                 RbacHierarchyPolicy.RequirePermission(actor, PermissionKeys.UsersManage);
                 RbacHierarchyPolicy.EnsureCanManageTarget(actor, target);
                 DateTime now = _clock.UtcNow;
                 if (!request.IsActive &&
                     RbacHierarchyPolicy.IsAdministrator(target) &&
-                    await _users.CountActiveAdministratorsAsync(true, cancellationToken)
+                    await _users.CountActiveAdministratorsAsync(true, transactionToken)
                         .ConfigureAwait(false) <= 1)
                 {
                     throw ApiException.Forbidden(
@@ -90,12 +90,12 @@ public sealed class UserLifecycleService : IUserLifecycleService
                     SessionValidAfter = request.IsActive ? target.SessionValidAfter : now,
                     UpdatedAt = now,
                 };
-                await _users.UpdateAsync(updated, cancellationToken).ConfigureAwait(false);
+                await _users.UpdateAsync(updated, transactionToken).ConfigureAwait(false);
                 if (!request.IsActive)
                 {
-                    await _sessions.RevokeAllAsync(target.Id, now, cancellationToken)
+                    await _sessions.RevokeAllAsync(target.Id, now, transactionToken)
                         .ConfigureAwait(false);
-                    await _context.EnsureAdministrationAvailableAsync(cancellationToken)
+                    await _context.EnsureAdministrationAvailableAsync(transactionToken)
                         .ConfigureAwait(false);
                 }
 
@@ -115,7 +115,7 @@ public sealed class UserLifecycleService : IUserLifecycleService
                             ["is_active"] = updated.IsActive,
                         },
                     },
-                    cancellationToken).ConfigureAwait(false);
+                    transactionToken).ConfigureAwait(false);
                 return UserResponseMapper.ToResponse(updated, actor, now);
             },
             cancellationToken);
@@ -128,16 +128,16 @@ public sealed class UserLifecycleService : IUserLifecycleService
         _transactions.ExecuteTransactionAsync(
             _unitOfWork,
             nameof(ApproveAsync),
-            async _ =>
+            async transactionToken =>
             {
                 (User actor, User target) = await _context.LoadActorAndTargetForUpdateAsync(
                     actorUserId,
                     userId,
-                    cancellationToken).ConfigureAwait(false);
+                    transactionToken).ConfigureAwait(false);
                 RbacHierarchyPolicy.RequirePermission(actor, PermissionKeys.UsersManage);
                 RbacHierarchyPolicy.EnsureCanManageTarget(actor, target);
                 User updated = target with { IsApproved = true, UpdatedAt = _clock.UtcNow };
-                await _users.UpdateAsync(updated, cancellationToken).ConfigureAwait(false);
+                await _users.UpdateAsync(updated, transactionToken).ConfigureAwait(false);
                 await _audit.RecordAsync(
                     "user.approved",
                     actor.Id,
@@ -154,7 +154,7 @@ public sealed class UserLifecycleService : IUserLifecycleService
                             ["is_approved"] = true,
                         },
                     },
-                    cancellationToken).ConfigureAwait(false);
+                    transactionToken).ConfigureAwait(false);
                 return UserResponseMapper.ToResponse(updated, actor, _clock.UtcNow);
             },
             cancellationToken);
@@ -174,18 +174,18 @@ public sealed class UserLifecycleService : IUserLifecycleService
         return _transactions.ExecuteTransactionAsync(
             _unitOfWork,
             nameof(KickAsync),
-            async _ =>
+            async transactionToken =>
             {
                 (User actor, User target) = await _context.LoadActorAndTargetForUpdateAsync(
                     actorUserId,
                     userId,
-                    cancellationToken).ConfigureAwait(false);
+                    transactionToken).ConfigureAwait(false);
                 RbacHierarchyPolicy.RequirePermission(actor, PermissionKeys.PresenceKick);
                 RbacHierarchyPolicy.EnsureCanManageTarget(actor, target);
                 DateTime now = _clock.UtcNow;
                 User updated = target with { SessionValidAfter = now, UpdatedAt = now };
-                await _users.UpdateAsync(updated, cancellationToken).ConfigureAwait(false);
-                await _sessions.RevokeAllAsync(target.Id, now, cancellationToken)
+                await _users.UpdateAsync(updated, transactionToken).ConfigureAwait(false);
+                await _sessions.RevokeAllAsync(target.Id, now, transactionToken)
                     .ConfigureAwait(false);
                 await _audit.RecordAsync(
                     "user.sessions.revoked",
@@ -193,7 +193,7 @@ public sealed class UserLifecycleService : IUserLifecycleService
                     "user",
                     target.Id,
                     new Dictionary<string, object?> { ["scope"] = "all" },
-                    cancellationToken,
+                    transactionToken,
                     "warning").ConfigureAwait(false);
                 return UserResponseMapper.ToResponse(updated, actor, now);
             },
@@ -259,17 +259,17 @@ public sealed class UserLifecycleService : IUserLifecycleService
         await _transactions.ExecuteTransactionAsync(
             _unitOfWork,
             nameof(ValidateBulkRoleAsync),
-            async _ =>
+            async transactionToken =>
             {
-                await _context.RequireSettingsAsync(true, cancellationToken).ConfigureAwait(false);
-                Role role = await _roles.FindAsync(roleId, true, cancellationToken)
+                await _context.RequireSettingsAsync(true, transactionToken).ConfigureAwait(false);
+                Role role = await _roles.FindAsync(roleId, true, transactionToken)
                     .ConfigureAwait(false)
                     ?? throw ApiException.BadRequest("UNKNOWN_ROLE", "No such role");
                 User actor = await _context.RequireActorAsync(
                     actorUserId,
                     PermissionKeys.UsersManage,
                     true,
-                    cancellationToken).ConfigureAwait(false);
+                    transactionToken).ConfigureAwait(false);
                 RbacHierarchyPolicy.EnsureRoleAssignable(actor, role);
             },
             cancellationToken).ConfigureAwait(false);
@@ -283,13 +283,13 @@ public sealed class UserLifecycleService : IUserLifecycleService
         _transactions.ExecuteTransactionAsync(
             _unitOfWork,
             nameof(ApplyBulkItemAsync),
-            async _ =>
+            async transactionToken =>
             {
-                await _context.RequireSettingsAsync(true, cancellationToken).ConfigureAwait(false);
+                await _context.RequireSettingsAsync(true, transactionToken).ConfigureAwait(false);
                 Role? role = null;
                 if (request.Action == BulkUserActionContract.AssignRole)
                 {
-                    role = await _roles.FindAsync(request.RoleId!.Value, true, cancellationToken)
+                    role = await _roles.FindAsync(request.RoleId!.Value, true, transactionToken)
                         .ConfigureAwait(false)
                         ?? throw ApiException.BadRequest("UNKNOWN_ROLE", "No such role");
                 }
@@ -302,7 +302,7 @@ public sealed class UserLifecycleService : IUserLifecycleService
                 (User actor, User target) = await _context.LoadActorAndTargetForUpdateAsync(
                     actorUserId,
                     userId,
-                    cancellationToken).ConfigureAwait(false);
+                    transactionToken).ConfigureAwait(false);
                 RbacHierarchyPolicy.RequirePermission(actor, PermissionKeys.UsersManage);
                 RbacHierarchyPolicy.EnsureCanManageTarget(actor, target);
                 if (role is not null)
@@ -316,15 +316,15 @@ public sealed class UserLifecycleService : IUserLifecycleService
                     request.Action,
                     role,
                     now,
-                    cancellationToken).ConfigureAwait(false);
-                await _users.UpdateAsync(updated, cancellationToken).ConfigureAwait(false);
+                    transactionToken).ConfigureAwait(false);
+                await _users.UpdateAsync(updated, transactionToken).ConfigureAwait(false);
                 if (request.Action == BulkUserActionContract.Deactivate)
                 {
-                    await _sessions.RevokeAllAsync(target.Id, now, cancellationToken)
+                    await _sessions.RevokeAllAsync(target.Id, now, transactionToken)
                         .ConfigureAwait(false);
                 }
 
-                await _context.EnsureAdministrationAvailableAsync(cancellationToken)
+                await _context.EnsureAdministrationAvailableAsync(transactionToken)
                     .ConfigureAwait(false);
                 string action = ToBulkAction(request.Action);
                 string eventType = request.Action switch
@@ -350,7 +350,7 @@ public sealed class UserLifecycleService : IUserLifecycleService
                         ["before"] = BulkSnapshot(target),
                         ["after"] = BulkSnapshot(updated),
                     },
-                    cancellationToken).ConfigureAwait(false);
+                    transactionToken).ConfigureAwait(false);
             },
             cancellationToken);
 
