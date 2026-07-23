@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Diagnostics;
 using MySqlConnector;
 using Sharpbill.Api.Diagnostics;
 using Sharpbill.Api.Middleware;
+using Sharpbill.Application.Abstractions;
 using Sharpbill.Application.Common;
 using Sharpbill.Infrastructure.Database;
 
@@ -48,6 +49,11 @@ public sealed partial class GlobalExceptionHandler(
                 "REQUEST_CANCELLED",
                 "Request was cancelled.",
                 LogLevel.Debug),
+            PersistenceOperationException => (
+                StatusCodes.Status503ServiceUnavailable,
+                "DATABASE_UNAVAILABLE",
+                "The database is temporarily unavailable.",
+                LogLevel.Error),
             MySqlException => (
                 StatusCodes.Status503ServiceUnavailable,
                 "DATABASE_UNAVAILABLE",

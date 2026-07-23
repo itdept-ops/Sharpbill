@@ -180,6 +180,31 @@ public sealed class ApiBoundaryTests(SharpbillApiFactory factory) : IClassFixtur
     }
 
     [Fact]
+    public async Task PersistenceBoundaryFailureUsesDatabaseUnavailableContractAsync()
+    {
+        SharpbillApiFactory.CapturingAuthService authService =
+            _factory.Services.GetRequiredService<SharpbillApiFactory.CapturingAuthService>();
+        authService.ConfigurationFailure = new PersistenceOperationException(
+            "Persistence operation failed.",
+            new InvalidOperationException("Provider detail must not cross the API boundary."));
+
+        try
+        {
+            using HttpResponseMessage response = await _client.GetAsync(
+                new Uri("/api/auth/config", UriKind.Relative));
+            string body = await response.Content.ReadAsStringAsync();
+
+            Assert.Equal(HttpStatusCode.ServiceUnavailable, response.StatusCode);
+            Assert.Contains("\"code\":\"DATABASE_UNAVAILABLE\"", body, StringComparison.Ordinal);
+            Assert.DoesNotContain("Provider detail", body, StringComparison.Ordinal);
+        }
+        finally
+        {
+            authService.Clear();
+        }
+    }
+
+    [Fact]
     public void EveryApiEndpointDeclaresAuthorizationOrAnonymousAccess()
     {
         EndpointDataSource source = _factory.Services.GetRequiredService<EndpointDataSource>();
@@ -408,8 +433,12 @@ public sealed class SharpbillApiFactory : WebApplicationFactory<Program>
         public IReadOnlyCollection<RequestContext> DevelopmentLoginContexts =>
             _developmentLoginContexts.ToArray();
 
+        public Exception? ConfigurationFailure { get; set; }
+
         public Task<AuthConfigResponse> GetConfigurationAsync(CancellationToken cancellationToken) =>
-            Task.FromResult(new AuthConfigResponse());
+            ConfigurationFailure is { } failure
+                ? Task.FromException<AuthConfigResponse>(failure)
+                : Task.FromResult(new AuthConfigResponse());
 
         public Task<AuthenticatedSession> LoginAsync(
             ProviderContract provider,
@@ -440,6 +469,7 @@ public sealed class SharpbillApiFactory : WebApplicationFactory<Program>
 
         public void Clear()
         {
+            ConfigurationFailure = null;
             while (_externalLoginContexts.TryDequeue(out _))
             {
             }
