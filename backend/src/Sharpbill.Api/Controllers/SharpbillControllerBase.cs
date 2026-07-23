@@ -23,14 +23,6 @@ public abstract class SharpbillControllerBase : ControllerBase
     protected Guid? SessionJti =>
         Guid.TryParse(User.FindFirstValue(SharpbillClaimTypes.SessionJti), out Guid jti) ? jti : null;
 
-    protected RequestContext RequestContext => new()
-    {
-        RequestId = HttpContext.TraceIdentifier,
-        IpAddress = HttpContext.Connection.RemoteIpAddress?.ToString(),
-        UserAgent = Request.Headers.UserAgent.ToString() is { Length: > 0 } value ? value : null,
-        SessionJti = SessionJti,
-    };
-
     protected async Task<IActionResult> WriteExportAsync(
         ExportDocument export,
         CancellationToken cancellationToken)
