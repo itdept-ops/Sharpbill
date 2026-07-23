@@ -3,12 +3,14 @@ using System.Data.Common;
 using Microsoft.AspNetCore.Mvc;
 using Sharpbill.Application.Abstractions;
 using Sharpbill.Application.Common;
+using Sharpbill.Application.Exports;
 using Sharpbill.Application.Identity;
+using Sharpbill.Application.Policies;
+using Sharpbill.Application.Users;
 using Sharpbill.Api.Controllers;
 using Sharpbill.Domain.Entities;
 using Sharpbill.Infrastructure.Configuration;
 using Sharpbill.Infrastructure.Database;
-using Sharpbill.Infrastructure.Services.Business;
 using Sharpbill.Infrastructure.Services.Identity;
 
 namespace Sharpbill.ArchitectureTests;
@@ -25,10 +27,15 @@ public sealed class LayerDependencyTests
     [Fact]
     public void ApplicationDoesNotReferenceRuntimeLayers()
     {
-        string[] references = SharpbillReferences(typeof(IUserService).Assembly);
+        Assembly applicationAssembly = typeof(IUserService).Assembly;
+        string[] references = SharpbillReferences(applicationAssembly);
         Assert.DoesNotContain("Sharpbill.Infrastructure", references);
         Assert.DoesNotContain("Sharpbill.Workers", references);
         Assert.DoesNotContain("Sharpbill.Api", references);
+
+        string[] providerReferences = AssemblyReferences(applicationAssembly);
+        Assert.DoesNotContain("MySqlConnector", providerReferences);
+        Assert.DoesNotContain("Microsoft.Extensions.Options", providerReferences);
     }
 
     [Fact]
@@ -81,6 +88,96 @@ public sealed class LayerDependencyTests
                 typeof(IUserLifecycleService),
             ],
             dependencies);
+    }
+
+    [Fact]
+    public void UserUseCaseCodeIsOwnedByApplication()
+    {
+        Assembly applicationAssembly = typeof(IUserService).Assembly;
+        Type[] boundaryTypes =
+        [
+            typeof(UserService),
+            typeof(UserQueryService),
+            typeof(UserProfileService),
+            typeof(UserAccessService),
+            typeof(UserLifecycleService),
+            typeof(UserOperationContext),
+            typeof(UserAuditWriter),
+            typeof(UserResponseMapper),
+            typeof(UserUseCaseOptions),
+            typeof(CsvExportWriter),
+            typeof(UserAccountPolicy),
+            typeof(SecurityEventWriteFactory),
+            typeof(SecurityEventMetadata),
+            typeof(InvariantTimestamp),
+            typeof(BusinessErrors),
+        ];
+
+        Assert.All(boundaryTypes, type => Assert.Equal(applicationAssembly, type.Assembly));
+    }
+
+    [Fact]
+    public void InfrastructureDoesNotImplementUserUseCaseBoundaries()
+    {
+        Type[] boundaries =
+        [
+            typeof(IUserService),
+            typeof(IUserQueryService),
+            typeof(IUserProfileService),
+            typeof(IUserAccessService),
+            typeof(IUserLifecycleService),
+        ];
+        string[] violations = typeof(SharpbillOptions).Assembly.GetTypes()
+            .Where(type => !type.IsAbstract && boundaries.Any(boundary =>
+                boundary.IsAssignableFrom(type)))
+            .Select(static type => type.FullName!)
+            .Order(StringComparer.Ordinal)
+            .ToArray();
+
+        Assert.Empty(violations);
+    }
+
+    [Fact]
+    public void UserUseCaseConstructorsDoNotDependOnRuntimeTypes()
+    {
+        Assembly infrastructureAssembly = typeof(SharpbillOptions).Assembly;
+        Type[] useCases =
+        [
+            typeof(UserQueryService),
+            typeof(UserProfileService),
+            typeof(UserAccessService),
+            typeof(UserLifecycleService),
+            typeof(UserOperationContext),
+            typeof(UserAuditWriter),
+        ];
+        string[] violations = useCases
+            .SelectMany(static type => type.GetConstructors()
+                .SelectMany(constructor => constructor.GetParameters()
+                    .Select(parameter => (Service: type, Dependency: parameter.ParameterType))))
+            .Where(candidate =>
+                candidate.Dependency.Assembly == infrastructureAssembly ||
+                candidate.Dependency.FullName?.StartsWith(
+                    "Microsoft.Extensions.Options.",
+                    StringComparison.Ordinal) == true)
+            .Select(candidate =>
+                $"{candidate.Service.FullName} -> {candidate.Dependency.FullName}")
+            .Order(StringComparer.Ordinal)
+            .ToArray();
+
+        Assert.Empty(violations);
+    }
+
+    [Fact]
+    public void MySqlExecutorIsTheOnlyRuntimeTransactionImplementation()
+    {
+        Assert.Equal(typeof(IUserService).Assembly, typeof(ITransactionExecutor).Assembly);
+        Type[] implementations = typeof(MySqlTransientRetryExecutor).Assembly.GetTypes()
+            .Where(static type =>
+                !type.IsAbstract &&
+                typeof(ITransactionExecutor).IsAssignableFrom(type))
+            .ToArray();
+
+        Assert.Equal([typeof(MySqlTransientRetryExecutor)], implementations);
     }
 
     [Fact]
@@ -182,6 +279,12 @@ public sealed class LayerDependencyTests
         .Select(static reference => reference.Name)
         .Where(static name => name?.StartsWith("Sharpbill.", StringComparison.Ordinal) == true)
         .Cast<string>()
+        .Order(StringComparer.Ordinal)
+        .ToArray();
+
+    private static string[] AssemblyReferences(Assembly assembly) => assembly.GetReferencedAssemblies()
+        .Select(static reference => reference.Name)
+        .OfType<string>()
         .Order(StringComparer.Ordinal)
         .ToArray();
 }
