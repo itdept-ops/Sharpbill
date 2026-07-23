@@ -7,6 +7,7 @@ using Sharpbill.Domain.Entities;
 using Sharpbill.Infrastructure.Configuration;
 using Sharpbill.Infrastructure.Database;
 using Sharpbill.Infrastructure.Services.Business;
+using Sharpbill.Infrastructure.Services.Identity;
 
 namespace Sharpbill.ArchitectureTests;
 
@@ -76,6 +77,25 @@ public sealed class LayerDependencyTests
                 typeof(IUserProfileService),
                 typeof(IUserAccessService),
                 typeof(IUserLifecycleService),
+            ],
+            dependencies);
+    }
+
+    [Fact]
+    public void AuthServiceFacadeDependsOnlyOnFocusedServices()
+    {
+        ConstructorInfo constructor = Assert.Single(typeof(AuthService).GetConstructors());
+        Type[] dependencies = constructor.GetParameters()
+            .Select(static parameter => parameter.ParameterType)
+            .ToArray();
+
+        Assert.Equal(
+            [
+                typeof(IAuthConfigurationService),
+                typeof(IExternalLoginService),
+                typeof(IDevelopmentLoginService),
+                typeof(IAuthAccountService),
+                typeof(IAuthSessionOperationsService),
             ],
             dependencies);
     }
