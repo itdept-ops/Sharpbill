@@ -5,6 +5,7 @@ using Sharpbill.Application.Abstractions;
 using Sharpbill.Application.Common;
 using Sharpbill.Application.Identity;
 using Sharpbill.Application.Policies;
+using Sharpbill.Application.Users;
 using Sharpbill.Application.Validation;
 using Sharpbill.Contracts.Access;
 using Sharpbill.Contracts.Auth;
@@ -45,8 +46,17 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<IDatabaseConnectionFactory, MySqlConnectionFactory>();
         services.AddSingleton(DatabaseRetryTelemetry.Shared);
         services.AddSingleton<MySqlTransientRetryExecutor>();
+        services.AddSingleton<ITransactionExecutor>(static provider =>
+            provider.GetRequiredService<MySqlTransientRetryExecutor>());
         services.AddScoped<DatabaseSession>();
         services.AddScoped<IUnitOfWork>(static provider => provider.GetRequiredService<DatabaseSession>());
+        services.AddScoped(static provider =>
+        {
+            SharpbillOptions options = provider.GetRequiredService<IOptions<SharpbillOptions>>().Value;
+            return new UserUseCaseOptions(
+                options.RequestPipeline.ExportMaxBytes,
+                options.Retention.PreciseLocationHours);
+        });
         services.AddMemoryCache();
 
         services.AddScoped<IIdentityRepository, IdentityRepository>();

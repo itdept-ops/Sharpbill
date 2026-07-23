@@ -9,7 +9,7 @@ using Sharpbill.Contracts.Operations;
 
 namespace Sharpbill.Infrastructure.Database;
 
-public sealed partial class MySqlTransientRetryExecutor
+public sealed partial class MySqlTransientRetryExecutor : ITransactionExecutor
 {
     internal const int MaximumAttempts = 3;
     private readonly Func<Exception, bool> _isRetryable;
