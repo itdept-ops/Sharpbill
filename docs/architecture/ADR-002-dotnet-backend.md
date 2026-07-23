@@ -32,10 +32,12 @@ HTTP -> Api -> Application -> Domain
 The diagram expresses allowed dependency direction, not runtime call direction. In particular:
 
 - `Domain` contains business invariants and depends on no web, database, or provider package.
-- `Application` coordinates use cases and declares interfaces for required external behavior.
+- `Application` coordinates user use cases, owns provider-neutral authentication policy/admission
+  and boundary mappings, and declares interfaces for required external behavior.
 - `Contracts` owns stable boundary models and does not expose persistence entities.
-- `Infrastructure` implements application ports for MySQL, identity providers, tokens, time, and
-  other external systems.
+- `Infrastructure` implements application ports for MySQL, identity providers, tokens, request
+  context, telemetry, and other external systems. Provider/database/session orchestration remains
+  here when it necessarily coordinates those adapters.
 - `Workers` hosts bounded background services using the same application abstractions.
 - `Api` is the composition root. It registers implementations, configures middleware and policies,
   maps transport contracts, and contains no persistence logic.
@@ -46,6 +48,14 @@ mutable state and resolving services from `IServiceProvider` inside business cod
 Service lifetimes must match their ownership: stateless coordinators are scoped or singleton only
 when proven thread-safe, database units of work are scoped, and hosted workers create explicit
 scopes per bounded iteration.
+
+Compatibility facades may preserve stable service contracts, but they delegate to focused
+boundaries rather than accumulating business logic. `UserService` delegates to query, profile,
+access, and lifecycle use cases. `AuthService` delegates to configuration, external-login,
+development-login, account, and session-operation services. Architecture tests pin both facade
+constructor dependency sets. User use cases and their support primitives are owned by Application;
+authentication policy, admission, identity mapping, and security-event construction are likewise
+Application-owned and receive only a secret-free configuration projection.
 
 The HTTP pipeline centralizes cross-cutting behavior in ordered middleware and filters, including:
 
@@ -58,7 +68,14 @@ The HTTP pipeline centralizes cross-cutting behavior in ordered middleware and f
 
 Controllers or endpoint handlers remain thin. They validate transport input, call an application
 service, and translate its typed result. Authorization uses named policies and resource checks;
-roles are not scattered as string comparisons through controllers.
+roles are not scattered as string comparisons through controllers. Controllers may not depend on
+repositories, units of work, database sessions, connection factories, or database connection and
+transaction types; architecture tests enforce that transport/persistence boundary.
+
+Request-context middleware creates the one canonical request context for each request and exposes
+it through `IRequestContextAccessor`. Endpoints and services do not reconstruct it. Business
+timestamps and query cutoffs use `IClock`, allowing deterministic policy and repository tests;
+direct wall-clock reads are reserved for operational runtime scheduling and telemetry.
 
 Configuration binds to validated options at startup. Secrets never have repository defaults or
 appear in structured logs. Production startup fails closed when security-critical values are
@@ -87,9 +104,14 @@ stack inventory is maintained in `docs/TECH_STACK.md`.
 - Nullable reference types, analyzers, deterministic builds, and warnings-as-errors are enabled
   repository-wide.
 - Central package versions and NuGet transitive auditing constrain dependency changes.
-- Architecture tests fail prohibited project and namespace dependencies.
-- Unit tests exercise Domain and Application behavior without infrastructure.
-- Integration tests exercise adapters and the HTTP pipeline against ephemeral MySQL.
+- Architecture tests fail prohibited project/namespace dependencies, persistence-bound controller
+  injection, misplaced user/authentication boundary code, unexpected facade dependencies, and
+  runtime dependencies in user use-case constructors.
+- Unit and characterization tests exercise Domain and Application policy, user lifecycle/access,
+  authentication admission/mapping, and facade contracts without live providers.
+- Integration tests exercise adapters and the HTTP pipeline against ephemeral MySQL, including
+  canonical request context, injected-time query cutoffs, transaction cancellation, and safe
+  persistence-failure translation.
 - CI verifies formatting, builds Release artifacts, runs all tests with branch-aware coverage,
   audits packages, builds the production-shaped API and web images, confirms non-root runtime
   users, smoke-tests liveness, scans images and source for vulnerabilities/secrets/misconfiguration,

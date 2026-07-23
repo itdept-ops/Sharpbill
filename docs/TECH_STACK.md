@@ -24,15 +24,25 @@ The active backend is C# only. The layered solution is split into:
 
 - `Sharpbill.Domain` for entities, value objects, and invariants.
 - `Sharpbill.Contracts` for HTTP request/response contracts.
-- `Sharpbill.Application` for use cases, policies, and service/repository ports.
-- `Sharpbill.Infrastructure` for MySQL, identity-provider, token, clock, CSV, and telemetry adapters.
+- `Sharpbill.Application` for user use cases, cross-provider authentication policy/admission,
+  mappings, CSV/export primitives, and service/repository/transaction ports.
+- `Sharpbill.Infrastructure` for MySQL transactions/repositories, identity-provider verification,
+  token/session, request-context, telemetry, and other runtime adapters.
 - `Sharpbill.Workers` for bounded background workloads.
 - `Sharpbill.Api` for middleware, authentication, authorization, controllers, and DI composition.
 - `Sharpbill.Migrator` for explicit database migration and schema validation.
 
 ASP.NET Core middleware owns request context, security headers, CSRF checks, body limits,
 request logging, rate limiting, and exception mapping. Controllers stay thin and call injected
-services.
+services. Architecture tests reject persistence dependencies in controller constructors and pin
+the focused dependencies of the `UserService` and `AuthService` compatibility facades.
+
+The Application-owned user facade delegates to query, profile, access, and lifecycle use cases.
+The authentication facade delegates to configuration, external-login, development-login, account,
+and session-operation services; its provider-neutral policy, admission, identity mapping, and
+security-event construction are Application-owned, while provider/database/session orchestration
+remains in Infrastructure. Middleware creates one canonical request context, exposed through
+`IRequestContextAccessor`, and business/query time is supplied through `IClock`.
 
 ## Database and migration model
 
