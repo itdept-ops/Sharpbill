@@ -2,6 +2,7 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Sharpbill.Application.Abstractions;
 using Sharpbill.Application.Common;
+using Sharpbill.Application.Identity;
 using Sharpbill.Domain.Entities;
 using Sharpbill.Domain.Enums;
 using Sharpbill.Infrastructure.Configuration;

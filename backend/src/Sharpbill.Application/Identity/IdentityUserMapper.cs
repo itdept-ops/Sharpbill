@@ -4,9 +4,9 @@ using Sharpbill.Domain.Entities;
 using Sharpbill.Domain.Enums;
 using Sharpbill.Domain.ValueObjects;
 
-namespace Sharpbill.Infrastructure.Services.Identity;
+namespace Sharpbill.Application.Identity;
 
-internal static class IdentityUserMapper
+public static class IdentityUserMapper
 {
     public static UserResponse ToResponse(User user, bool online, bool includeIdentitySubjects = true) =>
         new()

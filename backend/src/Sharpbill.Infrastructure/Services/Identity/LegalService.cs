@@ -2,6 +2,7 @@ using System.Globalization;
 using Microsoft.Extensions.Options;
 using Sharpbill.Application.Abstractions;
 using Sharpbill.Application.Common;
+using Sharpbill.Application.Identity;
 using Sharpbill.Application.Policies;
 using Sharpbill.Contracts.Legal;
 using Sharpbill.Domain.Entities;

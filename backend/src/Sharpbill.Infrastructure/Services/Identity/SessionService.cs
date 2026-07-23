@@ -1,6 +1,7 @@
 using Microsoft.Extensions.Options;
 using Sharpbill.Application.Abstractions;
 using Sharpbill.Application.Common;
+using Sharpbill.Application.Identity;
 using Sharpbill.Application.Policies;
 using Sharpbill.Contracts.Auth;
 using Sharpbill.Contracts.Users;

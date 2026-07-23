@@ -2,9 +2,9 @@ using Sharpbill.Application.Common;
 using Sharpbill.Domain.Entities;
 using Sharpbill.Domain.Enums;
 
-namespace Sharpbill.Infrastructure.Services.Identity;
+namespace Sharpbill.Application.Identity;
 
-internal static class IdentitySecurityEventFactory
+public static class IdentitySecurityEventFactory
 {
     public static SecurityEvent Create(
         string eventType,
