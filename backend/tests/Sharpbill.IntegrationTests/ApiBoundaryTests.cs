@@ -11,10 +11,13 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Options;
 using Sharpbill.Application.Abstractions;
+using Sharpbill.Application.Common;
 using Sharpbill.Api.Diagnostics;
 using Sharpbill.Contracts.Auth;
+using Sharpbill.Contracts.Common;
 using Sharpbill.Contracts.Health;
 using Sharpbill.Contracts.Operations;
+using Sharpbill.Contracts.Users;
 using Sharpbill.Domain.Entities;
 using Sharpbill.Infrastructure.Configuration;
 using Sharpbill.Infrastructure.Services.Identity;
@@ -81,6 +84,71 @@ public sealed class ApiBoundaryTests(SharpbillApiFactory factory) : IClassFixtur
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         Assert.True(response.Headers.Contains("X-Request-ID"));
         Assert.False(response.Headers.Contains("X-Client-Request-ID"));
+    }
+
+    [Fact]
+    public async Task ExternalLoginReceivesMiddlewareRequestContextAsync()
+    {
+        SharpbillApiFactory.CapturingAuthService authService =
+            _factory.Services.GetRequiredService<SharpbillApiFactory.CapturingAuthService>();
+        authService.Clear();
+        const string clientRequestId = "external-login-correlation";
+        const string userAgent = "Sharpbill-context-test/1.0";
+        using var request = new HttpRequestMessage(HttpMethod.Post, "/api/auth/google");
+        request.Headers.Add("X-Request-ID", clientRequestId);
+        request.Headers.TryAddWithoutValidation("User-Agent", userAgent);
+        request.Content = JsonContent.Create(new TokenLoginRequest
+        {
+            IdToken = "integration-token",
+            LegalAccepted = true,
+            LegalBundleVersion = "integration-legal",
+        });
+
+        using HttpResponseMessage response = await _client.SendAsync(request);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        RequestContext context = Assert.Single(authService.ExternalLoginContexts);
+        Assert.NotNull(context.RequestId);
+        Assert.Matches("^[a-f0-9]{32}$", context.RequestId);
+        Assert.Equal(
+            Assert.Single(response.Headers.GetValues("X-Request-ID")),
+            context.RequestId);
+        Assert.Equal(clientRequestId, context.ClientRequestId);
+        Assert.Equal(userAgent, context.UserAgent);
+    }
+
+    [Fact]
+    public async Task DevelopmentLoginReceivesMiddlewareRequestContextAsync()
+    {
+        SharpbillApiFactory.CapturingAuthService authService =
+            _factory.Services.GetRequiredService<SharpbillApiFactory.CapturingAuthService>();
+        authService.Clear();
+        const string clientRequestId = "development-login-correlation";
+        const string userAgent = "Sharpbill-dev-context-test/1.0";
+        using var request = new HttpRequestMessage(HttpMethod.Post, "/api/auth/dev");
+        request.Headers.Add("X-Request-ID", clientRequestId);
+        request.Headers.Add(
+            "X-Dev-Auth-Secret",
+            SharpbillApiFactory.DevelopmentAuthenticationSecret);
+        request.Headers.TryAddWithoutValidation("User-Agent", userAgent);
+        request.Content = JsonContent.Create(new DevLoginRequest
+        {
+            Email = "context-test@example.test",
+            LegalAccepted = true,
+            LegalBundleVersion = "integration-legal",
+        });
+
+        using HttpResponseMessage response = await _client.SendAsync(request);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        RequestContext context = Assert.Single(authService.DevelopmentLoginContexts);
+        Assert.NotNull(context.RequestId);
+        Assert.Matches("^[a-f0-9]{32}$", context.RequestId);
+        Assert.Equal(
+            Assert.Single(response.Headers.GetValues("X-Request-ID")),
+            context.RequestId);
+        Assert.Equal(clientRequestId, context.ClientRequestId);
+        Assert.Equal(userAgent, context.UserAgent);
     }
 
     [Fact]
@@ -293,6 +361,9 @@ public sealed class ApiBoundaryTests(SharpbillApiFactory factory) : IClassFixtur
 
 public sealed class SharpbillApiFactory : WebApplicationFactory<Program>
 {
+    public const string DevelopmentAuthenticationSecret =
+        "integration-dev-auth-secret-9f6a2d7c";
+
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
         builder.UseEnvironment("Development");
@@ -308,6 +379,8 @@ public sealed class SharpbillApiFactory : WebApplicationFactory<Program>
                 ["COOKIE_SECURE"] = "false",
                 ["PUBLIC_ORIGIN"] = "http://localhost",
                 ["RETENTION_WORKER_INTERVAL_SECONDS"] = "3600",
+                ["DEV_AUTH_ENABLED"] = "true",
+                ["DEV_AUTH_SECRET"] = DevelopmentAuthenticationSecret,
             }));
         builder.ConfigureServices(services =>
         {
@@ -317,7 +390,84 @@ public sealed class SharpbillApiFactory : WebApplicationFactory<Program>
             services.AddSingleton<CapturingRequestLogBuffer>();
             services.AddSingleton<IRequestLogBuffer>(static provider =>
                 provider.GetRequiredService<CapturingRequestLogBuffer>());
+            services.RemoveAll<IAuthService>();
+            services.AddSingleton<CapturingAuthService>();
+            services.AddSingleton<IAuthService>(static provider =>
+                provider.GetRequiredService<CapturingAuthService>());
         });
+    }
+
+    public sealed class CapturingAuthService : IAuthService
+    {
+        private readonly ConcurrentQueue<RequestContext> _externalLoginContexts = new();
+        private readonly ConcurrentQueue<RequestContext> _developmentLoginContexts = new();
+
+        public IReadOnlyCollection<RequestContext> ExternalLoginContexts =>
+            _externalLoginContexts.ToArray();
+
+        public IReadOnlyCollection<RequestContext> DevelopmentLoginContexts =>
+            _developmentLoginContexts.ToArray();
+
+        public Task<AuthConfigResponse> GetConfigurationAsync(CancellationToken cancellationToken) =>
+            Task.FromResult(new AuthConfigResponse());
+
+        public Task<AuthenticatedSession> LoginAsync(
+            ProviderContract provider,
+            TokenLoginRequest request,
+            RequestContext context,
+            CancellationToken cancellationToken)
+        {
+            _externalLoginContexts.Enqueue(context);
+            return Task.FromResult(CreateAuthenticatedSession());
+        }
+
+        public Task<AuthenticatedSession> DevLoginAsync(
+            DevLoginRequest request,
+            RequestContext context,
+            CancellationToken cancellationToken)
+        {
+            _developmentLoginContexts.Enqueue(context);
+            return Task.FromResult(CreateAuthenticatedSession());
+        }
+
+        public Task LogoutAsync(RequestContext context, CancellationToken cancellationToken) =>
+            Task.CompletedTask;
+
+        public Task<UserResponse> GetCurrentUserAsync(
+            int userId,
+            CancellationToken cancellationToken) =>
+            Task.FromResult(CreateAuthenticatedSession().User);
+
+        public void Clear()
+        {
+            while (_externalLoginContexts.TryDequeue(out _))
+            {
+            }
+
+            while (_developmentLoginContexts.TryDequeue(out _))
+            {
+            }
+        }
+
+        private static AuthenticatedSession CreateAuthenticatedSession()
+        {
+            DateTime issuedAt = new(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc);
+            return new AuthenticatedSession(
+                new UserResponse
+                {
+                    Id = 42,
+                    Email = "context-test@example.test",
+                    Role = "User",
+                },
+                new SessionToken
+                {
+                    Value = "integration-session-token",
+                    Jti = Guid.Parse("ce403140-e184-442d-9937-534d67c420f1"),
+                    UserId = 42,
+                    IssuedAt = issuedAt,
+                    ExpiresAt = issuedAt.AddHours(1),
+                });
+        }
     }
 
     public sealed class CapturingRequestLogBuffer : IRequestLogBuffer

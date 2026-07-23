@@ -104,7 +104,7 @@ public sealed class AuthController(
         AuthenticatedSession authenticated = await authService.LoginAsync(
             provider,
             request,
-            RequestContext,
+            requestContextAccessor.Current,
             cancellationToken).ConfigureAwait(false);
         SetSessionCookie(authenticated.Session);
         return Ok(authenticated.User);

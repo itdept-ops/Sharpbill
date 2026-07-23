@@ -17,6 +17,7 @@ namespace Sharpbill.Api.Controllers;
 public sealed class DevelopmentAuthController(
     IAuthService authService,
     IRoleRepository roles,
+    IRequestContextAccessor requestContextAccessor,
     IOptions<SharpbillOptions> options) : ControllerBase
 {
     private readonly SharpbillOptions _options = options.Value;
@@ -28,15 +29,9 @@ public sealed class DevelopmentAuthController(
         CancellationToken cancellationToken)
     {
         RequireSecret(suppliedSecret);
-        var context = new RequestContext
-        {
-            RequestId = HttpContext.TraceIdentifier,
-            IpAddress = HttpContext.Connection.RemoteIpAddress?.ToString(),
-            UserAgent = Request.Headers.UserAgent.ToString() is { Length: > 0 } value ? value : null,
-        };
         AuthenticatedSession authenticated = await authService.DevLoginAsync(
             request,
-            context,
+            requestContextAccessor.Current,
             cancellationToken).ConfigureAwait(false);
         Response.Cookies.Append(CookieName, authenticated.Session.Value, Cookie(authenticated.Session));
         return Ok(authenticated.User);
