@@ -212,7 +212,12 @@ public sealed class PresenceWebSocketHardeningTests
             Guid? currentJti,
             CancellationToken cancellationToken) => throw new NotSupportedException();
 
-        public Task RevokeAsync(
+        public Task RevokeOwnAsync(
+            int userId,
+            int sessionId,
+            CancellationToken cancellationToken) => throw new NotSupportedException();
+
+        public Task RevokeAdministrativelyAsync(
             int actorUserId,
             int targetUserId,
             int sessionId,

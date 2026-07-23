@@ -367,6 +367,36 @@ public sealed class IdentityServiceContractTests
     }
 
     [Fact]
+    public async Task AdministrativeSessionRevocationRejectsSelfWhilePersonalRevocationRemainsAvailableAsync()
+    {
+        User user = CreateUser();
+        UserSession session = CreateSession();
+        var events = new CapturingSecurityEventRepository();
+        SessionService service = CreateSessionService(
+            new StubUserRepository(user),
+            session,
+            events);
+
+        ApiException rejected = await Assert.ThrowsAsync<ApiException>(() =>
+            service.RevokeAdministrativelyAsync(
+                user.Id,
+                user.Id,
+                session.Id,
+                CancellationToken.None));
+
+        Assert.Equal("CANNOT_MODIFY_SELF", rejected.Code);
+        Assert.Empty(events.Added);
+
+        await service.RevokeOwnAsync(user.Id, session.Id, CancellationToken.None);
+
+        SecurityEvent securityEvent = Assert.Single(events.Added);
+        Assert.Equal(SecurityEventSeverity.Info, securityEvent.Severity);
+        Assert.Equal("user_session", securityEvent.TargetType);
+        Assert.Equal(session.Id.ToString(CultureInfo.InvariantCulture), securityEvent.TargetId);
+        Assert.Equal("self", securityEvent.Metadata["scope"]);
+    }
+
+    [Fact]
     public async Task AdministrativeSessionRevocationEnforcesHierarchyAndAuditsAllowedChangesAsync()
     {
         User delegateUser = CreateUser() with
@@ -384,11 +414,12 @@ public sealed class IdentityServiceContractTests
             new StubUserRepository(delegateUser, administrator),
             CreateSession() with { UserId = administrator.Id });
 
-        ApiException denied = await Assert.ThrowsAsync<ApiException>(() => deniedService.RevokeAsync(
-            delegateUser.Id,
-            administrator.Id,
-            CreateSession().Id,
-            CancellationToken.None));
+        ApiException denied = await Assert.ThrowsAsync<ApiException>(() =>
+            deniedService.RevokeAdministrativelyAsync(
+                delegateUser.Id,
+                administrator.Id,
+                CreateSession().Id,
+                CancellationToken.None));
 
         Assert.Equal("INSUFFICIENT_PRIVILEGE", denied.Code);
 
@@ -408,7 +439,7 @@ public sealed class IdentityServiceContractTests
             CreateSession() with { UserId = target.Id },
             events);
 
-        await allowedService.RevokeAsync(
+        await allowedService.RevokeAdministrativelyAsync(
             adminActor.Id,
             target.Id,
             CreateSession().Id,

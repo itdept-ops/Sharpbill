@@ -115,14 +115,11 @@ public sealed class UsersController(IUserService userService, ISessionService se
         int sessionId,
         CancellationToken cancellationToken)
     {
-        if (userId == ActorUserId)
-        {
-            throw Application.Common.ApiException.BadRequest(
-                "CANNOT_MODIFY_SELF",
-                "Use the personal sessions endpoint");
-        }
-
-        await sessionService.RevokeAsync(ActorUserId, userId, sessionId, cancellationToken).ConfigureAwait(false);
+        await sessionService.RevokeAdministrativelyAsync(
+            ActorUserId,
+            userId,
+            sessionId,
+            cancellationToken).ConfigureAwait(false);
         return NoContent();
     }
 }

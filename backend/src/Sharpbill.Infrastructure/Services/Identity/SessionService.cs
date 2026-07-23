@@ -133,10 +133,43 @@ public sealed class SessionService(
             .ToArray();
     }
 
-    public async Task RevokeAsync(
+    public Task RevokeOwnAsync(
+        int userId,
+        int sessionId,
+        CancellationToken cancellationToken) =>
+        RevokeCoreAsync(
+            userId,
+            userId,
+            sessionId,
+            selfService: true,
+            cancellationToken);
+
+    public async Task RevokeAdministrativelyAsync(
         int actorUserId,
         int targetUserId,
         int sessionId,
+        CancellationToken cancellationToken)
+    {
+        if (actorUserId == targetUserId)
+        {
+            throw ApiException.BadRequest(
+                "CANNOT_MODIFY_SELF",
+                "Use the personal sessions endpoint");
+        }
+
+        await RevokeCoreAsync(
+            actorUserId,
+            targetUserId,
+            sessionId,
+            selfService: false,
+            cancellationToken).ConfigureAwait(false);
+    }
+
+    private async Task RevokeCoreAsync(
+        int actorUserId,
+        int targetUserId,
+        int sessionId,
+        bool selfService,
         CancellationToken cancellationToken)
     {
         await _retryExecutor.ExecuteTransactionAsync(
@@ -148,7 +181,6 @@ public sealed class SessionService(
                     actorUserId,
                     targetUserId,
                     token).ConfigureAwait(false);
-                bool selfService = actorUserId == targetUserId;
                 if (!selfService)
                 {
                     RbacHierarchyPolicy.RequirePermission(actor, PermissionKeys.PresenceKick);
