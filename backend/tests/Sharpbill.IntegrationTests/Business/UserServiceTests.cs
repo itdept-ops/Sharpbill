@@ -12,6 +12,103 @@ namespace Sharpbill.IntegrationTests.Business;
 public sealed class UserServiceTests
 {
     [Fact]
+    public async Task ListAndGetEnforceUsersReadWhileAllowingSelfReadAsync()
+    {
+        var fixture = new BusinessServiceFixture();
+        fixture.Users.Items[1] = BusinessTestData.User(
+            1,
+            SystemRoleNames.DefaultUser,
+            []) with
+        {
+            Location = "Portland",
+            Timezone = "America/Los_Angeles",
+        };
+        fixture.Users.Items[2] = BusinessTestData.User(
+            2,
+            SystemRoleNames.DefaultUser,
+            [PermissionKeys.UsersRead]);
+
+        ApiException listException = await Assert.ThrowsAsync<ApiException>(() =>
+            fixture.CreateUserService().ListAsync(
+                new UserQuery(),
+                1,
+                CancellationToken.None));
+        ApiException getException = await Assert.ThrowsAsync<ApiException>(() =>
+            fixture.CreateUserService().GetAsync(
+                2,
+                1,
+                CancellationToken.None));
+        UserResponse self = await fixture.CreateUserService().GetAsync(
+            1,
+            1,
+            CancellationToken.None);
+
+        Assert.Equal("FORBIDDEN", listException.Code);
+        Assert.Equal("FORBIDDEN", getException.Code);
+        Assert.Equal("Portland", self.Location);
+        Assert.Equal("America/Los_Angeles", self.Timezone);
+    }
+
+    [Fact]
+    public async Task ListAndGetApplyLocationVisibilityAsync()
+    {
+        var fixture = new BusinessServiceFixture();
+        fixture.Users.Items[1] = BusinessTestData.User(
+            1,
+            "reader",
+            [PermissionKeys.UsersRead]);
+        fixture.Users.Items[2] = BusinessTestData.User(
+            2,
+            SystemRoleNames.DefaultUser,
+            [PermissionKeys.UsersRead]) with
+        {
+            Location = "Portland",
+            Timezone = "America/Los_Angeles",
+            LastLatitude = 45.52,
+            LastLongitude = -122.68,
+            LastLocationAt = fixture.Clock.UtcNow,
+        };
+        var service = fixture.CreateUserService();
+
+        UserListResponse readerList = await service.ListAsync(
+            new UserQuery(),
+            1,
+            CancellationToken.None);
+        UserResponse readerGet = await service.GetAsync(2, 1, CancellationToken.None);
+
+        UserResponse hiddenListUser = Assert.Single(
+            readerList.Items,
+            static user => user.Id == 2);
+        Assert.Null(hiddenListUser.Location);
+        Assert.Null(hiddenListUser.Timezone);
+        Assert.Null(hiddenListUser.LastLatitude);
+        Assert.Null(readerGet.Location);
+        Assert.Null(readerGet.Timezone);
+        Assert.Null(readerGet.LastLatitude);
+
+        fixture.Users.Items[1] = BusinessTestData.User(
+            1,
+            "manager",
+            [PermissionKeys.UsersRead, PermissionKeys.UsersManage]);
+
+        UserListResponse managerList = await service.ListAsync(
+            new UserQuery(),
+            1,
+            CancellationToken.None);
+        UserResponse managerGet = await service.GetAsync(2, 1, CancellationToken.None);
+
+        UserResponse visibleListUser = Assert.Single(
+            managerList.Items,
+            static user => user.Id == 2);
+        Assert.Equal("Portland", visibleListUser.Location);
+        Assert.Equal("America/Los_Angeles", visibleListUser.Timezone);
+        Assert.Equal(45.52, visibleListUser.LastLatitude);
+        Assert.Equal("Portland", managerGet.Location);
+        Assert.Equal("America/Los_Angeles", managerGet.Timezone);
+        Assert.Equal(45.52, managerGet.LastLatitude);
+    }
+
+    [Fact]
     public async Task AssignRoleRefusesToDemoteTheLastAdministratorAsync()
     {
         var fixture = new BusinessServiceFixture();
@@ -30,6 +127,37 @@ public sealed class UserServiceTests
         Assert.Equal(0, fixture.UnitOfWork.Commits);
         Assert.Equal(1, fixture.UnitOfWork.Rollbacks);
         Assert.Empty(fixture.SecurityEvents.Writes);
+    }
+
+    [Fact]
+    public async Task AssignRoleIncrementsAccessVersionAndAuditsAsync()
+    {
+        var fixture = new BusinessServiceFixture();
+        fixture.Users.Items[1] = Administrator(1);
+        fixture.Users.Items[2] = BusinessTestData.User(
+            2,
+            SystemRoleNames.DefaultUser,
+            [PermissionKeys.UsersRead, PermissionKeys.PresenceView]);
+
+        UserResponse response = await fixture.CreateUserService().AssignRoleAsync(
+            2,
+            1,
+            new RoleAssignRequest { RoleId = 1, ExpectedVersion = 1 },
+            CancellationToken.None);
+
+        Assert.Equal(SystemRoleNames.Administrator, response.Role);
+        Assert.Equal(1, response.RoleId);
+        Assert.Equal(2, response.AccessVersion);
+        Assert.Equal(SystemRoleNames.Administrator, fixture.Users.Items[2].RoleName);
+        Assert.Equal(2, fixture.Users.Items[2].AccessVersion);
+        Assert.Equal(1, fixture.UnitOfWork.Commits);
+        Assert.Equal(0, fixture.UnitOfWork.Rollbacks);
+        var securityEvent = Assert.Single(fixture.SecurityEvents.Writes);
+        Assert.Equal("user.role.changed", securityEvent.EventType);
+        Assert.Equal(1, securityEvent.ActorUserId);
+        Assert.Equal("user", securityEvent.TargetType);
+        Assert.Equal("2", securityEvent.TargetId);
+        Assert.Equal("business-test", securityEvent.RequestId);
     }
 
     [Fact]
@@ -59,6 +187,42 @@ public sealed class UserServiceTests
         Assert.Equal("INSUFFICIENT_PRIVILEGE", exception.Code);
         Assert.Equal(1, fixture.UnitOfWork.Rollbacks);
         Assert.Empty(fixture.Users.Updates);
+    }
+
+    [Fact]
+    public async Task SetPermissionsIncrementsAccessVersionAndAuditsAsync()
+    {
+        var fixture = new BusinessServiceFixture();
+        fixture.Users.Items[1] = Administrator(1);
+        fixture.Users.Items[2] = BusinessTestData.User(
+            2,
+            SystemRoleNames.DefaultUser,
+            [PermissionKeys.UsersRead, PermissionKeys.PresenceView]);
+
+        UserResponse response = await fixture.CreateUserService().SetPermissionsAsync(
+            2,
+            1,
+            new PermissionGrantRequest
+            {
+                PermissionKeys = [PermissionKeys.SettingsManage],
+                ExpectedVersion = 1,
+            },
+            CancellationToken.None);
+
+        Assert.Equal(2, response.AccessVersion);
+        Assert.Equal([PermissionKeys.SettingsManage], response.DirectPermissions);
+        Assert.Equal(2, fixture.Users.Items[2].AccessVersion);
+        Assert.Equal(
+            [PermissionKeys.SettingsManage],
+            fixture.Users.Items[2].DirectPermissionKeys);
+        Assert.Equal(1, fixture.UnitOfWork.Commits);
+        Assert.Equal(0, fixture.UnitOfWork.Rollbacks);
+        var securityEvent = Assert.Single(fixture.SecurityEvents.Writes);
+        Assert.Equal("user.permissions.changed", securityEvent.EventType);
+        Assert.Equal(1, securityEvent.ActorUserId);
+        Assert.Equal("user", securityEvent.TargetType);
+        Assert.Equal("2", securityEvent.TargetId);
+        Assert.Equal("business-test", securityEvent.RequestId);
     }
 
     [Fact]
@@ -102,6 +266,138 @@ public sealed class UserServiceTests
 
         Assert.Null(reset.UiPreferences);
         Assert.Equal(2, fixture.UnitOfWork.Commits);
+    }
+
+    [Fact]
+    public async Task SetStatusRefusesToDeactivateTheLastAdministratorAsync()
+    {
+        var fixture = new BusinessServiceFixture();
+        fixture.Users.Items[1] = Administrator(1);
+        fixture.Users.Items[2] = Administrator(2);
+        fixture.Users.ActiveAdministratorCount = 1;
+
+        ApiException exception = await Assert.ThrowsAsync<ApiException>(() =>
+            fixture.CreateUserService().SetStatusAsync(
+                2,
+                1,
+                new StatusUpdateRequest { IsActive = false },
+                CancellationToken.None));
+
+        Assert.Equal("LAST_ADMIN", exception.Code);
+        Assert.Equal(0, fixture.UnitOfWork.Commits);
+        Assert.Equal(1, fixture.UnitOfWork.Rollbacks);
+        Assert.Empty(fixture.Users.Updates);
+        Assert.Empty(fixture.Sessions.RevokedUserIds);
+        Assert.Empty(fixture.SecurityEvents.Writes);
+    }
+
+    [Fact]
+    public async Task SetStatusDeactivatesUserRevokesSessionsAndAuditsAsync()
+    {
+        var fixture = new BusinessServiceFixture();
+        fixture.Users.Items[1] = Administrator(1);
+        fixture.Users.Items[2] = BusinessTestData.User(
+            2,
+            SystemRoleNames.DefaultUser,
+            [PermissionKeys.UsersRead, PermissionKeys.PresenceView]);
+
+        UserResponse response = await fixture.CreateUserService().SetStatusAsync(
+            2,
+            1,
+            new StatusUpdateRequest { IsActive = false },
+            CancellationToken.None);
+
+        User updated = fixture.Users.Items[2];
+        Assert.False(response.IsActive);
+        Assert.False(updated.IsActive);
+        Assert.Equal(fixture.Clock.UtcNow, updated.DeactivatedAt);
+        Assert.Equal(fixture.Clock.UtcNow, updated.SessionValidAfter);
+        Assert.Equal([2], fixture.Sessions.RevokedUserIds);
+        Assert.Equal(1, fixture.UnitOfWork.Commits);
+        Assert.Equal(0, fixture.UnitOfWork.Rollbacks);
+        var securityEvent = Assert.Single(fixture.SecurityEvents.Writes);
+        Assert.Equal("user.status.changed", securityEvent.EventType);
+        Assert.Equal(1, securityEvent.ActorUserId);
+        Assert.Equal("2", securityEvent.TargetId);
+    }
+
+    [Fact]
+    public async Task ApproveUpdatesUserAndAuditsAsync()
+    {
+        var fixture = new BusinessServiceFixture();
+        fixture.Users.Items[1] = Administrator(1);
+        fixture.Users.Items[2] = BusinessTestData.User(
+            2,
+            SystemRoleNames.DefaultUser,
+            [PermissionKeys.UsersRead, PermissionKeys.PresenceView]) with
+        {
+            IsApproved = false,
+        };
+
+        UserResponse response = await fixture.CreateUserService().ApproveAsync(
+            2,
+            1,
+            CancellationToken.None);
+
+        Assert.True(response.IsApproved);
+        Assert.True(fixture.Users.Items[2].IsApproved);
+        Assert.Equal(fixture.Clock.UtcNow, fixture.Users.Items[2].UpdatedAt);
+        Assert.Equal(1, fixture.UnitOfWork.Commits);
+        Assert.Equal(0, fixture.UnitOfWork.Rollbacks);
+        var securityEvent = Assert.Single(fixture.SecurityEvents.Writes);
+        Assert.Equal("user.approved", securityEvent.EventType);
+        Assert.Equal(1, securityEvent.ActorUserId);
+        Assert.Equal("2", securityEvent.TargetId);
+    }
+
+    [Fact]
+    public async Task KickRejectsSelfBeforeStartingTransactionAsync()
+    {
+        var fixture = new BusinessServiceFixture();
+        fixture.Users.Items[1] = Administrator(1);
+
+        ApiException exception = await Assert.ThrowsAsync<ApiException>(() =>
+            fixture.CreateUserService().KickAsync(
+                1,
+                1,
+                CancellationToken.None));
+
+        Assert.Equal("CANNOT_MODIFY_SELF", exception.Code);
+        Assert.Equal(0, fixture.UnitOfWork.Begins);
+        Assert.Equal(0, fixture.UnitOfWork.Commits);
+        Assert.Equal(0, fixture.UnitOfWork.Rollbacks);
+        Assert.Empty(fixture.Users.Updates);
+        Assert.Empty(fixture.Sessions.RevokedUserIds);
+        Assert.Empty(fixture.SecurityEvents.Writes);
+    }
+
+    [Fact]
+    public async Task KickRevokesSessionsUpdatesCutoffAndAuditsAsync()
+    {
+        var fixture = new BusinessServiceFixture();
+        fixture.Users.Items[1] = Administrator(1);
+        fixture.Users.Items[2] = BusinessTestData.User(
+            2,
+            SystemRoleNames.DefaultUser,
+            [PermissionKeys.UsersRead, PermissionKeys.PresenceView]);
+
+        UserResponse response = await fixture.CreateUserService().KickAsync(
+            2,
+            1,
+            CancellationToken.None);
+
+        User updated = fixture.Users.Items[2];
+        Assert.Equal(fixture.Clock.UtcNow, updated.SessionValidAfter);
+        Assert.Equal(fixture.Clock.UtcNow, updated.UpdatedAt);
+        Assert.Equal(updated.AccessVersion, response.AccessVersion);
+        Assert.Equal([2], fixture.Sessions.RevokedUserIds);
+        Assert.Equal(1, fixture.UnitOfWork.Commits);
+        Assert.Equal(0, fixture.UnitOfWork.Rollbacks);
+        var securityEvent = Assert.Single(fixture.SecurityEvents.Writes);
+        Assert.Equal("user.sessions.revoked", securityEvent.EventType);
+        Assert.Equal("warning", securityEvent.Severity);
+        Assert.Equal(1, securityEvent.ActorUserId);
+        Assert.Equal("2", securityEvent.TargetId);
     }
 
     [Fact]
