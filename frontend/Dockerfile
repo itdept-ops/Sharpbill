@@ -16,7 +16,7 @@ RUN npm run build
 
 # ---- prod: nginx serves the SPA with a history fallback ----
 # Digest-pinned Alpine 3.24 image verified with Docker Scout on 2026-07-20.
-FROM nginx:1.31.3-alpine-slim@sha256:45b82ed5f285b90d63df07ba70430fdd8f25624b416617d9e6dc93412b2006dc AS prod
+FROM nginx:1.31.4-alpine-slim@sha256:1870de6d59aafee152589b64404556d2535922cdd998e6dac1c4888c938ed8f9 AS prod
 COPY --chown=101:101 nginx.conf /etc/nginx/conf.d/default.conf
 COPY --from=build --chown=101:101 /app/dist /usr/share/nginx/html
 RUN touch /var/run/nginx.pid \
